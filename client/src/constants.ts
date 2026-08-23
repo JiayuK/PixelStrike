@@ -102,7 +102,7 @@ export const PHYS = {
   stopAccel: 60,
   airAccel: 9.5,
   gravity: -22.0,
-  jumpVel: 7.4,
+  jumpVel: 8.4,
   crouchSpeed: 0.6,
   eyeHeight: 1.6,
   crouchEye: 1.12,

@@ -44,7 +44,7 @@ const (
 	AirAccel        = 9.5
 	CrouchSpeed     = .6
 	Gravity         = -22.0
-	JumpVel         = 7.4
+	JumpVel         = 8.4
 	MaxRewindTicks  = 8
 	MaxHP           = 100
 	SpawnProtectS   = 2 * time.Second
@@ -231,7 +231,7 @@ func (r *Room) Move(p *PlayerState, now time.Time) {
 func (r *Room) CheckSanity(p *PlayerState) {
 	bad := math.IsNaN(p.Pos.X) || math.IsNaN(p.Pos.Y) || math.IsNaN(p.Pos.Z) ||
 		math.Abs(p.Pos.X) > r.World.Size[0]/2+5 || math.Abs(p.Pos.Z) > r.World.Size[1]/2+5 || p.Pos.Y < -10 ||
-		!r.World.CanOccupy(p.Pos, p.Height())
+		r.tick%60 == 0 && !r.World.CanOccupy(p.Pos, p.Height())
 	if bad {
 		log.Printf("player %d (%s): invalid position reset", p.Id, p.Name)
 		p.Pos = r.BestSpawn(p)
@@ -262,7 +262,11 @@ func (r *Room) TryFire(p *PlayerState, yaw, pitch float64, mode uint8, seenTick 
 	if weapon == 6 && mode&1 != 0 {
 		gap = time.Second
 	}
-	p.NextFire = now.Add(gap)
+	if p.NextFire.IsZero() || now.Sub(p.NextFire) >= gap {
+		p.NextFire = now.Add(gap)
+	} else {
+		p.NextFire = p.NextFire.Add(gap)
+	}
 	if now.Sub(p.LastShotAt) > 420*time.Millisecond {
 		p.ShotCounter = 0
 	}

@@ -499,7 +499,7 @@ export function moveAABB(
         : startX - PH >= b.x1 - EPS && nextX - PH < b.x1;
       if (!crossed) continue;
       const stepH = b.y1 - pos.y;
-      if (canStep && stepH > 0 && stepH <= SU && !stepBlocked(boxes, nextX, b.y1, pos.z, height)) {
+      if ((canStep || vel.y > 0) && stepH > 0 && stepH <= SU && !stepBlocked(boxes, nextX, b.y1, pos.z, height)) {
         pos.y = b.y1 + EPS;
         grounded = true;
         continue;
@@ -523,7 +523,7 @@ export function moveAABB(
         : startZ - PH >= b.z1 - EPS && nextZ - PH < b.z1;
       if (!crossed) continue;
       const stepH = b.y1 - pos.y;
-      if (canStep && stepH > 0 && stepH <= SU && !stepBlocked(boxes, pos.x, b.y1, nextZ, height)) {
+      if ((canStep || vel.y > 0) && stepH > 0 && stepH <= SU && !stepBlocked(boxes, pos.x, b.y1, nextZ, height)) {
         pos.y = b.y1 + EPS;
         grounded = true;
         continue;

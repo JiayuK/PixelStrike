@@ -83,7 +83,7 @@ func (w *World) MoveAABB(pos *Vec3, vel *Vec3, dt, height float64, canStep bool)
 				continue
 			}
 			stepH := b.Max.Y - pos.Y
-			if canStep && stepH > 0 && stepH <= StepUp && !stepBlocked(w, Vec3{nextX, pos.Y, pos.Z}, b.Max.Y, height) {
+			if (canStep || vel.Y > 0) && stepH > 0 && stepH <= StepUp && !stepBlocked(w, Vec3{nextX, pos.Y, pos.Z}, b.Max.Y, height) {
 				pos.Y = b.Max.Y + Epsilon
 				grounded = true
 				continue
@@ -114,7 +114,7 @@ func (w *World) MoveAABB(pos *Vec3, vel *Vec3, dt, height float64, canStep bool)
 				continue
 			}
 			stepH := b.Max.Y - pos.Y
-			if canStep && stepH > 0 && stepH <= StepUp && !stepBlocked(w, Vec3{pos.X, pos.Y, nextZ}, b.Max.Y, height) {
+			if (canStep || vel.Y > 0) && stepH > 0 && stepH <= StepUp && !stepBlocked(w, Vec3{pos.X, pos.Y, nextZ}, b.Max.Y, height) {
 				pos.Y = b.Max.Y + Epsilon
 				grounded = true
 				continue

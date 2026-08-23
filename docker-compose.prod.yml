@@ -21,6 +21,6 @@ services:
     restart: unless-stopped
     mem_limit: 128m
     ports:
-      - "127.0.0.1:12888:80"
+      - "127.0.0.1:${PIXEL_STRIKE_PORT:-12888}:80"
     depends_on:
       - server

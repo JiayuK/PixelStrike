@@ -278,7 +278,8 @@ export class Weapons {
 
   onFired(t: number, origin: THREE.Vector3) {
     const def = WEAPONS[this.weaponId] ?? WEAPONS[0];
-    this.nextFireAt = t + (60000 / def.rpm);
+    const interval = 60000 / def.rpm;
+    this.nextFireAt = this.nextFireAt > 0 && t - this.nextFireAt < interval ? this.nextFireAt + interval : t + interval;
     this.ammoLocal = Math.max(0, this.ammoLocal - 1);
     this.recoil = Math.min(1.2, this.recoil + 0.45);
 

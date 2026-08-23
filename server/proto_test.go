@@ -17,7 +17,7 @@ func TestWelcomeV2(t *testing.T) {
 
 func TestBalanceValues(t *testing.T) {
 	if RespawnDelayS != 3*time.Second || Weapons[3].Dmg != 33 || Weapons[5].Dmg != 108 || Weapons[0].ArmorPen != .58 ||
-		WalkSpeed != 6.4 || GroundAccel != 44 || StopAccel != 60 || AirAccel != 9.5 || JumpVel != 7.4 || MaxRewindTicks != 8 {
+		WalkSpeed != 6.4 || GroundAccel != 44 || StopAccel != 60 || AirAccel != 9.5 || JumpVel != 8.4 || MaxRewindTicks != 8 {
 		t.Fatalf("unexpected balance: respawn=%v ak=%v awp=%v", RespawnDelayS, Weapons[3].Dmg, Weapons[5].Dmg)
 	}
 	for _, weapon := range []int{1, 3} {
@@ -70,6 +70,39 @@ func TestSweptCollisionAndCrouchClearance(t *testing.T) {
 	w.aabbs = []AABB{{Min: Vec3{-2, 1.4, -2}, Max: Vec3{2, 2, 2}}}
 	if !w.CanOccupy(Vec3{}, CrouchingHeight) || w.CanOccupy(Vec3{}, StandingHeight) {
 		t.Fatal("crouch clearance check failed")
+	}
+}
+
+func TestJumpLeavesGroundAndClearsCrate(t *testing.T) {
+	w := &World{aabbs: []AABB{{Min: Vec3{-20, -1, -20}, Max: Vec3{20, 0, 20}}}}
+	r := &Room{World: w}
+	p := &PlayerState{Alive: true, OnGround: true, Pos: Vec3{Y: Epsilon}, CmdKeys: KeyJump}
+	p.ApplyLoadout(3, 0)
+	maxY := p.Pos.Y
+	for range 30 {
+		r.Move(p, time.Now())
+		maxY = max(maxY, p.Pos.Y)
+	}
+	if maxY < 1.45 {
+		t.Fatalf("jump apex too low: %.3f", maxY)
+	}
+}
+
+func TestAutomaticFireKeepsCadenceAcrossFrames(t *testing.T) {
+	r := &Room{World: &World{}, history: make(map[uint16]*poseHistory)}
+	p := &PlayerState{Alive: true, OnGround: true}
+	p.ApplyLoadout(2, 0)
+	now := time.Unix(1, 0)
+	if !r.TryFire(p, 0, 0, 0, 0, 1, now) {
+		t.Fatal("first shot rejected")
+	}
+	firstDeadline := p.NextFire
+	gap := time.Duration(60 / Weapons[2].Rpm * float64(time.Second))
+	if !r.TryFire(p, 0, 0, 0, 0, 2, firstDeadline.Add(8*time.Millisecond)) {
+		t.Fatal("late frame shot rejected")
+	}
+	if want := firstDeadline.Add(gap); !p.NextFire.Equal(want) {
+		t.Fatalf("fire cadence drifted: got %v want %v", p.NextFire, want)
 	}
 }
 

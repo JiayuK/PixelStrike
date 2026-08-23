@@ -432,7 +432,8 @@ function frame(t: number) {
     while (remaining > 0.00001) {
       const step = Math.min(1 / 60, remaining);
       const wasGrounded = local.onGround;
-      local.update(step, !world || canOccupy(world.boxes, local.pos, PHYS.standingHeight));
+      const canStand = !local.crouch || !!(local.keys & KEY.Crouch) || !world || canOccupy(world.boxes, local.pos, PHYS.standingHeight);
+      local.update(step, canStand);
       const fallSpeed = local.vel.y;
       let grounded = false;
       if (world) grounded = moveAABB(local.pos, local.vel, step, world.boxes, local.height(), local.onGround);
