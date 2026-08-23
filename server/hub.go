@@ -94,6 +94,9 @@ func (h *Hub) Join(p *Player, name string, primary, secondary uint8) {
 	p.Send(Roster(room.Players))
 	p.lastSelf, p.hasLastSelf = compactSelf(&p.PlayerState), true
 	p.Send(SelfState(&p.PlayerState))
+	if pickups := room.pickupEvents(); len(pickups) > 0 {
+		p.Send(Events(pickups))
+	}
 	p.ready = true
 	if !room.running {
 		room.running = true

@@ -266,13 +266,23 @@ function createHDVoxelTexture(type: number): THREE.Texture {
       ctx.stroke();
       break;
     }
-    case 12: { // 12: Azure Water Basin
+    case 12: { // 12: Azure Water Basin (Crystal Clear Flowing Water Caustics)
       ctx.fillStyle = '#0284c7';
       ctx.fillRect(0, 0, 128, 128);
-      ctx.fillStyle = '#38bdf8';
-      for (let y = 10; y < 120; y += 24) {
-        ctx.fillRect(10, y, 60, 4);
-        ctx.fillRect(70, y + 12, 48, 4);
+      // Soft organic water caustics ripples without harsh stripes
+      ctx.fillStyle = 'rgba(56, 189, 248, 0.28)';
+      for (let i = 0; i < 48; i++) {
+        const cx = Math.floor(rnd() * 128);
+        const cy = Math.floor(rnd() * 128);
+        const cw = 6 + Math.floor(rnd() * 14);
+        const ch = 4 + Math.floor(rnd() * 8);
+        ctx.fillRect(cx, cy, cw, ch);
+      }
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.18)';
+      for (let i = 0; i < 24; i++) {
+        const cx = Math.floor(rnd() * 128);
+        const cy = Math.floor(rnd() * 128);
+        ctx.fillRect(cx, cy, 3, 2);
       }
       break;
     }
@@ -329,10 +339,13 @@ export class WorldView {
   clouds = new THREE.Group();
   sun = new THREE.Group();
   private scene: THREE.Scene;
+  private waterTex: THREE.Texture | null = null;
+  private pickupTemplates: THREE.Group[];
+  private pickups = new Map<number, THREE.Group>();
   boxes: { x0: number; x1: number; y0: number; y1: number; z0: number; z1: number }[] = [];
-
   constructor(scene: THREE.Scene, map: MapData) {
     this.scene = scene;
+    this.pickupTemplates = [this.createPickup(0), this.createPickup(1), this.createPickup(2)];
 
     // 1. Build Repeating-UV High-Definition Voxel Map with Merged Geometries per Material
     const byMat = new Map<number, THREE.BufferGeometry[]>();
@@ -354,10 +367,12 @@ export class WorldView {
           emissiveIntensity: 0.8,
         });
       } else if (t === 12) { // Water surface
+        this.waterTex = tex;
         mat = new THREE.MeshLambertMaterial({
           map: tex,
           transparent: true,
-          opacity: 0.82,
+          opacity: 0.76,
+          depthWrite: false,
         });
       } else if (t === 11) { // Glass
         mat = new THREE.MeshLambertMaterial({
@@ -382,6 +397,62 @@ export class WorldView {
     // 2. High-Tech Sky with Sun & Volumetric Cloud Slabs
     this.setupSky();
 
+  }
+
+  private createPickup(kind: number): THREE.Group {
+    const group = new THREE.Group();
+    const colors = [0xe4a94a, 0xd94c4c, 0x35c9e8];
+    const color = colors[kind];
+    const core = new THREE.Mesh(
+      new THREE.BoxGeometry(0.52, 0.36, 0.52),
+      new THREE.MeshLambertMaterial({ color, emissive: color, emissiveIntensity: 0.75 }),
+    );
+    const glow = new THREE.Mesh(
+      new THREE.SphereGeometry(0.68, 12, 8),
+      new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.16, depthWrite: false, blending: THREE.AdditiveBlending }),
+    );
+    group.add(core, glow);
+    const markerMat = new THREE.MeshBasicMaterial({ color: 0xf5f2df });
+    if (kind === 0) {
+      const left = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.32, 0.09), markerMat);
+      const right = left.clone();
+      left.position.set(-0.12, 0.24, 0);
+      right.position.set(0.12, 0.24, 0);
+      group.add(left, right);
+    } else if (kind === 1) {
+      const horizontal = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.1, 0.08), markerMat);
+      const vertical = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.34, 0.08), markerMat);
+      horizontal.position.set(0, 0, -0.3);
+      vertical.position.set(0, 0, -0.3);
+      group.add(horizontal, vertical);
+    } else {
+      const shaft = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.3, 0.08), markerMat);
+      const wingL = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.22, 0.08), markerMat);
+      const wingR = wingL.clone();
+      shaft.position.set(0, 0.08, -0.3);
+      wingL.position.set(-0.1, -0.05, -0.3);
+      wingR.position.set(0.1, -0.05, -0.3);
+      wingL.rotation.z = -0.7;
+      wingR.rotation.z = 0.7;
+      group.add(shaft, wingL, wingR);
+    }
+    return group;
+  }
+
+  setPickup(id: number, kind: number, x: number, y: number, z: number) {
+    this.removePickup(id);
+    const pickup = (this.pickupTemplates[kind] ?? this.pickupTemplates[0]).clone();
+    pickup.position.set(x, y + 0.48, z);
+    pickup.userData.baseY = pickup.position.y;
+    this.pickups.set(id, pickup);
+    this.group.add(pickup);
+  }
+
+  removePickup(id: number) {
+    const pickup = this.pickups.get(id);
+    if (!pickup) return;
+    this.group.remove(pickup);
+    this.pickups.delete(id);
   }
 
   private setupSky() {
@@ -452,6 +523,15 @@ export class WorldView {
 
   animate(t: number) {
     if (this.clouds.visible) this.clouds.position.x = (t * 0.0018) % 48;
+    if (this.waterTex) {
+      this.waterTex.offset.x = (t * 0.00005) % 1;
+      this.waterTex.offset.y = (t * 0.00008) % 1;
+    }
+    for (const [id, pickup] of this.pickups) {
+      pickup.rotation.y = t * 0.0018 + id;
+      pickup.position.y = pickup.userData.baseY + Math.sin(t * 0.003 + id) * 0.08;
+      pickup.scale.setScalar(1 + Math.sin(t * 0.004 + id) * 0.06);
+    }
   }
 }
 

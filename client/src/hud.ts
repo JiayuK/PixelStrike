@@ -26,6 +26,7 @@ const WEAPON_BADGES: Record<number, string> = {
   4: 'M4A4',
   5: 'AWP',
   6: 'KNIFE',
+  7: 'GRENADE',
 };
 
 const BLOCK_RADAR_COLORS: Record<number, string> = {
@@ -45,6 +46,16 @@ const BLOCK_RADAR_COLORS: Record<number, string> = {
   13: '#6e4f35',
 };
 
+const WEAPON_SVGS: Record<number, string> = {
+  0: `<svg viewBox="0 0 32 32"><rect x="6" y="11" width="16" height="5" fill="#1b1b1e"/><rect x="8" y="16" width="12" height="3" fill="#2c3038"/><rect x="8" y="19" width="5" height="7" fill="#1b1b1e" transform="rotate(20 8 19)"/><circle cx="20" cy="12" r="1.5" fill="#39ff14"/></svg>`,
+  1: `<svg viewBox="0 0 32 32"><rect x="5" y="10" width="18" height="6" fill="#d2d6dc"/><rect x="7" y="16" width="14" height="3" fill="#9fa3ab"/><rect x="7" y="19" width="6" height="8" fill="#1b1b1e" transform="rotate(20 7 19)"/><rect x="10" y="21" width="2" height="2" fill="#d4af37"/></svg>`,
+  2: `<svg viewBox="0 0 32 32"><rect x="3" y="15" width="6" height="4" fill="#22252a"/><rect x="9" y="13" width="9" height="6" fill="#22252a"/><rect x="18" y="12" width="11" height="7" rx="3" fill="#223547"/><rect x="14" y="19" width="3" height="8" fill="#22252a" transform="rotate(20 14 19)"/><rect x="6" y="18" width="3" height="6" fill="#22252a" transform="rotate(25 6 18)"/></svg>`,
+  3: `<svg viewBox="0 0 32 32"><rect x="3" y="15" width="7" height="6" fill="#7a3a1a"/><rect x="10" y="13" width="10" height="6" fill="#22252a"/><rect x="20" y="14" width="9" height="3" fill="#555d68"/><rect x="16" y="15" width="4" height="5" fill="#7a3a1a"/><rect x="14" y="19" width="3" height="8" fill="#22252a" transform="rotate(20 14 19)"/><rect x="5" y="19" width="3" height="6" fill="#7a3a1a" transform="rotate(25 5 19)"/></svg>`,
+  4: `<svg viewBox="0 0 32 32"><rect x="3" y="14" width="7" height="6" fill="#22252a"/><rect x="10" y="13" width="10" height="6" fill="#333842"/><rect x="20" y="13" width="7" height="6" fill="#555d68"/><rect x="27" y="14" width="4" height="3" fill="#88929e"/><rect x="14" y="19" width="3" height="8" fill="#22252a" transform="rotate(25 7 19)"/><rect x="7" y="19" width="3" height="6" fill="#22252a" transform="rotate(25 7 19)"/></svg>`,
+  5: `<svg viewBox="0 0 32 32"><rect x="2" y="15" width="8" height="6" fill="#344d37"/><rect x="10" y="14" width="12" height="6" fill="#344d37"/><rect x="22" y="15" width="8" height="3" fill="#22252a"/><rect x="29" y="14" width="2" height="5" fill="#555d68"/><rect x="11" y="9" width="11" height="4" rx="1" fill="#1b1b1e"/><rect x="13" y="13" width="2" height="2" fill="#555d68"/><rect x="19" y="13" width="2" height="2" fill="#555d68"/><rect x="14" y="20" width="4" height="5" fill="#22252a"/></svg>`,
+  6: `<svg viewBox="0 0 32 32"><path d="M6 26 L12 20 L15 21 L9 27 Z" fill="#22252a"/><path d="M11 19 L14 17 L16 19 L13 21 Z" fill="#555d68"/><path d="M14 17 L25 5 L27 7 L16 19 Z" fill="#d2d6dc"/><path d="M23 7 L25 5 L27 7 L25 9 Z" fill="#ffffff"/></svg>`,
+  7: `<svg viewBox="0 0 32 32"><ellipse cx="16" cy="18" rx="7" ry="9" fill="#475e38"/><rect x="11" y="17" width="10" height="2" fill="#2e3f24"/><rect x="15" y="11" width="2" height="14" fill="#2e3f24"/><rect x="14" y="7" width="4" height="4" fill="#9fa3ab"/><circle cx="11" cy="8" r="2.5" fill="none" stroke="#d2d6dc" stroke-width="1.5"/></svg>`,
+};
 export class Hud {
   root = el('hud');
   sensitivity = 0.00216;
@@ -78,10 +89,12 @@ export class Hud {
   private damageTimer = 0;
   private lastHp = -1;
   private lastArmor = -1;
-  private lastWeapon = '';
   private lastInventory = '';
+  private lastPrimary = -1;
+  private lastSecondary = -1;
   private lastNetwork = '';
   private lastShield = false;
+  private lastScope: boolean | null = null;
   private lastCrosshair = -1;
   private lastDeathCountdown = -2;
   private lastReloading: boolean | null = null;
@@ -227,22 +240,41 @@ export class Hud {
 
   setMap(map: MapData) {
     this.map = map;
-    this.radarBase.width = this.radar.width;
-    this.radarBase.height = this.radar.height;
+    this.radarBase.width = 256;
+    this.radarBase.height = 256;
     const ctx = this.radarBase.getContext('2d')!;
-    const size = map.size[0] || 256;
-    const scale = this.radarBase.width / size;
-    ctx.fillStyle = '#080c14';
+    const ARENA_SPAN = 136; // Focus on active 128m fortress area (-68 to +68)
+    const scale = this.radarBase.width / ARENA_SPAN;
+    const origin = ARENA_SPAN / 2;
+
+    // Dark high-tech tactical radar background
+    ctx.fillStyle = '#0d1117';
     ctx.fillRect(0, 0, this.radarBase.width, this.radarBase.height);
+
+    // Subtle 32m tactical radar grid
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+    ctx.lineWidth = 1;
+    for (let g = 0; g <= ARENA_SPAN; g += 32) {
+      const pos = g * scale;
+      ctx.beginPath();
+      ctx.moveTo(pos, 0); ctx.lineTo(pos, this.radarBase.height);
+      ctx.moveTo(0, pos); ctx.lineTo(this.radarBase.width, pos);
+      ctx.stroke();
+    }
+
+    // Draw active structures and cover (ignore outer 512m floor slab)
     for (const b of map.blocks) {
+      if (b.t === 0) continue; // Skip giant ground slab to avoid empty padding
       ctx.fillStyle = BLOCK_RADAR_COLORS[b.t] ?? '#444850';
-      ctx.fillRect((b.x + size / 2) * scale, (b.z + size / 2) * scale, Math.max(1, b.w * scale), Math.max(1, b.d * scale));
+      const bx = (b.x + origin) * scale;
+      const bz = (b.z + origin) * scale;
+      ctx.fillRect(bx, bz, Math.max(1.5, b.w * scale), Math.max(1.5, b.d * scale));
     }
     this.drawRadar(0, 0, 0, true);
   }
 
   updateRadar(x: number, z: number, yaw: number, now: number) {
-    if (now - this.lastRadar < 80) return;
+    if (now - this.lastRadar < 70) return;
     this.lastRadar = now;
     this.drawRadar(x, z, yaw, false);
   }
@@ -252,26 +284,38 @@ export class Hud {
     const c = this.radar;
     const ctx = c.getContext('2d');
     if (!ctx) return;
-    const size = this.map.size[0] || 256;
-    const scale = c.width / size;
-    ctx.drawImage(this.radarBase, 0, 0);
+    const ARENA_SPAN = 136;
+    const scale = c.width / ARENA_SPAN;
+    const origin = ARENA_SPAN / 2;
+    ctx.drawImage(this.radarBase, 0, 0, c.width, c.height);
 
     if (staticOnly) return;
 
-    const px = (x + size / 2) * scale;
-    const pz = (z + size / 2) * scale;
+    const px = (x + origin) * scale;
+    const pz = (z + origin) * scale;
 
+    // Player Tactical Beacon & Heading Cone
     ctx.save();
     ctx.translate(px, pz);
     ctx.rotate(-yaw);
+
+    // Direction cone
+    ctx.fillStyle = 'rgba(16, 185, 129, 0.18)';
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.arc(0, 0, 18, -Math.PI * 0.65, -Math.PI * 0.35);
+    ctx.closePath();
+    ctx.fill();
+
+    // Sharp tactical arrow
     ctx.fillStyle = '#10b981';
     ctx.shadowColor = '#10b981';
-    ctx.shadowBlur = 4;
+    ctx.shadowBlur = 6;
     ctx.beginPath();
-    ctx.moveTo(0, -7);
-    ctx.lineTo(5, 5);
-    ctx.lineTo(0, 2);
-    ctx.lineTo(-5, 5);
+    ctx.moveTo(0, -9);
+    ctx.lineTo(6, 6);
+    ctx.lineTo(0, 3);
+    ctx.lineTo(-6, 6);
     ctx.closePath();
     ctx.fill();
     ctx.restore();
@@ -282,6 +326,8 @@ export class Hud {
     this.lastHp = v;
     const hpEl = el('hp');
     if (hpEl) hpEl.textContent = String(v);
+    const fillEl = el('hp-bar-fill');
+    if (fillEl) fillEl.style.width = `${Math.max(0, Math.min(100, v))}%`;
   }
 
   setArmor(v: number) {
@@ -289,36 +335,49 @@ export class Hud {
     this.lastArmor = v;
     const armorEl = el('armor');
     if (armorEl) armorEl.textContent = String(v);
+    const fillEl = el('armor-bar-fill');
+    if (fillEl) fillEl.style.width = `${Math.max(0, Math.min(100, v))}%`;
   }
 
-  setWeapon(id: number, mag: number, reserve: number, nades: number, activeSlot = 1) {
-    const state = `${id}:${mag}:${reserve}:${nades}:${activeSlot}`;
-    if (state === this.lastWeapon) return;
-    this.lastWeapon = state;
-    const grenade = activeSlot === 4;
-    const nameEl = el('weapon-name');
-    if (nameEl) nameEl.textContent = grenade ? 'HE GRENADE' : WEAPON_BADGES[id] ?? 'UNKNOWN';
-    const ammoEl = el('ammo');
-    if (ammoEl) ammoEl.innerHTML = grenade ? `× ${nades}` : id === 6 ? '-' : `${mag} <span class="reserve">/ ${reserve}</span>`;
-    const nadeEl = el('grenades');
-    if (nadeEl) nadeEl.textContent = String(nades);
-  }
-
-  setInventory(primary: number, secondary: number, active: number, mags: readonly number[], reserves: readonly number[], nades: number, primed: boolean) {
-    const state = `${primary}:${secondary}:${active}:${mags[1]}:${reserves[1]}:${mags[2]}:${reserves[2]}:${nades}:${primed}`;
+  setInventory(primary: number, secondary: number, active: number, mags: readonly number[], nades: number, primed: boolean) {
+    const state = `${primary}:${secondary}:${active}:${mags[1]}:${mags[2]}:${nades}:${primed}`;
     if (state === this.lastInventory) return;
     this.lastInventory = state;
-    el('item-1-name').textContent = WEAPON_BADGES[primary] ?? 'PRIMARY';
-    el('item-1-ammo').textContent = `${mags[1]}/${reserves[1]}`;
-    el('item-2-name').textContent = WEAPON_BADGES[secondary] ?? 'SECONDARY';
-    el('item-2-ammo').textContent = `${mags[2]}/${reserves[2]}`;
-    el('item-4-ammo').textContent = primed ? 'PIN OUT' : `×${nades}`;
-    for (let slot = 1; slot <= 4; slot++) {
-      const item = el(`item-slot-${slot}`);
-      item.classList.toggle('active', slot === active);
-      item.setAttribute('aria-current', slot === active ? 'true' : 'false');
+    const slot1Icon = el('slot-1-icon');
+    if (slot1Icon && (slot1Icon.innerHTML === '' || this.lastPrimary !== primary)) {
+      this.lastPrimary = primary;
+      slot1Icon.innerHTML = WEAPON_SVGS[primary] ?? WEAPON_SVGS[3];
     }
-    el('item-slot-4').classList.toggle('primed', primed);
+    const slot2Icon = el('slot-2-icon');
+    if (slot2Icon && (slot2Icon.innerHTML === '' || this.lastSecondary !== secondary)) {
+      this.lastSecondary = secondary;
+      slot2Icon.innerHTML = WEAPON_SVGS[secondary] ?? WEAPON_SVGS[0];
+    }
+    const slot3Icon = el('slot-3-icon');
+    if (slot3Icon && slot3Icon.innerHTML === '') slot3Icon.innerHTML = WEAPON_SVGS[6];
+    const slot4Icon = el('slot-4-icon');
+    if (slot4Icon && slot4Icon.innerHTML === '') slot4Icon.innerHTML = WEAPON_SVGS[7];
+
+    const slot1Ammo = el('slot-1-ammo');
+    if (slot1Ammo) slot1Ammo.textContent = String(mags[1] ?? 30);
+    const slot2Ammo = el('slot-2-ammo');
+    if (slot2Ammo) slot2Ammo.textContent = String(mags[2] ?? 20);
+    const slot3Ammo = el('slot-3-ammo');
+    if (slot3Ammo) slot3Ammo.textContent = '-';
+    const slot4Ammo = el('slot-4-ammo');
+    if (slot4Ammo) slot4Ammo.textContent = primed ? 'PIN' : String(nades);
+    const grenadeReady = el('grenade-ready');
+    grenadeReady.style.display = active === 4 ? 'block' : 'none';
+    grenadeReady.textContent = primed ? '手雷已拉栓 · 左键投掷' : '右键拉栓';
+    grenadeReady.classList.toggle('primed', primed);
+    el('slot-4').classList.toggle('primed', primed);
+
+    for (let s = 1; s <= 4; s++) {
+      const slotEl = el(`slot-${s}`);
+      if (slotEl) {
+        slotEl.classList.toggle('active', s === active);
+      }
+    }
   }
 
   setReloading(reloading: boolean, progress = 0) {
@@ -341,6 +400,8 @@ export class Hud {
     if (fillEl) fillEl.style.width = `${pct}%`;
   }
   setScope(v: boolean) {
+    if (v === this.lastScope) return;
+    this.lastScope = v;
     if (this.scope) this.scope.style.display = v ? 'block' : 'none';
     this.crosshair.style.display = v ? 'none' : 'block';
   }
@@ -381,10 +442,10 @@ export class Hud {
   }
 
   setCrosshair(spread: number) {
-    const px = Math.max(0, spread);
-    if (Math.abs(px - this.lastCrosshair) < 0.1) return;
+    const px = Math.round(Math.max(0, spread));
+    if (px === this.lastCrosshair) return;
     this.lastCrosshair = px;
-    this.crosshair.style.setProperty('--spread', `${px.toFixed(1)}px`);
+    this.crosshair.style.setProperty('--spread', `${px}px`);
   }
 
 
@@ -415,6 +476,15 @@ export class Hud {
       this.killfeed.lastElementChild?.remove();
     }
     setTimeout(() => row.remove(), 4200);
+  }
+
+  showPickupNotice(message: string) {
+    const row = document.createElement('div');
+    row.className = 'kill-row mine';
+    row.textContent = message;
+    this.killfeed.prepend(row);
+    while (this.killfeed.children.length > 6) this.killfeed.lastElementChild?.remove();
+    setTimeout(() => row.remove(), 2400);
   }
 
 
@@ -484,6 +554,7 @@ export class Hud {
 
   exitMatch() {
     document.exitPointerLock?.();
+    void document.exitFullscreen?.();
     this.root.style.display = 'none';
     this.menu.style.display = 'block';
     if (this.pause) this.pause.style.display = 'none';

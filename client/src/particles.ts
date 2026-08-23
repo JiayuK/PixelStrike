@@ -6,6 +6,8 @@ const MAX_PARTICLES = 512;
 const dummy = new THREE.Object3D();
 const pColor = new THREE.Color();
 const grenadeStep = new THREE.Vector3();
+const FIRE_COLORS = [0xff2200, 0xff5500, 0xff9900, 0xffdd33, 0xfffa88];
+const SMOKE_COLORS = [0x1e1e22, 0x38383e, 0x55555c, 0x777780];
 
 interface ParticleData {
   x: number;
@@ -17,6 +19,8 @@ interface ParticleData {
   color: number;
   born: number;
   life: number;
+  size: number;
+  gravity: number;
 }
 
 interface GrenadeVisual {
@@ -25,6 +29,12 @@ interface GrenadeVisual {
   vx: number;
   vy: number;
   vz: number;
+  born: number;
+}
+
+interface BlastVisual {
+  mesh: THREE.Mesh<THREE.SphereGeometry, THREE.MeshBasicMaterial>;
+  light: THREE.PointLight;
   born: number;
 }
 
@@ -38,6 +48,8 @@ export class ParticleSystem {
   private geo = new THREE.BoxGeometry(0.06, 0.06, 0.06);
   private instancedMesh: THREE.InstancedMesh;
   private grenades: GrenadeVisual[] = [];
+  private blasts: BlastVisual[] = [];
+  private blastGeo = new THREE.SphereGeometry(0.5, 12, 8);
   private grenadeGeo = (() => {
     const body = new THREE.CylinderGeometry(0.075, 0.075, 0.18, 12);
     const rib = new THREE.BoxGeometry(0.16, 0.04, 0.16);
@@ -79,6 +91,8 @@ export class ParticleSystem {
         color,
         born: now,
         life: 400 + Math.random() * 300,
+        size: 0.7 + Math.random() * 0.7,
+        gravity: 18,
       });
     }
   }
@@ -101,9 +115,15 @@ export class ParticleSystem {
   /** Spawn dynamic high-impact explosion fire, sparks, and billowing smoke */
   spawnExplosion(pos: THREE.Vector3) {
     const now = performance.now();
+    const blastMat = new THREE.MeshBasicMaterial({ color: 0xff8a22, transparent: true, opacity: 0.95, depthWrite: false, blending: THREE.AdditiveBlending });
+    const blast = new THREE.Mesh(this.blastGeo, blastMat);
+    const light = new THREE.PointLight(0xff7a22, 14, 20, 2);
+    blast.position.copy(pos).y += 0.35;
+    light.position.copy(blast.position);
+    this.group.add(blast, light);
+    this.blasts.push({ mesh: blast, light, born: now });
     // 1. Fiery Blast Core & Shrapnel Sparks (Spherical burst)
-    const fireColors = [0xff2200, 0xff5500, 0xff9900, 0xffdd33, 0xfffa88];
-    for (let i = 0; i < 32; i++) {
+    for (let i = 0; i < 48; i++) {
       if (this.particles.length >= MAX_PARTICLES) break;
       const speed = 4.0 + Math.random() * 8.5;
       const theta = Math.random() * Math.PI * 2;
@@ -118,15 +138,16 @@ export class ParticleSystem {
         vx,
         vy,
         vz,
-        color: fireColors[i % fireColors.length],
+        color: FIRE_COLORS[i % FIRE_COLORS.length],
         born: now,
-        life: 500 + Math.random() * 400,
+        life: 550 + Math.random() * 450,
+        size: 2.5 + Math.random() * 2.5,
+        gravity: 14,
       });
     }
 
     // 2. Billowing Volumetric Smoke Plumes (Rising ash & dark smoke)
-    const smokeColors = [0x1e1e22, 0x38383e, 0x55555c, 0x777780];
-    for (let i = 0; i < 24; i++) {
+    for (let i = 0; i < 30; i++) {
       if (this.particles.length >= MAX_PARTICLES) break;
       const speed = 1.0 + Math.random() * 2.5;
       const angle = Math.random() * Math.PI * 2;
@@ -137,14 +158,16 @@ export class ParticleSystem {
         vx: Math.cos(angle) * speed,
         vy: 2.5 + Math.random() * 3.5, // Ascending smoke
         vz: Math.sin(angle) * speed,
-        color: smokeColors[i % smokeColors.length],
+        color: SMOKE_COLORS[i % SMOKE_COLORS.length],
         born: now,
-        life: 900 + Math.random() * 600,
+        life: 1400 + Math.random() * 800,
+        size: 6 + Math.random() * 5,
+        gravity: -0.35,
       });
     }
 
     // 3. Ground Shrapnel & Debris
-    this.spawnImpact(pos, UP, 0x8a7a60, 14);
+    this.spawnImpact(pos, UP, 0x8a7a60, 18);
 
     let nearest = -1;
     let nearestSq = 4;
@@ -167,11 +190,11 @@ export class ParticleSystem {
       const age = now - p.born;
       if (age > p.life) continue;
 
-      p.vy -= 18.0 * dt;
+      p.vy -= p.gravity * dt;
       p.x += p.vx * dt;
       p.y += p.vy * dt;
       p.z += p.vz * dt;
-      const scale = Math.max(0.08, 1 - age / p.life);
+      const scale = p.size * Math.max(0.08, 1 - age / p.life);
 
       dummy.position.set(p.x, p.y, p.z);
       dummy.scale.setScalar(scale);
@@ -191,6 +214,20 @@ export class ParticleSystem {
         this.instancedMesh.instanceColor.needsUpdate = true;
       }
     }
+    let liveBlasts = 0;
+    for (const blast of this.blasts) {
+      const progress = (now - blast.born) / 260;
+      if (progress >= 1) {
+        this.group.remove(blast.mesh, blast.light);
+        blast.mesh.material.dispose();
+        continue;
+      }
+      blast.mesh.scale.setScalar(0.5 + progress * 7);
+      blast.mesh.material.opacity = (1 - progress) * (1 - progress);
+      blast.light.intensity = 14 * (1 - progress);
+      this.blasts[liveBlasts++] = blast;
+    }
+    this.blasts.length = liveBlasts;
     let liveGrenades = 0;
     for (const g of this.grenades) {
       if (now - g.born > 2100) {

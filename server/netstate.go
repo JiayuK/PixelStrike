@@ -49,12 +49,24 @@ func angleHalfDeg(rad float64) int16 {
 	return int16(deg2)
 }
 
-func (p *Player) BuildSnapshot(tick uint32, players []*Player, nowUnixNano int64) []byte {
+func quantizePlayers(dst []quantState, players []*Player, nowUnixNano int64) []quantState {
+	if cap(dst) < len(players) {
+		dst = make([]quantState, len(players))
+	} else {
+		dst = dst[:len(players)]
+	}
+	for i, player := range players {
+		dst[i] = quantizeState(&player.PlayerState, nowUnixNano)
+	}
+	return dst
+}
+
+func (p *Player) BuildSnapshot(tick uint32, players []*Player, states []quantState) []byte {
 	if p.netCache == nil {
 		p.netCache = make(map[uint16]quantState)
 		p.netFullAt = make(map[uint16]uint32)
 	}
-	w := &Buf{b: make([]byte, 1, maxSnapshotBytes)}
+	w := &Buf{b: make([]byte, 1, min(maxSnapshotBytes, 8+len(players)*21))}
 	w.b[0] = OpSnapshot
 	w.U32(tick)
 	w.U16(p.LastInputSeq)
@@ -62,7 +74,7 @@ func (p *Player) BuildSnapshot(tick uint32, players []*Player, nowUnixNano int64
 	countAt := len(w.b) - 1
 	count := 0
 
-	for _, other := range players {
+	for i, other := range players {
 		isSelf := other.Id == p.Id
 		dx := other.Pos.X - p.Pos.X
 		dz := other.Pos.Z - p.Pos.Z
@@ -86,7 +98,7 @@ func (p *Player) BuildSnapshot(tick uint32, players []*Player, nowUnixNano int64
 		if len(w.b) >= maxSnapshotBytes {
 			break
 		}
-		cur := quantizeState(&other.PlayerState, nowUnixNano)
+		cur := states[i]
 		prev, seen := p.netCache[other.Id]
 		full := !seen || tick-p.netFullAt[other.Id] >= 120
 		if !appendStateDelta(w, other.Id, prev, cur, full) {

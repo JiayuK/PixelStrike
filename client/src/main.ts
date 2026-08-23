@@ -6,7 +6,8 @@ import { Weapons } from './weapons.js';
 import { Hud } from './hud.js';
 import { AudioEngine, type SfxName } from './audio.js';
 import { ParticleSystem } from './particles.js';
-import { KEY, PHYS, WEAPONS, type MapData, type PlayerSnap, type RosterEntry } from './constants.js';
+import { KEY, PHYS, WEAPONS, type MapData, type PlayerSnap, type RosterEntry, type WeaponDef } from './constants.js';
+import bundledMap from '../../map.json';
 
 const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
 const wsUrl = import.meta.env.VITE_WS_URL || `${proto}//${location.host}/ws`;
@@ -49,6 +50,8 @@ let inputSeq = 0;
 let shotSeq = 0;
 let lastInput = 0;
 const INPUT_INTERVAL = 1000 / 60;
+const AWP_SCOPE_MS = 450;
+const SPEED_BOOST_MULTIPLIER = 1.35;
 let fireHeld = false;
 let firePressed = false;
 let mouseX = 0;
@@ -56,15 +59,21 @@ let mouseY = 0;
 let mag = 30;
 let reserve = 90;
 let nades = 1;
+let reloadPendingSlot = 0;
+let reloadPendingMag = 0;
+let reloadPendingReserve = 0;
 let landingKick = 0;
 let cameraEyeHeight = PHYS.eyeHeight;
 let landingPenaltyUntil = 0;
 let aimStartedAt = 0;
+let awpRescopeAt = 0;
+let speedBoostUntil = 0;
 let patternShots = 0;
 let lastPatternShot = 0;
 let latencyMs = 0;
 let serverOutboundBps = 0;
 let crosshairScale = 1;
+let displayedCrosshair = 0;
 let activeSlot = 1;
 let lastWeaponSlot = 1;
 let grenadePrimed = false;
@@ -87,6 +96,7 @@ let cameraStepOffset = 0;
 const states = new Map<number, PlayerSnap>();
 const names = new Map<number, string>();
 const roster = new Map<number, RosterEntry>();
+const pickupStates = new Map<number, { kind: number; origin: [number, number, number] }>();
 remotes.nameOf = (id) => names.get(id) ?? `特战队员${id}`;
 const deathTarget = new THREE.Vector3();
 const remoteShotOrigin = new THREE.Vector3();
@@ -129,7 +139,7 @@ function keyMask(): number {
   if (keys.has('KeyA')) k |= KEY.Left;
   if (keys.has('KeyD')) k |= KEY.Right;
   if (keys.has('Space')) k |= KEY.Jump;
-  if (keys.has('ControlLeft') || keys.has('ControlRight')) k |= KEY.Crouch;
+  if (keys.has('KeyC') || keys.has('ControlLeft') || keys.has('ControlRight')) k |= KEY.Crouch;
   return k;
 }
 
@@ -143,8 +153,7 @@ function resetInventory(primary: number, secondary: number) {
 }
 
 function refreshWeaponHud() {
-  hud.setWeapon(weapons.weaponId, mag, reserve, nades, activeSlot);
-  hud.setInventory(primaryWeapon, secondaryWeapon, activeSlot, slotMags, slotReserves, nades, grenadePrimed);
+  hud.setInventory(primaryWeapon, secondaryWeapon, activeSlot, slotMags, nades, grenadePrimed);
 }
 
 function grenadeVelocity(out: THREE.Vector3) {
@@ -162,10 +171,64 @@ function clearCombatInput() {
   refreshWeaponHud();
 }
 
+const keyboard = (navigator as Navigator & { keyboard?: { lock(keys?: string[]): Promise<void>; unlock(): void } }).keyboard;
+let capturePending = false;
+let pointerLockedAt = 0;
+let pointerUnlockRequested = false;
+let historyGuarded = false;
+
+function guardMatchHistory() {
+  if (historyGuarded) return;
+  history.pushState({ pixelStrikeMatch: true }, '');
+  historyGuarded = true;
+}
+
+function releaseMatchHistory() {
+  if (!historyGuarded) return;
+  historyGuarded = false;
+  if (history.state?.pixelStrikeMatch) history.back();
+}
+
+async function lockPointer() {
+  capturePending = false;
+  if (document.fullscreenElement) {
+    try { await keyboard?.lock(['Escape']); } catch {}
+  }
+  if (document.pointerLockElement !== renderer.domElement) {
+    try {
+      await renderer.domElement.requestPointerLock({ unadjustedMovement: true });
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'NotSupportedError') {
+        try { await renderer.domElement.requestPointerLock(); } catch {}
+      }
+    }
+  }
+}
+
+function captureGame() {
+  pointerUnlockRequested = false;
+  if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+  capturePending = true;
+  if (!document.fullscreenElement && document.fullscreenEnabled) {
+    void document.documentElement.requestFullscreen({ navigationUI: 'hide' }).catch(() => void lockPointer());
+    return;
+  }
+  void lockPointer();
+}
+
+document.addEventListener('fullscreenchange', () => {
+  if (capturePending && document.fullscreenElement) void lockPointer();
+  else if (!document.fullscreenElement) {
+    capturePending = false;
+    keyboard?.unlock();
+  }
+});
+
+
 function stopAiming() {
   aiming = false;
   aimStartedAt = 0;
-  hud.setScope(false);
+  awpRescopeAt = 0;
 }
 
 function isInteractiveTarget(target: EventTarget | null): boolean {
@@ -174,7 +237,10 @@ function isInteractiveTarget(target: EventTarget | null): boolean {
 
 
 function startReload(t = performance.now(), notifyServer = true) {
-  if (!alive || activeSlot > 2 || weapons.isReloading(t) || !weapons.startReload(t, reserve)) return;
+  if (!alive || activeSlot > 2 || reloadPendingSlot === activeSlot || weapons.isReloading(t) || !weapons.startReload(t, reserve)) return;
+  reloadPendingSlot = activeSlot;
+  reloadPendingMag = weapons.ammoLocal;
+  reloadPendingReserve = reserve;
   if (notifyServer) net.sendReload();
   stopAiming();
 }
@@ -184,6 +250,8 @@ function selectSlot(slot: number) {
   if (slot === 4 ? nades <= 0 : slot < 1 || slot > 3) return;
   fireHeld = false;
   firePressed = false;
+  patternShots = 0;
+  lastPatternShot = 0;
   weapons.nextFireAt = Math.max(weapons.nextFireAt, performance.now() + 220);
   if (slot === 4) {
     activeSlot = 4;
@@ -201,11 +269,17 @@ function selectSlot(slot: number) {
   weapons.group.visible = true;
   stopAiming();
   weapons.cancelReload();
+  if (slot !== reloadPendingSlot) reloadPendingSlot = 0;
+  const weapon = slot === 1 ? primaryWeapon : slot === 2 ? secondaryWeapon : 6;
+  if (weapon !== weapons.weaponId) weapons.build(weapon);
+  local.weaponId = weapon;
+  mag = slot <= 2 ? slotMags[slot] : 0;
+  reserve = slot <= 2 ? slotReserves[slot] : 0;
+  weapons.ammoLocal = mag;
   net.switchSlot(slot);
   audio.play('weapon_switch', 0.7);
   refreshWeaponHud();
 }
-
 function primeGrenade() {
   if (activeSlot !== 4 || grenadePrimed || nades <= 0) return;
   grenadePrimed = true;
@@ -225,18 +299,31 @@ function throwGrenade() {
   audio.play('weapon_switch', 0.7);
   refreshWeaponHud();
 }
+
 window.addEventListener('keydown', (e) => {
-  const interactive = isInteractiveTarget(e.target);
-  if (joined && (!interactive || e.ctrlKey || e.metaKey || e.altKey || /^F\d+$/.test(e.code))) e.preventDefault();
+  const isLock = document.pointerLockElement === renderer.domElement;
+  const interactive = !isLock && isInteractiveTarget(e.target);
+
   if (e.code === 'Escape' && joined) {
+    pointerUnlockRequested = true;
     e.preventDefault();
-    if (!e.repeat) hud.toggleSettings();
+    clearCombatInput();
+    keyboard?.unlock();
+    document.exitPointerLock?.();
+    if (document.fullscreenElement) void document.exitFullscreen();
+    hud.showPause(true);
     return;
   }
   if (!joined || interactive) return;
-  if (e.metaKey || e.altKey || (e.ctrlKey && e.code !== 'ControlLeft' && e.code !== 'ControlRight')) return;
+  if (e.metaKey || e.altKey) return;
+  if (e.ctrlKey && e.code !== 'ControlLeft' && e.code !== 'ControlRight') {
+    if (!/^(Key[WASDRG]|Digit[1234]|Space)$/.test(e.code)) return;
+    e.preventDefault();
+  }
   if (e.code === 'Tab') {
+    e.preventDefault();
     hud.toggleScoreboard(true);
+    refreshScoreboard();
     if (!e.repeat) net.requestRoster();
     return;
   }
@@ -244,18 +331,22 @@ window.addEventListener('keydown', (e) => {
   keys.add(e.code);
   if (e.repeat) return;
   if (/^Digit[1234]$/.test(e.code)) {
+    e.preventDefault();
     selectSlot(+e.code.at(-1)!);
     return;
   }
   if (e.code === 'KeyR') {
+    e.preventDefault();
     startReload();
     return;
   }
-  if (e.code === 'KeyG') selectSlot(4);
+  if (e.code === 'KeyG') {
+    e.preventDefault();
+    selectSlot(4);
+  }
 }, { capture: true });
 
 window.addEventListener('keyup', (e) => {
-  if (joined && !isInteractiveTarget(e.target)) e.preventDefault();
   keys.delete(e.code);
   if (e.code === 'Tab') hud.toggleScoreboard(false);
 }, { capture: true });
@@ -268,25 +359,29 @@ document.addEventListener('visibilitychange', () => {
 window.addEventListener('mousemove', (e) => {
   if (!alive || document.pointerLockElement !== renderer.domElement) return;
   if (e.buttons & 2) e.preventDefault();
-  const mx = e.movementX;
-  const my = e.movementY;
-  const sens = aiming && weapons.weaponId === 5 ? hud.sensitivity * 0.45 : hud.sensitivity;
-  local.yaw -= mx * sens;
-  local.pitch = Math.max(-1.52, Math.min(1.52, local.pitch - my * sens));
-  mouseX = Math.max(-240, Math.min(240, mouseX + Math.max(-150, Math.min(150, mx))));
-  mouseY = Math.max(-240, Math.min(240, mouseY + Math.max(-150, Math.min(150, my))));
-}, { capture: true, passive: false });
+  if (performance.now() - pointerLockedAt < 120) return; // Suppress initial pointerlock re-center jump
 
+  // Discard spurious browser pointer lock jump spikes
+  if (Math.abs(e.movementX) > 250 || Math.abs(e.movementY) > 250) return;
+
+  const mx = Math.max(-80, Math.min(80, e.movementX));
+  const my = Math.max(-80, Math.min(80, e.movementY));
+  const sens = aiming && weapons.weaponId === 5 ? hud.sensitivity * camera.fov / 75 : hud.sensitivity;
+  local.yaw -= mx * sens;
+  local.pitch = Math.max(-1.45, Math.min(1.45, local.pitch - my * sens));
+  mouseX = Math.max(-160, Math.min(160, mouseX + mx));
+  mouseY = Math.max(-160, Math.min(160, mouseY + my));
+}, { capture: true, passive: false });
 window.addEventListener('mousedown', (e) => {
   if (!joined) return;
   const interactive = isInteractiveTarget(e.target);
   if (!interactive || e.button !== 0) e.preventDefault();
-  if (e.button === 2) e.stopPropagation();
+  if (e.button !== 0) e.stopImmediatePropagation();
   if (interactive) return;
   document.getSelection()?.removeAllRanges();
   if (!alive || hud.isSettingsOpen()) return;
   if (document.pointerLockElement !== renderer.domElement) {
-    renderer.domElement.requestPointerLock();
+    void captureGame();
     return;
   }
   if (activeSlot === 4) {
@@ -297,22 +392,40 @@ window.addEventListener('mousedown', (e) => {
   if (e.button === 0) {
     fireHeld = true;
     firePressed = true;
-  } else if (e.button === 2) {
-    if (!aiming) aimStartedAt = performance.now();
-    aiming = true;
-    hud.setScope(weapons.weaponId === 5);
+  } else if (e.button === 2 && weapons.weaponId < 6) {
+    if (weapons.weaponId === 5 && awpRescopeAt) return;
+    if (aiming) stopAiming();
+    else {
+      aimStartedAt = performance.now();
+      aiming = true;
+    }
   }
 }, { capture: true });
 
 window.addEventListener('mouseup', (e) => {
   if (joined && (!isInteractiveTarget(e.target) || e.button !== 0)) e.preventDefault();
-  if (e.button === 2) e.stopPropagation();
+  if (e.button !== 0) e.stopImmediatePropagation();
   if (e.button === 0) fireHeld = false;
-  if (e.button === 2 && activeSlot !== 4) stopAiming();
 }, { capture: true });
 
+for (const type of ['pointerdown', 'pointerup']) {
+  window.addEventListener(type, (e) => {
+    if (joined && e instanceof PointerEvent && e.pointerType === 'mouse' && e.button >= 3) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+    }
+  }, { capture: true, passive: false });
+}
+
+
+window.addEventListener('popstate', () => {
+  if (!historyGuarded) return;
+  history.pushState({ pixelStrikeMatch: true }, '');
+  if (joined) void captureGame();
+});
+
 window.addEventListener('pointermove', (e) => {
-  if (joined && e.pointerType === 'mouse' && e.buttons & 2) {
+  if (joined && e.pointerType === 'mouse' && e.buttons && !hud.isSettingsOpen()) {
     e.preventDefault();
     e.stopPropagation();
   }
@@ -321,8 +434,11 @@ document.addEventListener('contextmenu', (e) => {
   e.preventDefault();
   e.stopImmediatePropagation();
 }, { capture: true });
-document.addEventListener('auxclick', (e) => e.preventDefault(), { capture: true });
-for (const type of ['selectstart', 'dragstart', 'copy', 'cut', 'paste', 'gesturestart', 'gesturechange', 'gestureend']) {
+document.addEventListener('auxclick', (e) => {
+  e.preventDefault();
+  e.stopImmediatePropagation();
+}, { capture: true });
+for (const type of ['selectstart', 'dragstart', 'dragover', 'drop', 'copy', 'cut', 'paste', 'gesturestart', 'gesturechange', 'gestureend']) {
   document.addEventListener(type, (e) => {
     if (!isInteractiveTarget(e.target)) e.preventDefault();
   }, { capture: true });
@@ -344,16 +460,24 @@ window.addEventListener('wheel', (e) => {
 
 document.addEventListener('pointerlockchange', () => {
   const isLocked = document.pointerLockElement === renderer.domElement;
-  if (!isLocked) clearCombatInput();
-  else document.getSelection()?.removeAllRanges();
+  if (!isLocked) {
+    clearCombatInput();
+    if (joined && alive && document.fullscreenElement && document.hasFocus() && !pointerUnlockRequested && !hud.isSettingsOpen()) {
+      void lockPointer();
+      return;
+    }
+  } else {
+    pointerUnlockRequested = false;
+    pointerLockedAt = performance.now();
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    document.getSelection()?.removeAllRanges();
+  }
   if (joined && alive) hud.showPause(!isLocked && !hud.isSettingsOpen());
   else hud.showPause(false);
 });
 
 hud.onPauseClick(() => {
-  if (joined && !hud.isSettingsOpen()) {
-    renderer.domElement.requestPointerLock();
-  }
+  if (joined && !hud.isSettingsOpen()) void captureGame();
 });
 
 hud.onJoin = (name, primary, secondary) => {
@@ -373,8 +497,9 @@ hud.onJoin = (name, primary, secondary) => {
   weapons.ammoLocal = mag;
   weapons.group.visible = true;
   refreshWeaponHud();
+  guardMatchHistory();
   net.connect(wsUrl, name, primaryWeapon, secondaryWeapon);
-  renderer.domElement.requestPointerLock();
+  void captureGame(); // Fullscreen and pointer lock
   audio.init();
 };
 
@@ -388,7 +513,11 @@ hud.onExit = () => {
   joined = false;
   alive = false;
   respawnAt = 0;
+  pointerUnlockRequested = true;
+  releaseMatchHistory();
   clearCombatInput();
+  document.exitPointerLock?.();
+  if (document.fullscreenElement) void document.exitFullscreen();
   net.disconnect();
   hud.exitMatch();
   for (const id of [...remotes.ids()]) remotes.remove(id);
@@ -398,41 +527,40 @@ hud.onExit = () => {
 };
 
 hud.onSettingsClose = () => {
-  if (joined && alive) renderer.domElement.requestPointerLock();
+  if (joined && alive) void captureGame();
 };
 
-net.onWelcome = async (id, revision) => {
+net.onWelcome = (id, _revision) => {
   if (joined) {
     for (const playerId of [...remotes.ids()]) remotes.remove(playerId);
     states.clear();
     roster.clear();
     names.clear();
   }
+  for (const pickupId of pickupStates.keys()) world?.removePickup(pickupId);
+  pickupStates.clear();
   joined = true;
   hud.hideDisconnect();
   if (!world) {
-    try {
-      const response = await fetch(`/map.json?v=${revision.toString(16)}`);
-      if (!response.ok) throw new Error('map load failed');
-      const map = (await response.json()) as MapData;
-      world = new WorldView(scene, map);
-      world.clouds.visible = hud.quality !== 'low';
-      hud.setMap(map);
-    } catch {
-      joined = false;
-      net.disconnect();
-      hud.showDisconnect('地图加载失败，请刷新页面重试');
-      return;
-    }
+    const map = bundledMap as MapData;
+    world = new WorldView(scene, map);
+    world.clouds.visible = hud.quality !== 'low';
+    hud.setMap(map);
+    for (const [pickupId, pickup] of pickupStates) world.setPickup(pickupId, pickup.kind, ...pickup.origin);
   }
-  renderer.domElement.requestPointerLock();
   names.set(id, myName);
 };
 
-net.onReject = (reason) => hud.showDisconnect(reason);
+net.onReject = (reason) => {
+  releaseMatchHistory();
+  hud.showDisconnect(reason);
+};
 net.onDisconnect = () => {
+  if (!joined) releaseMatchHistory();
   alive = false;
   respawnAt = 0;
+  reloadPendingSlot = 0;
+  weapons.cancelReload();
   clearCombatInput();
   hud.showDisconnect();
 };
@@ -469,15 +597,20 @@ net.onSnapshot = (_tick, _ack, updates) => {
 };
 
 net.onSelf = (s) => {
-  mag = s.mag;
-  reserve = s.reserve;
   nades = s.nades;
   if (s.slot === 1) primaryWeapon = s.weapon;
   else if (s.slot === 2) secondaryWeapon = s.weapon;
   if (s.slot === 1 || s.slot === 2) {
-    slotMags[s.slot] = mag;
-    slotReserves[s.slot] = reserve;
+    slotMags[s.slot] = s.mag;
+    slotReserves[s.slot] = s.reserve;
   }
+  if (s.slot === reloadPendingSlot && s.mag > reloadPendingMag && s.reserve < reloadPendingReserve) reloadPendingSlot = 0;
+  if (activeSlot !== 4 && s.slot !== activeSlot) {
+    refreshWeaponHud();
+    return;
+  }
+  mag = s.mag;
+  reserve = s.reserve;
   if (s.weapon !== weapons.weaponId) {
     weapons.cancelReload();
     weapons.build(s.weapon);
@@ -521,6 +654,9 @@ function handleEvent(e: GameEvent) {
       alive = false;
       weapons.group.visible = false;
       respawnAt = performance.now() + 3000;
+      reloadPendingSlot = 0;
+      weapons.cancelReload();
+      speedBoostUntil = 0;
       clearCombatInput();
       killerId = e.killer ?? -1;
       const next = resolveLoadout(userPrimaryChoice, userSecondaryChoice);
@@ -553,7 +689,10 @@ function handleEvent(e: GameEvent) {
     local.onGround = true;
     cameraEyeHeight = PHYS.eyeHeight;
     landingPenaltyUntil = 0;
+    speedBoostUntil = 0;
     patternShots = 0;
+    reloadPendingSlot = 0;
+    weapons.cancelReload();
     resetInventory(primaryWeapon, secondaryWeapon);
     activeSlot = lastWeaponSlot = 1;
     grenadePrimed = false;
@@ -561,7 +700,6 @@ function handleEvent(e: GameEvent) {
     cameraCorrection.set(0, 0, 0);
     weapons.group.visible = true;
     refreshWeaponHud();
-    if (!hud.isSettingsOpen() && document.pointerLockElement !== renderer.domElement) renderer.domElement.requestPointerLock();
     return;
   }
   if (e.type === 5) {
@@ -604,6 +742,31 @@ function handleEvent(e: GameEvent) {
     refreshScoreboard();
     return;
   }
+  if (e.type === 10 && e.pickup !== undefined && e.kind !== undefined && e.origin) {
+    pickupStates.set(e.pickup, { kind: e.kind, origin: e.origin });
+    world?.setPickup(e.pickup, e.kind, ...e.origin);
+    return;
+  }
+  if (e.type === 11 && e.pickup !== undefined) {
+    pickupStates.delete(e.pickup);
+    world?.removePickup(e.pickup);
+    if (e.victim === net.yourId) {
+      if (e.kind === 0) {
+        reloadPendingSlot = 0;
+        weapons.cancelReload();
+        audio.play('mag_in', 0.9);
+        hud.showPickupNotice('弹药补给 · 弹药已补满');
+      } else if (e.kind === 1) {
+        audio.play('hitmarker', 0.55);
+        hud.showPickupNotice('医疗补给 · 生命恢复');
+      } else if (e.kind === 2) {
+        speedBoostUntil = performance.now() + (e.ms ?? 8000);
+        audio.play('weapon_switch', 0.7, 1.2);
+        hud.showPickupNotice(`速度提升 · ${(e.ms ?? 8000) / 1000} 秒`);
+      }
+    }
+    return;
+  }
 }
 
 function nameOf(id?: number): string {
@@ -629,13 +792,14 @@ remotes.onShot = (s, position) => {
 
 remotes.onStep = (position) => playSpatial('step', position.x, position.z, 0.16, 26, 0.92);
 
-let prev = performance.now();
+let prev = performance.now(), lastLabels = 0;
 function frame(t: number) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.05, (t - prev) / 1000);
   prev = t;
 
   if (joined && alive) {
+    local.speedMultiplier = t < speedBoostUntil ? SPEED_BOOST_MULTIPLIER : 1;
     local.keys = keyMask();
     let remaining = dt;
     let landed = false;
@@ -677,6 +841,11 @@ function frame(t: number) {
       audio.play('step', 0.18, 0.92 + Math.random() * 0.16);
     }
 
+    if (awpRescopeAt && t >= awpRescopeAt && weapons.weaponId === 5 && reloadPendingSlot !== activeSlot && !weapons.isReloading(t)) {
+      awpRescopeAt = 0;
+      aiming = true;
+      aimStartedAt = t;
+    }
     if (t - lastInput >= INPUT_INTERVAL) {
       lastInput = t - ((t - lastInput) % INPUT_INTERVAL);
       net.sendInput(inputSeq++, local.keys | (aiming ? KEY.Aim : 0), local.yaw, local.pitch);
@@ -684,9 +853,9 @@ function frame(t: number) {
 
     const shouldFire = activeSlot !== 4 && ((WEAPONS[weapons.weaponId]?.automatic ?? false) ? fireHeld : firePressed);
     if (shouldFire && document.pointerLockElement === renderer.domElement) {
-      if (weapons.canFire(t)) {
+      if (reloadPendingSlot !== activeSlot && weapons.canFire(t)) {
         fire(0, t);
-      } else if (weapons.ammoLocal === 0 && !weapons.isReloading(t) && t >= weapons.nextFireAt && weapons.weaponId < 6) {
+      } else if (firePressed && reloadPendingSlot !== activeSlot && weapons.ammoLocal === 0 && !weapons.isReloading(t) && t >= weapons.nextFireAt && weapons.weaponId < 6) {
         if (reserve > 0) {
           startReload(t, true);
         } else {
@@ -715,8 +884,9 @@ function frame(t: number) {
     camera.rotation.y = local.yaw;
     camera.rotation.x = local.pitch;
 
-    const targetFov = aiming ? (weapons.weaponId === 5 ? 32 : 58) : 75;
-    const nextFov = camera.fov + (targetFov - camera.fov) * Math.min(1, dt * 14);
+    const targetFov = aiming ? WEAPONS[weapons.weaponId].adsFov : 75;
+    const aimRate = weapons.weaponId === 5 ? 4.5 : 14;
+    const nextFov = camera.fov + (targetFov - camera.fov) * Math.min(1, dt * aimRate);
     if (Math.abs(nextFov - camera.fov) > 0.01) {
       camera.fov = nextFov;
       camera.updateProjectionMatrix();
@@ -728,32 +898,47 @@ function frame(t: number) {
     mouseY = 0;
 
     hud.updateRadar(local.pos.x, local.pos.z, local.yaw, t);
-    hud.setReloading(activeSlot <= 2 && weapons.isReloading(t), weapons.getReloadProgress(t));
+    const localReloading = weapons.isReloading(t);
+    const reloadPending = reloadPendingSlot === activeSlot;
+    hud.setReloading(activeSlot <= 2 && (localReloading || reloadPending), localReloading ? weapons.getReloadProgress(t) : 1);
   } else if (joined && !alive) {
     deathCam();
   }
+  hud.setScope(joined && alive && activeSlot !== 4 && weapons.weaponId === 5 && weapons.adsProgress > (aiming ? 0.86 : 0.14));
 
   hud.setDeathCountdown(joined && !alive && respawnAt ? Math.max(0, Math.ceil((respawnAt - t) / 1000)) : -1);
   const spread = joined && alive && activeSlot !== 4 && weapons.weaponId < 6 ? localSpread(t) : 0;
-  hud.setCrosshair(Math.tan(spread * Math.PI / 180) * crosshairScale);
+  const targetCrosshair = Math.tan(spread * Math.PI / 180) * crosshairScale;
+  const crosshairResponse = targetCrosshair > displayedCrosshair ? 18 : 10;
+  displayedCrosshair += (targetCrosshair - displayedCrosshair) * (1 - Math.exp(-dt * crosshairResponse));
+  hud.setCrosshair(displayedCrosshair);
 
   remotes.update(t);
   particles.update(dt, t, world);
   world?.animate(t);
   renderer.render(scene, camera);
-  remotes.updateLabels(camera, world);
+  if (t - lastLabels >= 1000 / 30) {
+    lastLabels = t;
+    remotes.updateLabels(camera, world);
+  }
 }
 requestAnimationFrame(frame);
 
 function fire(mode: number, t: number) {
   const origin = localShotOrigin.set(local.pos.x, local.eyeY(), local.pos.z);
+  const autoRescope = weapons.weaponId === 5 && aiming && weapons.ammoLocal > 1;
   if (t - lastPatternShot > 420) patternShots = 0;
+  const spread = weapons.weaponId < 6 ? localSpread(t) : 0;
   lastPatternShot = t;
   patternShots++;
-  const dir = shotDirection(localShotDir, local.yaw, local.pitch, localSpread(t), patternShots, weapons.weaponId);
+  const dir = shotDirection(localShotDir, local.yaw, local.pitch, spread, patternShots, weapons.weaponId);
   weapons.onFired(t, origin);
   net.sendFire(++shotSeq, net.lastServerTick, mode | (aiming ? 0x80 : 0), local.yaw, local.pitch);
   mag = weapons.ammoLocal;
+  if (weapons.weaponId === 5) {
+    stopAiming();
+    if (autoRescope) awpRescopeAt = weapons.nextFireAt - AWP_SCOPE_MS;
+  }
   if (activeSlot === 1 || activeSlot === 2) slotMags[activeSlot] = mag;
   refreshWeaponHud();
   if (weapons.weaponId < 6) {
@@ -773,7 +958,7 @@ function fire(mode: number, t: number) {
       particles.spawnImpact(impactPoint.copy(origin).addScaledVector(dir, dist), impactNormal, 0xd6b36e, 3);
     }
   }
-  if (mag === 0 && reserve > 0 && weapons.weaponId < 6) startReload(t, false);
+  if (mag === 0 && reserve > 0 && weapons.weaponId < 6) startReload(t);
 }
 
 function deathCam() {
@@ -792,24 +977,28 @@ function deathCam() {
   camera.rotation.x = Math.atan2(dy, Math.hypot(dx, dz));
 }
 
+function weaponSpread(def: WeaponDef, vx: number, vz: number, onGround: boolean, crouching: boolean, landing: boolean, burstShots: number): number {
+  const moveFactor = Math.min(1, Math.hypot(vx, vz) / 3);
+  let spread = def.spread + (def.moveSpread - def.spread) * moveFactor;
+  spread += Math.min(def.moveSpread - def.spread, burstShots * def.bloom);
+  if (!onGround) spread = Math.max(spread, def.moveSpread * 2.2 + 1);
+  if (crouching) spread *= 0.6;
+  if (landing) spread = Math.max(spread, def.moveSpread * 1.35);
+  return spread;
+}
+
 function localSpread(t: number): number {
   const def = WEAPONS[weapons.weaponId];
-  let spread = def.spread;
-  if (local.vel.x * local.vel.x + local.vel.z * local.vel.z > 0.25) spread = def.moveSpread;
-  if (!local.onGround) spread = Math.max(spread, def.moveSpread * 2.2 + 1);
-  if (local.crouch) spread *= 0.6;
-  if (t < landingPenaltyUntil) spread = Math.max(spread, def.moveSpread * 1.35);
-  if (weapons.weaponId === 5 && (!aiming || t - aimStartedAt < 180)) spread = Math.max(spread, 3.5);
+  const burstShots = t - lastPatternShot <= 420 ? patternShots : 0;
+  let spread = weaponSpread(def, local.vel.x, local.vel.z, local.onGround, local.crouch, t < landingPenaltyUntil, burstShots);
+  if (weapons.weaponId === 5 && (!aiming || t - aimStartedAt < AWP_SCOPE_MS)) spread = Math.max(spread, def.moveSpread);
   return spread;
 }
 
 function remoteSpread(s: PlayerSnap): number {
   const def = WEAPONS[s.weapon];
-  let spread = def.spread;
-  if (s.vx * s.vx + s.vz * s.vz > 0.25) spread = def.moveSpread;
-  if (!(s.state & 8)) spread = Math.max(spread, def.moveSpread * 2.2 + 1);
-  if (s.state & 4) spread *= 0.6;
-  if (s.weapon === 5 && !(s.state & 16)) spread = Math.max(spread, 3.5);
+  let spread = weaponSpread(def, s.vx, s.vz, !!(s.state & 8), !!(s.state & 4), false, Math.max(0, s.shot - 1));
+  if (s.weapon === 5 && !(s.state & 16)) spread = Math.max(spread, def.moveSpread);
   return spread;
 }
 

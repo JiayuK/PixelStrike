@@ -18,21 +18,21 @@ const (
 )
 
 type WeaponDef struct {
-	Id                                                                uint8
-	Name                                                              string
-	Dmg, HeadMult, Rpm, SpreadDeg, MoveSpreadDeg, SpeedMult, ArmorPen float64
-	Mag, Reserve, ReloadMs                                            int
-	Automatic                                                         bool
+	Id                                                                          uint8
+	Name                                                                        string
+	Dmg, HeadMult, Rpm, SpreadDeg, MoveSpreadDeg, BloomDeg, SpeedMult, ArmorPen float64
+	Mag, Reserve, ReloadMs                                                      int
+	Automatic                                                                   bool
 }
 
 var Weapons = [7]WeaponDef{
-	{0, "Glock-18", 20, 3.0, 400, .55, 1.5, 1.0, .58, 20, 120, 1400, false},
-	{1, "Desert Eagle", 48, 2.3, 267, .35, 2.0, .98, .93, 7, 35, 1800, false},
-	{2, "MP5-SD", 25, 3.0, 800, .9, 2.1, .98, .63, 30, 120, 1800, true},
-	{3, "AK-47", 33, 4.0, 600, .5, 1.8, .92, .78, 30, 90, 2200, true},
-	{4, "M4A4", 31, 3.6, 666, .45, 1.5, .92, .70, 30, 90, 2100, true},
-	{5, "AWP", 108, 2.5, 41, .08, 3.5, .75, .98, 5, 30, 2800, false},
-	{6, "Knife", 34, 1, 150, 0, 0, 1.08, 1, 0, 0, 0, false},
+	{0, "Glock-18", 20, 3.0, 400, .42, 1.3, .14, 1.0, .58, 20, 120, 1400, false},
+	{1, "Desert Eagle", 48, 2.3, 267, .22, 2.2, .36, .98, .93, 7, 35, 1800, false},
+	{2, "MP5-SD", 25, 3.0, 800, .72, 1.6, .07, .98, .63, 30, 120, 1800, true},
+	{3, "AK-47", 33, 4.0, 600, .38, 2.0, .17, .92, .78, 30, 90, 2200, true},
+	{4, "M4A4", 31, 3.6, 666, .32, 1.75, .12, .92, .70, 30, 90, 2100, true},
+	{5, "AWP", 108, 2.5, 32, .03, 4.8, 0, .75, .98, 5, 30, 2800, false},
+	{6, "Knife", 34, 1, 150, 0, 0, 0, 1.08, 1, 0, 0, 0, false},
 }
 
 const (
@@ -48,6 +48,7 @@ const (
 	MaxRewindTicks  = 8
 	MaxHP           = 100
 	SpawnProtectS   = 2 * time.Second
+	AWPScopeTime    = 450 * time.Millisecond
 	RespawnDelayS   = 3 * time.Second
 	EyeHeight       = 1.6
 	CrouchEyeH      = 1.12
@@ -68,7 +69,7 @@ type PlayerState struct {
 	CmdKeys                                                        uint8
 	Reloading                                                      bool
 	ReloadEnd, NextFire, InvincibleUntil, RespawnAt, NextGrenadeAt time.Time
-	LandingUntil, AimStarted                                       time.Time
+	LandingUntil, AimStarted, SpeedUntil                           time.Time
 	Grenades                                                       int
 	Kills, Deaths                                                  uint16
 	LastInputSeq, LastShotSeq                                      uint16
@@ -100,8 +101,7 @@ func (p *PlayerState) ActiveAmmo() (int, int) {
 func (p *PlayerState) setActiveAmmo(mag, reserve int) {
 	if p.ActiveSlot == 1 {
 		p.Mags[0], p.Reserves[0] = mag, reserve
-	}
-	if p.ActiveSlot == 2 {
+	} else if p.ActiveSlot == 2 {
 		p.Mags[1], p.Reserves[1] = mag, reserve
 	}
 }
@@ -134,6 +134,8 @@ func (p *PlayerState) SwitchSlot(slot uint8) bool {
 		return false
 	}
 	p.ActiveSlot, p.Weapon, p.Reloading, p.AimStarted = slot, weapon, false, time.Time{}
+	p.ShotCounter = 0
+	p.LastShotAt = time.Time{}
 	p.NextFire = time.Now().Add(220 * time.Millisecond)
 	return true
 }
@@ -164,6 +166,7 @@ func (r *Room) Step(now time.Time) {
 		r.Move(p, now)
 		r.CheckSanity(p)
 	}
+	r.StepPickups(now)
 	r.recordHistory()
 }
 
@@ -201,6 +204,9 @@ func (r *Room) Move(p *PlayerState, now time.Time) {
 		p.Crouch = false
 	}
 	speed := WalkSpeed * Weapons[min(int(p.Weapon), len(Weapons)-1)].SpeedMult
+	if now.Before(p.SpeedUntil) {
+		speed *= speedBoostMultiplier
+	}
 	if p.Crouch {
 		speed *= CrouchSpeed
 	}
@@ -257,7 +263,6 @@ func (r *Room) TryFire(p *PlayerState, yaw, pitch float64, mode uint8, seenTick 
 	weapon := min(int(p.Weapon), len(Weapons)-1)
 	def := Weapons[weapon]
 	mag, reserve := p.ActiveAmmo()
-	_ = reserve
 	if weapon < 6 && mag <= 0 {
 		return false
 	}
@@ -295,21 +300,9 @@ func (r *Room) TryFire(p *PlayerState, yaw, pitch float64, mode uint8, seenTick 
 		maxDist = 1.65
 	}
 	if weapon < 6 {
-		spread := def.SpreadDeg
-		if p.Vel.X*p.Vel.X+p.Vel.Z*p.Vel.Z > .25 {
-			spread = def.MoveSpreadDeg
-		}
-		if !p.OnGround {
-			spread = math.Max(spread, def.MoveSpreadDeg*2.2+1)
-		}
-		if p.Crouch {
-			spread *= .6
-		}
-		if now.Before(p.LandingUntil) {
-			spread = math.Max(spread, def.MoveSpreadDeg*1.35)
-		}
-		if weapon == 5 && (mode&0x80 == 0 || p.AimStarted.IsZero() || now.Sub(p.AimStarted) < 180*time.Millisecond) {
-			spread = math.Max(spread, 3.5)
+		spread := weaponSpread(def, p.Vel.X, p.Vel.Z, p.OnGround, p.Crouch, now.Before(p.LandingUntil), max(0, int(p.ShotCounter)-1))
+		if weapon == 5 && (mode&0x80 == 0 || p.AimStarted.IsZero() || now.Sub(p.AimStarted) < AWPScopeTime) {
+			spread = math.Max(spread, def.MoveSpreadDeg)
 		}
 		dir = patternDir(dir, spread, int(p.ShotCounter), weapon)
 	}
@@ -433,6 +426,7 @@ func (r *Room) Respawn(p *PlayerState, now time.Time) {
 	p.ApplyLoadout(p.Primary, p.Secondary)
 	p.InvincibleUntil = now.Add(SpawnProtectS)
 	p.LandingUntil, p.AimStarted = time.Time{}, time.Time{}
+	p.SpeedUntil = time.Time{}
 	p.RespawnAt = time.Time{}
 	r.Emit(Event{Type: EvRespawn, Player: p.Id, Origin: p.Pos})
 }
@@ -479,6 +473,122 @@ func (r *Room) BestSpawn(p *PlayerState) Vec3 {
 	}
 	n := min(4, considered)
 	return best[rand.IntN(n)].pos
+}
+
+const (
+	PickupAmmo uint8 = iota
+	PickupHealth
+	PickupSpeed
+	pickupCount = 12
+)
+
+const (
+	speedBoostDuration   = 8 * time.Second
+	speedBoostMultiplier = 1.35
+)
+
+type Pickup struct {
+	Id        uint16
+	Kind      uint8
+	Pos       Vec3
+	Active    bool
+	RespawnAt time.Time
+}
+
+func (r *Room) initPickups() {
+	if len(r.World.Spawns) == 0 {
+		return
+	}
+	r.Pickups = make([]Pickup, pickupCount)
+	for i := range r.Pickups {
+		r.Pickups[i] = Pickup{Id: uint16(i + 1), Kind: uint8(rand.IntN(3)), Active: true}
+		r.Pickups[i].Pos = r.randomPickupPosition()
+	}
+}
+
+func (r *Room) randomPickupPosition() Vec3 {
+	var pos Vec3
+	for range 24 {
+		spawn := r.World.Spawns[rand.IntN(len(r.World.Spawns))]
+		pos = Vec3{spawn[0], spawn[1], spawn[2]}
+		clear := true
+		for i := range r.Pickups {
+			pickup := &r.Pickups[i]
+			dx, dz := pos.X-pickup.Pos.X, pos.Z-pickup.Pos.Z
+			if pickup.Active && dx*dx+dz*dz < 36 {
+				clear = false
+				break
+			}
+		}
+		if clear {
+			return pos
+		}
+	}
+	return pos
+}
+
+func (r *Room) pickupEvents() []Event {
+	events := make([]Event, 0, len(r.Pickups))
+	for i := range r.Pickups {
+		pickup := &r.Pickups[i]
+		if pickup.Active {
+			events = append(events, Event{Type: EvPickupSpawn, Player: pickup.Id, Kind: pickup.Kind, Origin: pickup.Pos})
+		}
+	}
+	return events
+}
+
+func (r *Room) StepPickups(now time.Time) {
+	for i := range r.Pickups {
+		pickup := &r.Pickups[i]
+		if !pickup.Active {
+			if now.Before(pickup.RespawnAt) {
+				continue
+			}
+			pickup.Kind = uint8(rand.IntN(3))
+			pickup.Pos = r.randomPickupPosition()
+			pickup.Active = true
+			r.Emit(Event{Type: EvPickupSpawn, Player: pickup.Id, Kind: pickup.Kind, Origin: pickup.Pos})
+		}
+		for _, player := range r.Players {
+			p := &player.PlayerState
+			dx, dz := p.Pos.X-pickup.Pos.X, p.Pos.Z-pickup.Pos.Z
+			if !p.Alive || math.Abs(p.Pos.Y-pickup.Pos.Y) > 1.5 || dx*dx+dz*dz > 1.44 || !applyPickup(p, pickup.Kind, now) {
+				continue
+			}
+			pickup.Active = false
+			pickup.RespawnAt = now.Add(time.Duration(8+rand.IntN(5)) * time.Second)
+			ms := uint16(0)
+			if pickup.Kind == PickupSpeed {
+				ms = uint16(speedBoostDuration / time.Millisecond)
+			}
+			r.Emit(Event{Type: EvPickupTaken, Player: pickup.Id, Victim: p.Id, Kind: pickup.Kind, Ms: ms})
+			break
+		}
+	}
+}
+
+func applyPickup(p *PlayerState, kind uint8, now time.Time) bool {
+	switch kind {
+	case PickupAmmo:
+		primary, secondary := Weapons[p.Primary], Weapons[p.Secondary]
+		if p.Mags[0] == primary.Mag && p.Reserves[0] == primary.Reserve && p.Mags[1] == secondary.Mag && p.Reserves[1] == secondary.Reserve {
+			return false
+		}
+		p.Mags = [2]int{primary.Mag, secondary.Mag}
+		p.Reserves = [2]int{primary.Reserve, secondary.Reserve}
+		p.Reloading, p.ReloadEnd, p.NextFire = false, time.Time{}, now
+	case PickupHealth:
+		if p.HP >= MaxHP {
+			return false
+		}
+		p.HP = uint8(min(MaxHP, int(p.HP)+50))
+	case PickupSpeed:
+		p.SpeedUntil = now.Add(speedBoostDuration)
+	default:
+		return false
+	}
+	return true
 }
 
 type Grenade struct {
@@ -608,6 +718,22 @@ func AimDir(yaw, pitch float64) Vec3 {
 	cp := math.Cos(pitch)
 	return Vec3{-math.Sin(yaw) * cp, math.Sin(pitch), -math.Cos(yaw) * cp}
 }
+func weaponSpread(def WeaponDef, vx, vz float64, onGround, crouching, landing bool, burstShots int) float64 {
+	moveFactor := math.Min(1, math.Hypot(vx, vz)/3)
+	spread := def.SpreadDeg + (def.MoveSpreadDeg-def.SpreadDeg)*moveFactor
+	spread += math.Min(def.MoveSpreadDeg-def.SpreadDeg, float64(burstShots)*def.BloomDeg)
+	if !onGround {
+		spread = math.Max(spread, def.MoveSpreadDeg*2.2+1)
+	}
+	if crouching {
+		spread *= .6
+	}
+	if landing {
+		spread = math.Max(spread, def.MoveSpreadDeg*1.35)
+	}
+	return spread
+}
+
 func patternDir(dir Vec3, deg float64, shot, weapon int) Vec3 {
 	if deg <= 0 {
 		return dir

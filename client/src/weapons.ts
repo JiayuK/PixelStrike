@@ -55,6 +55,8 @@ export class Weapons {
   private curBobY = 0;
   private drawProgress = 1.0;
   private slashProgress = 0;
+  private boltCycleStartedAt = 0;
+  private boltCycleUntil = 0;
   private shells: Shell[] = [];
   private shellPool: THREE.Mesh[] = [];
   private shellGeo = new THREE.BoxGeometry(0.02, 0.02, 0.05);
@@ -107,7 +109,12 @@ export class Weapons {
     this.weaponId = id;
     this.drawProgress = 0;
     this.slashProgress = 0;
+    this.boltCycleStartedAt = 0;
+    this.boltCycleUntil = 0;
     this.scheduledSounds = [];
+    this.recoil = 0;
+    this.adsProgress = 0;
+    this.resetMotion();
     this.magazineMesh = null;
     this.boltMesh = null;
 
@@ -734,6 +741,7 @@ export class Weapons {
         if (!(obj instanceof THREE.Mesh)) return;
         const materials = Array.isArray(obj.material) ? obj.material : [obj.material];
         for (const material of materials) {
+          material.transparent = true;
           material.depthTest = false;
           material.depthWrite = false;
         }
@@ -785,6 +793,8 @@ export class Weapons {
     this.reloadStartedAt = 0;
     this.reloadingUntil = 0;
     this.scheduledSounds = [];
+    this.boltCycleStartedAt = 0;
+    this.boltCycleUntil = 0;
     if (this.magazineMesh) {
       this.magazineMesh.position.set(0, 0, 0);
       this.magazineMesh.rotation.set(0, 0, 0);
@@ -793,6 +803,8 @@ export class Weapons {
       this.boltMesh.position.set(0, 0, 0);
     }
     this.handLGroup.position.set(0, 0, 0);
+    this.handRGroup.position.set(0, 0, 0);
+    this.handRGroup.rotation.set(0, 0, 0);
   }
 
   onKnifeSlash() {
@@ -810,6 +822,11 @@ export class Weapons {
     const def = WEAPONS[this.weaponId] ?? WEAPONS[0];
     const interval = 60000 / def.rpm;
     this.nextFireAt = this.nextFireAt > 0 && t - this.nextFireAt < interval ? this.nextFireAt + interval : t + interval;
+    if (this.weaponId === 5) {
+      this.boltCycleStartedAt = t;
+      this.boltCycleUntil = this.nextFireAt;
+      this.scheduledSounds.push({ time: t + interval * 0.28, name: 'bolt_cycle', vol: 0.9 });
+    }
     if (this.weaponId === 6) return;
     this.ammoLocal = Math.max(0, this.ammoLocal - 1);
     this.recoil = Math.min(1.2, this.recoil + 0.45);
@@ -844,6 +861,10 @@ export class Weapons {
   animate(t: number, dt: number, moving: boolean, isAiming: boolean, mouseDeltaX: number, mouseDeltaY: number, equipped = true) {
     const reloading = this.isReloading(t);
     const rlProgress = reloading ? this.getReloadProgress(t) : 0;
+    const boltProgress = this.weaponId === 5 && !reloading && t < this.boltCycleUntil
+      ? Math.max(0, Math.min(1, (t - this.boltCycleStartedAt) / (this.boltCycleUntil - this.boltCycleStartedAt)))
+      : 1;
+    const awpBoltArc = boltProgress < 0.78 ? Math.sin(boltProgress / 0.78 * Math.PI) : 0;
 
     // Trigger scheduled audio cues exactly synchronized with visual animation
     if (this.scheduledSounds.length > 0) {
@@ -858,9 +879,10 @@ export class Weapons {
       this.scheduledSounds.length = pending;
     }
 
-    this.group.visible = equipped;
+    this.group.visible = equipped && !(this.weaponId === 5 && isAiming && !reloading);
     const targetAds = isAiming && !reloading ? 1 : 0;
-    this.adsProgress += (targetAds - this.adsProgress) * Math.min(1, dt * 14);
+    const adsRate = this.weaponId === 5 ? 4.5 : 14;
+    this.adsProgress += (targetAds - this.adsProgress) * Math.min(1, dt * adsRate);
 
     this.swayX += (-mouseDeltaX * 0.00045 - this.swayX) * Math.min(1, dt * 16);
     this.swayY += (-mouseDeltaY * 0.00045 - this.swayY) * Math.min(1, dt * 16);
@@ -924,14 +946,14 @@ export class Weapons {
         break;
     }
 
-    const posX = hipX + (adsX - hipX) * this.adsProgress + this.curBobX + this.swayX * motionFactor - rlTilt * 0.06 + slashPhase * 0.24;
-    const posY = hipY + (adsY - hipY) * this.adsProgress + this.curBobY + this.swayY * motionFactor - rlTilt * 0.05 - rlSeatImpulse - drawDip * 0.12 + Math.sin(slashPhase * Math.PI) * 0.10;
-    const posZ = hipZ + (adsZ - hipZ) * this.adsProgress + this.recoil * 0.06 + rlSeatImpulse * 0.3 - drawDip * 0.06 - slashPhase * 0.16;
+    const posX = hipX + (adsX - hipX) * this.adsProgress + this.curBobX + this.swayX * motionFactor - rlTilt * 0.06 + slashPhase * 0.11;
+    const posY = hipY + (adsY - hipY) * this.adsProgress + this.curBobY + this.swayY * motionFactor - rlTilt * 0.05 - rlSeatImpulse - drawDip * 0.12 + Math.sin(slashPhase * Math.PI) * 0.045;
+    const posZ = hipZ + (adsZ - hipZ) * this.adsProgress + this.recoil * 0.06 + rlSeatImpulse * 0.3 - drawDip * 0.06 - slashPhase * 0.07;
     this.group.position.set(posX, posY, posZ);
 
-    this.group.rotation.x = this.recoil * 0.12 + rlTilt * 0.16 - this.swayY * motionFactor + drawDip * 0.22 - slashPhase * 0.75 + rlBoltCycle * 0.10 - this.adsProgress * 0.04;
-    this.group.rotation.y = -this.recoil * 0.02 + this.swayX * motionFactor + rlTilt * 0.10 + slashPhase * 0.95 - this.adsProgress * 0.02;
-    this.group.rotation.z = -rlTilt * 0.30 - slashPhase * 0.45;
+    this.group.rotation.x = this.recoil * 0.12 + rlTilt * 0.16 - this.swayY * motionFactor + drawDip * 0.22 - slashPhase * 0.32 + rlBoltCycle * 0.10 - this.adsProgress * 0.04;
+    this.group.rotation.y = -this.recoil * 0.02 + this.swayX * motionFactor + rlTilt * 0.10 + slashPhase * 0.48 - this.adsProgress * 0.02;
+    this.group.rotation.z = -rlTilt * 0.30 - slashPhase * 0.20;
     if (this.magazineMesh) {
       if (reloading && rlProgress < 0.32) {
         const p = rlProgress / 0.32;
@@ -946,7 +968,8 @@ export class Weapons {
     }
     if (this.boltMesh) {
       const fireBlowback = Math.max(0, this.recoil) * 0.04;
-      this.boltMesh.position.set(0, 0, fireBlowback + rlBoltCycle * 0.065);
+      this.boltMesh.position.set(0, 0, fireBlowback + rlBoltCycle * 0.065 + awpBoltArc * 0.22);
+      this.boltMesh.rotation.z = this.weaponId === 5 ? -awpBoltArc * 0.65 : 0;
     }
     if (reloading) {
       if (rlProgress < 0.32) {
@@ -963,6 +986,13 @@ export class Weapons {
       }
     } else {
       this.handLGroup.position.set(0, 0, 0);
+    }
+    if (this.weaponId === 5 && awpBoltArc > 0) {
+      this.handRGroup.position.set(awpBoltArc * 0.07, awpBoltArc * 0.08, awpBoltArc * 0.16);
+      this.handRGroup.rotation.z = -awpBoltArc * 0.35;
+    } else {
+      this.handRGroup.position.set(0, 0, 0);
+      this.handRGroup.rotation.set(0, 0, 0);
     }
     if (t > this.muzzleUntil) {
       this.muzzleFlashMesh.visible = false;

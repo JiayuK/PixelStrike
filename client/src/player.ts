@@ -12,6 +12,7 @@ export class LocalPlayer {
   onGround = true;
   crouch = false;
   weaponId = 3;
+  speedMultiplier = 1;
   update(dt: number, canStand = true) {
     let forward = 0, side = 0;
     if (this.keys & KEY.Forward) forward++;
@@ -23,7 +24,7 @@ export class LocalPlayer {
 
     if (this.keys & KEY.Crouch) this.crouch = true;
     else if (canStand) this.crouch = false;
-    let speed = PHYS.walkSpeed * (WEAPONS[this.weaponId]?.speedMult ?? 1);
+    let speed = PHYS.walkSpeed * (WEAPONS[this.weaponId]?.speedMult ?? 1) * this.speedMultiplier;
     if (this.crouch) speed *= PHYS.crouchSpeed;
     const sin = Math.sin(this.yaw), cos = Math.cos(this.yaw);
     const targetX = (side * cos - forward * sin) * speed;
@@ -277,8 +278,8 @@ export class RemotePlayers {
       [0.50, 0.75, 0.00, 0.50], // -X (Left side)
       [0.25, 0.50, 0.50, 1.00], // +Y (Top hair)
       [0.50, 0.75, 0.50, 1.00], // -Y (Bottom neck)
-      [0.25, 0.50, 0.00, 0.50], // +Z (Front face with Steve eyes!)
-      [0.75, 1.00, 0.00, 0.50], // -Z (Back hair)
+      [0.75, 1.00, 0.00, 0.50], // +Z (Back hair)
+      [0.25, 0.50, 0.00, 0.50], // -Z (Front face with Steve eyes!)
     ];
     for (let f = 0; f < 6; f++) {
       const [u0, u1, v0, v1] = faceUVs[f];

@@ -14,18 +14,22 @@ type Room struct {
 	running, closed       bool
 	Players               []*Player
 	Grenades              []*Grenade
+	Pickups               []Pickup
 	nextNadeId, nextIdSeq uint16
 	tick                  uint32
 	pending               []Event
 	botAIs                map[uint16]*BotAI
 	history               map[uint16]*poseHistory
 	outboundBuf           []outbound
+	quantizedBuf          []quantState
 }
 
 const RoomCap = 100
 
 func NewRoom(id int, w *World, s *Store) *Room {
-	return &Room{Id: id, World: w, Store: s, nextIdSeq: 1, botAIs: make(map[uint16]*BotAI), history: make(map[uint16]*poseHistory)}
+	r := &Room{Id: id, World: w, Store: s, nextIdSeq: 1, botAIs: make(map[uint16]*BotAI), history: make(map[uint16]*poseHistory)}
+	r.initPickups()
+	return r
 }
 
 func (r *Room) Remove(p *Player) {
@@ -47,7 +51,7 @@ func (r *Room) Remove(p *Player) {
 		r.closed, r.Players = true, nil
 		r.botAIs = make(map[uint16]*BotAI)
 		r.history = make(map[uint16]*poseHistory)
-		r.Grenades, r.pending = nil, nil
+		r.Grenades, r.Pickups, r.pending = nil, nil, nil
 		return
 	}
 	r.Emit(Event{Type: EvPlayerLeave, Player: p.Id})
@@ -100,16 +104,16 @@ func (r *Room) Run() {
 		if r.tick%2 == 0 {
 			players := r.Players
 			outs = r.outboundBuf[:0]
+			r.quantizedBuf = quantizePlayers(r.quantizedBuf, players, now.UnixNano())
 			var periodicRoster []byte
 			if r.tick%600 == 0 {
 				periodicRoster = Roster(players)
 			}
-			nowUnixNano := now.UnixNano()
 			for _, p := range players {
 				if p.IsBot || !p.ready {
 					continue
 				}
-				out := outbound{p: p, snapshot: p.BuildSnapshot(r.tick, players, nowUnixNano)}
+				out := outbound{p: p, snapshot: p.BuildSnapshot(r.tick, players, r.quantizedBuf)}
 				self := compactSelf(&p.PlayerState)
 				if r.tick%60 == 0 || !p.hasLastSelf || self != p.lastSelf {
 					out.self = SelfState(&p.PlayerState)
@@ -171,6 +175,8 @@ func (r *Room) eventsFor(target *Player, evts []Event) []Event {
 			send = e.Player == target.Id || horizontalWithin(target.Pos, e.Origin, 120)
 		case EvExplosion, EvNadeThrow:
 			send = horizontalWithin(target.Pos, e.Origin, 120)
+		case EvPickupSpawn, EvPickupTaken:
+			send = true
 		case EvReloadStart:
 			if e.Player == target.Id {
 				send = true

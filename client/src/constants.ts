@@ -1,4 +1,4 @@
-export const PROTOCOL_VERSION = 3;
+export const PROTOCOL_VERSION = 4;
 
 export const OP = {
   Join: 0x01,
@@ -70,19 +70,21 @@ export interface WeaponDef {
   speedMult: number;
   spread: number;
   moveSpread: number;
+  bloom: number;
+  adsFov: number;
   automatic: boolean;
   color: number;
   length: number;
 }
 
 export const WEAPONS: WeaponDef[] = [
-  { id: 0, name: 'Glock-18', dmg: 20, headMult: 3.0, rpm: 400, mag: 20, reserve: 120, reloadMs: 1400, speedMult: 1.0, spread: 0.55, moveSpread: 1.5, automatic: false, color: 0x222225, length: 0.35 },
-  { id: 1, name: 'Desert Eagle', dmg: 48, headMult: 2.3, rpm: 267, mag: 7, reserve: 35, reloadMs: 1800, speedMult: 0.98, spread: 0.35, moveSpread: 2.0, automatic: false, color: 0x9b9890, length: 0.42 },
-  { id: 2, name: 'MP5-SD', dmg: 25, headMult: 3.0, rpm: 800, mag: 30, reserve: 120, reloadMs: 1800, speedMult: 0.98, spread: 0.9, moveSpread: 2.1, automatic: true, color: 0x34485a, length: 0.55 },
-  { id: 3, name: 'AK-47', dmg: 33, headMult: 4.0, rpm: 600, mag: 30, reserve: 90, reloadMs: 2200, speedMult: 0.92, spread: 0.5, moveSpread: 1.8, automatic: true, color: 0x79502f, length: 0.75 },
-  { id: 4, name: 'M4A4', dmg: 31, headMult: 3.6, rpm: 666, mag: 30, reserve: 90, reloadMs: 2100, speedMult: 0.92, spread: 0.45, moveSpread: 1.5, automatic: true, color: 0x3b463b, length: 0.75 },
-  { id: 5, name: 'AWP', dmg: 108, headMult: 2.5, rpm: 41, mag: 5, reserve: 30, reloadMs: 2800, speedMult: 0.75, spread: 0.08, moveSpread: 3.5, automatic: false, color: 0x35463a, length: 1.05 },
-  { id: 6, name: 'Knife', dmg: 34, headMult: 1.0, rpm: 150, mag: 0, reserve: 0, reloadMs: 0, speedMult: 1.08, spread: 0, moveSpread: 0, automatic: false, color: 0x777777, length: 0.3 },
+  { id: 0, name: 'Glock-18', dmg: 20, headMult: 3.0, rpm: 400, mag: 20, reserve: 120, reloadMs: 1400, speedMult: 1.0, spread: 0.42, moveSpread: 1.3, bloom: 0.14, adsFov: 68, automatic: false, color: 0x222225, length: 0.35 },
+  { id: 1, name: 'Desert Eagle', dmg: 48, headMult: 2.3, rpm: 267, mag: 7, reserve: 35, reloadMs: 1800, speedMult: 0.98, spread: 0.22, moveSpread: 2.2, bloom: 0.36, adsFov: 64, automatic: false, color: 0x9b9890, length: 0.42 },
+  { id: 2, name: 'MP5-SD', dmg: 25, headMult: 3.0, rpm: 800, mag: 30, reserve: 120, reloadMs: 1800, speedMult: 0.98, spread: 0.72, moveSpread: 1.6, bloom: 0.07, adsFov: 60, automatic: true, color: 0x34485a, length: 0.55 },
+  { id: 3, name: 'AK-47', dmg: 33, headMult: 4.0, rpm: 600, mag: 30, reserve: 90, reloadMs: 2200, speedMult: 0.92, spread: 0.38, moveSpread: 2.0, bloom: 0.17, adsFov: 56, automatic: true, color: 0x79502f, length: 0.75 },
+  { id: 4, name: 'M4A4', dmg: 31, headMult: 3.6, rpm: 666, mag: 30, reserve: 90, reloadMs: 2100, speedMult: 0.92, spread: 0.32, moveSpread: 1.75, bloom: 0.12, adsFov: 54, automatic: true, color: 0x3b463b, length: 0.75 },
+  { id: 5, name: 'AWP', dmg: 108, headMult: 2.5, rpm: 32, mag: 5, reserve: 30, reloadMs: 2800, speedMult: 0.75, spread: 0.03, moveSpread: 4.8, bloom: 0, adsFov: 28, automatic: false, color: 0x35463a, length: 1.05 },
+  { id: 6, name: 'Knife', dmg: 34, headMult: 1.0, rpm: 150, mag: 0, reserve: 0, reloadMs: 0, speedMult: 1.08, spread: 0, moveSpread: 0, bloom: 0, adsFov: 75, automatic: false, color: 0x777777, length: 0.3 },
 ];
 
 export const KEY = {

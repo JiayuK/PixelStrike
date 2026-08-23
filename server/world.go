@@ -163,16 +163,6 @@ func (w *World) CanOccupy(pos Vec3, height float64) bool {
 	return true
 }
 
-func (w *World) HasSupport(pos Vec3) bool {
-	for _, b := range w.aabbs {
-		gap := pos.Y - b.Max.Y
-		if gap >= -Epsilon && gap <= .02 && pos.X-PlayerHalf < b.Max.X && pos.X+PlayerHalf > b.Min.X && pos.Z-PlayerHalf < b.Max.Z && pos.Z+PlayerHalf > b.Min.Z {
-			return true
-		}
-	}
-	return false
-}
-
 func (w *World) depenetrate(pos *Vec3, vel *Vec3, height float64) bool {
 	grounded := false
 	for pass := 0; pass < 6; pass++ {

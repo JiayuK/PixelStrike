@@ -143,6 +143,26 @@ func TestReloadRequestDoesNotRestartActiveReload(t *testing.T) {
 	}
 }
 
+func TestReloadAfterRejectedLastRoundRefillsMagazine(t *testing.T) {
+	player := &Player{PlayerState: PlayerState{Alive: true, OnGround: true}}
+	p := &player.PlayerState
+	r := &Room{World: &World{}, Players: []*Player{player}, history: make(map[uint16]*poseHistory)}
+	p.ApplyLoadout(3, 0)
+	p.Mags[0] = 1
+	now := time.Unix(1, 0)
+	p.NextFire = now.Add(time.Second)
+	if r.TryFire(p, 0, 0, 0, 0, 1, now) || p.Mags[0] != 1 {
+		t.Fatalf("rejected shot consumed last round: mag=%d", p.Mags[0])
+	}
+	if !r.StartReload(p, now) {
+		t.Fatal("reload after rejected last round was rejected")
+	}
+	r.FinishReloads(p.ReloadEnd)
+	if p.Mags[0] != Weapons[3].Mag {
+		t.Fatalf("reload left %d rounds, want %d", p.Mags[0], Weapons[3].Mag)
+	}
+}
+
 func TestGrenadeThrowConsumesOnceAndEmitsTrajectory(t *testing.T) {
 	r := &Room{}
 	p := &PlayerState{Id: 7, Alive: true, Grenades: 1}
@@ -206,9 +226,12 @@ func TestDeltaSnapshotIsSmallerThanKeyframe(t *testing.T) {
 	receiver.ApplyLoadout(3, 0)
 	other := &Player{PlayerState: PlayerState{Id: 2, Alive: true, HP: 100, Armor: 100, Pos: Vec3{10, 0, 10}}}
 	other.ApplyLoadout(4, 0)
-	full := receiver.BuildSnapshot(0, []*Player{receiver, other}, now.UnixNano())
+	players := []*Player{receiver, other}
+	states := quantizePlayers(nil, players, now.UnixNano())
+	full := receiver.BuildSnapshot(0, players, states)
 	other.Pos.X += .1
-	delta := receiver.BuildSnapshot(2, []*Player{receiver, other}, now.UnixNano())
+	states = quantizePlayers(states, players, now.UnixNano())
+	delta := receiver.BuildSnapshot(2, players, states)
 	if len(delta) >= len(full) || delta[7] == 0 {
 		t.Fatalf("full=%d delta=%d records=%d", len(full), len(delta), delta[7])
 	}
@@ -289,5 +312,15 @@ func TestFingerprintsDoNotMergePlayersBehindOneIP(t *testing.T) {
 	b := s.GetOrCreatePlayer("203.0.113.10", "browser-b", "Bob")
 	if a != "Alice" || b != "Bob" {
 		t.Fatalf("shared IP merged distinct browsers: %q %q", a, b)
+	}
+}
+
+func TestCrouchedPlayerCanMove(t *testing.T) {
+	w := &World{aabbs: []AABB{{Min: Vec3{-20, -1, -20}, Max: Vec3{20, 0, 20}}}}
+	p := &PlayerState{Alive: true, OnGround: true, Pos: Vec3{Y: Epsilon}, CmdKeys: KeyCrouch | KeyForward}
+	p.ApplyLoadout(3, 0)
+	(&Room{World: w}).Move(p, time.Now())
+	if !p.Crouch || p.Vel.Z >= 0 {
+		t.Fatalf("crouched movement failed: crouch=%v vel=%v", p.Crouch, p.Vel)
 	}
 }

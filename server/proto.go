@@ -6,7 +6,7 @@ import (
 	"unicode/utf8"
 )
 
-const ProtocolVersion = 3
+const ProtocolVersion = 4
 
 const (
 	OpJoin          = 0x01
@@ -39,15 +39,17 @@ const (
 	EvExplosion
 	EvNadeThrow
 	EvPlayerLeave
+	EvPickupSpawn
+	EvPickupTaken
 )
 
 type Event struct {
-	Type                   uint8
-	Killer, Victim, Player uint16
-	Headshot, Weapon, Dmg  uint8
-	Origin, Dir            Vec3
-	Ms                     uint16
-	Name                   string
+	Type                        uint8
+	Killer, Victim, Player      uint16
+	Headshot, Weapon, Dmg, Kind uint8
+	Origin, Dir                 Vec3
+	Ms                          uint16
+	Name                        string
 }
 
 type Buf struct{ b []byte }
@@ -160,6 +162,15 @@ func Events(evts []Event) []byte {
 			w.U16(e.Player)
 			w.V3(e.Origin)
 			w.V3(e.Dir)
+		case EvPickupSpawn:
+			w.U16(e.Player)
+			w.U8(e.Kind)
+			w.V3(e.Origin)
+		case EvPickupTaken:
+			w.U16(e.Player)
+			w.U16(e.Victim)
+			w.U8(e.Kind)
+			w.U16(e.Ms)
 		}
 	}
 	return w.Bytes()
