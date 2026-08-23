@@ -1,4 +1,5 @@
 client/node_modules
 server/*.exe
+server/pixelstrike-*
 server/stats.db*
 data

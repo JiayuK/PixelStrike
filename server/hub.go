@@ -10,14 +10,38 @@ import (
 var OnlinePlayers atomic.Int64
 
 type Hub struct {
-	World  *World
-	Store  *Store
-	mu     sync.Mutex
-	rooms  []*Room
-	nextId int
+	World    *World
+	Store    *Store
+	mu       sync.Mutex
+	rooms    []*Room
+	nextId   int
+	botCount int
 }
 
-func NewHub(w *World, s *Store) *Hub { return &Hub{World: w, Store: s} }
+func NewHub(w *World, s *Store) *Hub { return &Hub{World: w, Store: s, botCount: 6} }
+
+func (h *Hub) BotStatus() (count, rooms int) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.botCount, len(h.rooms)
+}
+
+func (h *Hub) SetBotCount(count int) (int, int) {
+	count = max(0, min(count, len(BotNames)))
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.botCount = count
+	active := 0
+	for _, room := range h.rooms {
+		room.mu.Lock()
+		if !room.closed {
+			room.SetBotCount(count)
+			active++
+		}
+		room.mu.Unlock()
+	}
+	return count, active
+}
 
 func (h *Hub) Join(p *Player, name string, primary, secondary uint8) {
 	h.mu.Lock()
@@ -33,21 +57,27 @@ func (h *Hub) Join(p *Player, name string, primary, secondary uint8) {
 	if room == nil {
 		h.nextId++
 		room = NewRoom(h.nextId, h.World, h.Store)
+		room.SetBotCount(h.botCount)
 		h.rooms = append(h.rooms, room)
 		room.mu.Lock()
 	}
 	// Bots are filler: a real player always owns the seat.
 	if len(room.Players) >= RoomCap {
 		for i := len(room.Players) - 1; i >= 0; i-- {
-			if room.Players[i].IsBot {
-				delete(room.botAIs, room.Players[i].Id)
+			if bot := room.Players[i]; bot.IsBot {
+				delete(room.botAIs, bot.Id)
+				delete(room.history, bot.Id)
+				for _, other := range room.Players {
+					delete(other.netCache, bot.Id)
+					delete(other.netFullAt, bot.Id)
+				}
+				room.Emit(Event{Type: EvPlayerLeave, Player: bot.Id})
 				room.Players = append(room.Players[:i], room.Players[i+1:]...)
 				break
 			}
 		}
 	}
-	p.Id = room.nextIdSeq
-	room.nextIdSeq++
+	p.Id = room.allocPlayerID()
 	p.Name = name
 	p.joined = true
 	p.Room = room
@@ -58,14 +88,12 @@ func (h *Hub) Join(p *Player, name string, primary, secondary uint8) {
 	p.OnGround = true
 	p.InvincibleUntil = time.Now().Add(SpawnProtectS)
 	p.Pos = room.BestSpawn(&p.PlayerState)
-	p.IsAdmin = room.HumanCountLocked() == 0
 	room.Players = append(room.Players, p)
 	room.Emit(Event{Type: EvPlayerName, Player: p.Id, Name: p.Name})
-	players := append([]*Player(nil), room.Players...)
-	p.Send(Welcome(p.Id, h.World.Revision, p.IsAdmin))
-	p.Send(Roster(players))
-	p.lastSelf = SelfState(&p.PlayerState)
-	p.Send(p.lastSelf)
+	p.Send(Welcome(p.Id, h.World.Revision))
+	p.Send(Roster(room.Players))
+	p.lastSelf, p.hasLastSelf = compactSelf(&p.PlayerState), true
+	p.Send(SelfState(&p.PlayerState))
 	p.ready = true
 	if !room.running {
 		room.running = true
@@ -76,32 +104,24 @@ func (h *Hub) Join(p *Player, name string, primary, secondary uint8) {
 
 	OnlinePlayers.Add(1)
 	h.Store.IncrMeta("total_joins", 1)
-	log.Printf("player %d joined room %d as %q (admin=%v)", p.Id, room.Id, name, p.IsAdmin)
+	log.Printf("player %d joined room %d as %q", p.Id, room.Id, name)
 }
 
 func (h *Hub) Leave(p *Player) {
+	p.sendMu.Lock()
 	if p.closed {
+		p.sendMu.Unlock()
 		return
 	}
 	p.closed = true
-	if room := p.Room; room != nil && p.joined {
-		wasAdmin := p.IsAdmin
-		room.Remove(p)
-		OnlinePlayers.Add(-1)
-		if wasAdmin {
-			room.mu.Lock()
-			for _, next := range room.Players {
-				if !next.IsBot {
-					next.IsAdmin = true
-					break
-				}
-			}
-			room.mu.Unlock()
-		}
-		log.Printf("player %d (%s) left room %d", p.Id, p.Name, room.Id)
-	}
 	if p.send != nil {
 		close(p.send)
+	}
+	p.sendMu.Unlock()
+	if room := p.Room; room != nil && p.joined {
+		room.Remove(p)
+		OnlinePlayers.Add(-1)
+		log.Printf("player %d (%s) left room %d", p.Id, p.Name, room.Id)
 	}
 	if p.joined {
 		h.Store.Flush()

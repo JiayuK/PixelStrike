@@ -62,47 +62,41 @@ func (p *Player) BuildSnapshot(tick uint32, players []*Player, nowUnixNano int64
 	countAt := len(w.b) - 1
 	count := 0
 
-	for tier := 0; tier < 3; tier++ {
-		for _, other := range players {
-			isSelf := other.Id == p.Id
-			dx := other.Pos.X - p.Pos.X
-			dz := other.Pos.Z - p.Pos.Z
-			distSq := dx*dx + dz*dz
-			inTier := false
-			switch tier {
-			case 0:
-				inTier = isSelf || distSq <= 48*48
-			case 1:
-				inTier = !isSelf && distSq > 48*48 && distSq <= 112*112
-			case 2:
-				inTier = !isSelf && distSq > 112*112 && distSq <= 180*180
-			}
-			if !inTier {
+	for _, other := range players {
+		isSelf := other.Id == p.Id
+		dx := other.Pos.X - p.Pos.X
+		dz := other.Pos.Z - p.Pos.Z
+		distSq := dx*dx + dz*dz
+		if !isSelf {
+			switch {
+			case distSq <= 48*48:
+			case distSq <= 112*112:
+				if tick%6 != 0 {
+					continue
+				}
+			case distSq <= 180*180:
+				moving := other.Vel.X*other.Vel.X+other.Vel.Z*other.Vel.Z > .0025
+				if moving && tick%12 != 0 || !moving && tick%60 != 0 {
+					continue
+				}
+			default:
 				continue
 			}
-			if tier == 1 && tick%6 != 0 {
-				continue
-			}
-			moving := other.Vel.X*other.Vel.X+other.Vel.Z*other.Vel.Z > .0025
-			if tier == 2 && ((moving && tick%12 != 0) || (!moving && tick%60 != 0)) {
-				continue
-			}
-			if len(w.b) >= maxSnapshotBytes {
-				break
-			}
-
-			cur := quantizeState(&other.PlayerState, nowUnixNano)
-			prev, seen := p.netCache[other.Id]
-			full := !seen || tick-p.netFullAt[other.Id] >= 120
-			if !appendStateDelta(w, other.Id, prev, cur, full) {
-				continue
-			}
-			p.netCache[other.Id] = cur
-			if full {
-				p.netFullAt[other.Id] = tick
-			}
-			count++
 		}
+		if len(w.b) >= maxSnapshotBytes {
+			break
+		}
+		cur := quantizeState(&other.PlayerState, nowUnixNano)
+		prev, seen := p.netCache[other.Id]
+		full := !seen || tick-p.netFullAt[other.Id] >= 120
+		if !appendStateDelta(w, other.Id, prev, cur, full) {
+			continue
+		}
+		p.netCache[other.Id] = cur
+		if full {
+			p.netFullAt[other.Id] = tick
+		}
+		count++
 	}
 	w.b[countAt] = byte(count)
 	return w.Bytes()

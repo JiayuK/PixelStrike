@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"log"
 	"sync"
 	"time"
@@ -20,14 +19,13 @@ type Room struct {
 	pending               []Event
 	botAIs                map[uint16]*BotAI
 	history               map[uint16]*poseHistory
+	outboundBuf           []outbound
 }
 
 const RoomCap = 100
 
 func NewRoom(id int, w *World, s *Store) *Room {
-	r := &Room{Id: id, World: w, Store: s, nextIdSeq: 1, botAIs: make(map[uint16]*BotAI), history: make(map[uint16]*poseHistory)}
-	r.InitBots()
-	return r
+	return &Room{Id: id, World: w, Store: s, nextIdSeq: 1, botAIs: make(map[uint16]*BotAI), history: make(map[uint16]*poseHistory)}
 }
 
 func (r *Room) Remove(p *Player) {
@@ -41,6 +39,10 @@ func (r *Room) Remove(p *Player) {
 	}
 	delete(r.botAIs, p.Id)
 	delete(r.history, p.Id)
+	for _, other := range r.Players {
+		delete(other.netCache, p.Id)
+		delete(other.netFullAt, p.Id)
+	}
 	if !p.IsBot && r.HumanCountLocked() == 0 {
 		r.closed, r.Players = true, nil
 		r.botAIs = make(map[uint16]*BotAI)
@@ -59,6 +61,16 @@ func (r *Room) HumanCountLocked() int {
 		}
 	}
 	return n
+}
+
+func (r *Room) allocPlayerID() uint16 {
+	for {
+		id := r.nextIdSeq
+		r.nextIdSeq++
+		if id != 0 && r.findPlayer(id) == nil {
+			return id
+		}
+	}
 }
 
 type outbound struct {
@@ -82,12 +94,12 @@ func (r *Room) Run() {
 		var evts []Event
 		if r.tick%2 == 0 {
 			evts = r.pending
-			r.pending = make([]Event, 0, 32)
+			r.pending = nil
 		}
 		var outs []outbound
 		if r.tick%2 == 0 {
-			players := append([]*Player(nil), r.Players...)
-			outs = make([]outbound, 0, len(players))
+			players := r.Players
+			outs = r.outboundBuf[:0]
 			var periodicRoster []byte
 			if r.tick%600 == 0 {
 				periodicRoster = Roster(players)
@@ -98,9 +110,10 @@ func (r *Room) Run() {
 					continue
 				}
 				out := outbound{p: p, snapshot: p.BuildSnapshot(r.tick, players, nowUnixNano)}
-				self := SelfState(&p.PlayerState)
-				if r.tick%60 == 0 || len(p.lastSelf) == 0 || !bytes.Equal(self[3:], p.lastSelf[3:]) {
-					out.self, p.lastSelf = self, self
+				self := compactSelf(&p.PlayerState)
+				if r.tick%60 == 0 || !p.hasLastSelf || self != p.lastSelf {
+					out.self = SelfState(&p.PlayerState)
+					p.lastSelf, p.hasLastSelf = self, true
 				}
 				if len(evts) > 0 {
 					if filtered := r.eventsFor(p, evts); len(filtered) > 0 {
@@ -120,7 +133,8 @@ func (r *Room) Run() {
 		}
 		r.tick++
 		r.mu.Unlock()
-		for _, out := range outs {
+		for i := range outs {
+			out := &outs[i]
 			out.p.Send(out.snapshot)
 			if out.self != nil {
 				out.p.Send(out.self)
@@ -131,6 +145,10 @@ func (r *Room) Run() {
 			if out.roster != nil {
 				out.p.Send(out.roster)
 			}
+			*out = outbound{}
+		}
+		if outs != nil {
+			r.outboundBuf = outs[:0]
 		}
 		took := time.Since(start)
 		recordTick(took)

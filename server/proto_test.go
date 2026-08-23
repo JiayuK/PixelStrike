@@ -2,15 +2,16 @@ package main
 
 import (
 	"encoding/binary"
+	"math"
 	"strings"
 	"testing"
 	"time"
 	"unicode/utf8"
 )
 
-func TestWelcomeV2(t *testing.T) {
-	b := Welcome(42, 0x12345678, true)
-	if len(b) != 9 || b[0] != OpWelcome || b[1] != ProtocolVersion || binary.LittleEndian.Uint16(b[2:]) != 42 || b[8] != 1 {
+func TestWelcomeV3(t *testing.T) {
+	b := Welcome(42, 0x12345678)
+	if len(b) != 8 || b[0] != OpWelcome || b[1] != ProtocolVersion || binary.LittleEndian.Uint16(b[2:]) != 42 {
 		t.Fatalf("bad welcome: %v", b)
 	}
 }
@@ -73,18 +74,111 @@ func TestSweptCollisionAndCrouchClearance(t *testing.T) {
 	}
 }
 
-func TestJumpLeavesGroundAndClearsCrate(t *testing.T) {
+func TestDiagonalWallSlideDoesNotStickOrTunnel(t *testing.T) {
+	w := &World{aabbs: []AABB{{Min: Vec3{1, 0, -10}, Max: Vec3{1.05, 3, 10}}}}
+	pos, vel := Vec3{}, Vec3{X: 20, Z: 6}
+	w.MoveAABB(&pos, &vel, .1, StandingHeight, false)
+	if pos.X > 1-PlayerHalf || pos.Z < .59 || vel.X != 0 || !w.CanOccupy(pos, StandingHeight) {
+		t.Fatalf("diagonal slide failed: pos=%v vel=%v", pos, vel)
+	}
+	for range 20 {
+		vel.X, vel.Z = 6, 6
+		w.MoveAABB(&pos, &vel, 1.0/60, StandingHeight, false)
+	}
+	if pos.Z < 2.5 || !w.CanOccupy(pos, StandingHeight) {
+		t.Fatalf("wall movement stuck or penetrated: pos=%v", pos)
+	}
+}
+
+func TestJumpRequiresGround(t *testing.T) {
 	w := &World{aabbs: []AABB{{Min: Vec3{-20, -1, -20}, Max: Vec3{20, 0, 20}}}}
 	r := &Room{World: w}
-	p := &PlayerState{Alive: true, OnGround: true, Pos: Vec3{Y: Epsilon}, CmdKeys: KeyJump}
+	p := &PlayerState{Alive: true, OnGround: true, Pos: Vec3{Y: Epsilon}, CmdKeys: KeyJump | KeyForward}
 	p.ApplyLoadout(3, 0)
-	maxY := p.Pos.Y
-	for range 30 {
+	maxY, maxSpeed := p.Pos.Y, 0.0
+	jumps := 0
+	for range 180 {
+		wasGrounded := p.OnGround
 		r.Move(p, time.Now())
+		if wasGrounded && !p.OnGround {
+			jumps++
+		}
 		maxY = max(maxY, p.Pos.Y)
+		maxSpeed = max(maxSpeed, math.Hypot(p.Vel.X, p.Vel.Z))
 	}
-	if maxY < 1.45 {
-		t.Fatalf("jump apex too low: %.3f", maxY)
+	speedLimit := WalkSpeed * Weapons[3].SpeedMult
+	if maxY < 1.45 || jumps < 2 || maxSpeed > speedLimit+1e-9 {
+		t.Fatalf("bad bunny hop: apex=%.3f jumps=%d speed=%.3f limit=%.3f", maxY, jumps, maxSpeed, speedLimit)
+	}
+	p.Pos.Y, p.OnGround, p.Vel.Y = 2, false, -1
+	r.Move(p, time.Now())
+	if p.Vel.Y >= 0 {
+		t.Fatal("jump without solid support was accepted")
+	}
+}
+
+func TestLastRoundStartsReload(t *testing.T) {
+	r := &Room{World: &World{}, history: make(map[uint16]*poseHistory)}
+	p := &PlayerState{Alive: true, OnGround: true}
+	p.ApplyLoadout(3, 0)
+	p.Mags[0] = 1
+	now := time.Unix(1, 0)
+	if !r.TryFire(p, 0, 0, 0, 0, 1, now) || p.Mags[0] != 0 || !p.Reloading {
+		t.Fatalf("last round did not start reload: mag=%d reloading=%v", p.Mags[0], p.Reloading)
+	}
+}
+
+func TestReloadRequestDoesNotRestartActiveReload(t *testing.T) {
+	r := &Room{}
+	p := &PlayerState{Alive: true}
+	p.ApplyLoadout(3, 0)
+	p.Mags[0]--
+	now := time.Unix(1, 0)
+	if !r.StartReload(p, now) {
+		t.Fatal("initial reload rejected")
+	}
+	deadline := p.ReloadEnd
+	if r.StartReload(p, now.Add(time.Second)) || !p.ReloadEnd.Equal(deadline) || len(r.pending) != 1 {
+		t.Fatalf("active reload restarted: end=%v events=%d", p.ReloadEnd, len(r.pending))
+	}
+}
+
+func TestGrenadeThrowConsumesOnceAndEmitsTrajectory(t *testing.T) {
+	r := &Room{}
+	p := &PlayerState{Id: 7, Alive: true, Grenades: 1}
+	now := time.Unix(1, 0)
+	r.ThrowGrenade(p, .4, .2, now)
+	r.ThrowGrenade(p, .4, .2, now)
+	if p.Grenades != 0 || len(r.Grenades) != 1 || len(r.pending) != 1 {
+		t.Fatalf("duplicate grenade throw: grenades=%d live=%d events=%d", p.Grenades, len(r.Grenades), len(r.pending))
+	}
+	e := r.pending[0]
+	if e.Type != EvNadeThrow || e.Player != p.Id || e.Dir.X == 0 || e.Dir.Y == 0 || e.Dir.Z == 0 {
+		t.Fatalf("grenade trajectory event missing: %#v", e)
+	}
+}
+
+func TestKnifeAttackDoesNotRequireAmmo(t *testing.T) {
+	r := &Room{World: &World{}, history: make(map[uint16]*poseHistory)}
+	attacker := &Player{PlayerState: PlayerState{Id: 1, Alive: true, IsBot: true, HP: MaxHP, Pos: Vec3{}}}
+	victim := &Player{PlayerState: PlayerState{Id: 2, Alive: true, IsBot: true, HP: MaxHP, Pos: Vec3{Z: -1.2}}}
+	attacker.ApplyLoadout(3, 0)
+	attacker.SwitchSlot(3)
+	attacker.NextFire = time.Time{}
+	r.Players = []*Player{attacker, victim}
+	if !r.TryFire(&attacker.PlayerState, 0, 0, 0, 0, 1, time.Unix(1, 0)) || victim.HP >= MaxHP {
+		t.Fatalf("knife attack failed without ammo: accepted=%v hp=%d", attacker.HasShot, victim.HP)
+	}
+}
+
+func TestPatternDirStaysInsideSpread(t *testing.T) {
+	aim := AimDir(.3, -.2)
+	limit := math.Cos(2 * math.Pi / 180)
+	for shot := 1; shot <= 64; shot++ {
+		got := patternDir(aim, 2, shot, 3)
+		if dot := aim.X*got.X + aim.Y*got.Y + aim.Z*got.Z; dot < limit-1e-12 {
+			t.Fatalf("shot %d left spread cone: cos=%.9f limit=%.9f", shot, dot, limit)
+		}
 	}
 }
 
@@ -125,7 +219,7 @@ func TestMapSupportsHundredPlayerRoom(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if w.Size != [2]float64{256, 256} || len(w.Spawns) < 64 {
+	if w.Size != [2]float64{512, 512} || len(w.Spawns) < 64 {
 		t.Fatalf("size=%v spawns=%d", w.Size, len(w.Spawns))
 	}
 	for i, spawn := range w.Spawns {

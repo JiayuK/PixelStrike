@@ -29,7 +29,7 @@
       --shadow: 0 18px 48px rgb(3 5 3 / .52);
     }
 
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
     html, body {
       width: 100%;
       height: 100%;
@@ -38,11 +38,12 @@
       color: var(--paper);
       font-family: var(--font-ui);
       -webkit-font-smoothing: antialiased;
+      overscroll-behavior: none;
     }
     body > canvas { position: fixed; inset: 0; z-index: 0; }
     button, input, select { font: inherit; color: inherit; }
     button { cursor: pointer; }
-    input, select { user-select: text; }
+    input, select, textarea { user-select: text; -webkit-user-select: text; }
     canvas { display: block; }
     :focus-visible { outline: 2px solid var(--accent-hi); outline-offset: 3px; }
 
@@ -394,40 +395,43 @@
       top: 18px;
       display: grid;
       grid-template-columns: auto auto;
-      border: 1px solid rgb(240 234 220 / .3);
-      background: rgb(11 13 11 / .9);
-      font: 9px var(--font-mono);
+      border: 1px solid rgb(240 234 220 / .35);
+      border-top: 3px solid var(--accent);
+      background: rgb(11 13 11 / .95);
+      font: 700 12px var(--font-mono);
+      box-shadow: 0 4px 16px rgb(0 0 0 / .6);
     }
-    #net-stats span { display: flex; gap: 7px; padding: 7px 9px; color: var(--dim); }
+    #net-stats span { display: flex; align-items: center; gap: 8px; padding: 8px 14px; color: var(--muted); font-size: 11px; }
     #net-stats span + span { border-left: 1px solid var(--line); }
-    #net-stats strong { color: var(--paper); }
+    #net-stats strong { color: #ffffff; font-size: 13px; font-weight: 800; }
     #killfeed {
       position: absolute;
       right: 18px;
-      top: 57px;
+      top: 64px;
       display: flex;
       flex-direction: column;
       align-items: end;
-      gap: 4px;
+      gap: 6px;
     }
     .kill-row {
       display: flex;
       align-items: center;
       justify-content: end;
-      gap: 6px;
-      min-height: 27px;
-      border-right: 3px solid var(--line-strong);
-      background: rgb(11 13 11 / .88);
-      padding: 5px 8px;
-      color: var(--muted);
-      font-size: 10px;
+      gap: 8px;
+      min-height: 32px;
+      border-right: 4px solid var(--line-strong);
+      background: rgb(11 13 11 / .92);
+      padding: 6px 12px;
+      color: var(--paper);
+      font-size: 12px;
+      font-weight: 700;
+      box-shadow: 0 3px 12px rgb(0 0 0 / .5);
       animation: feed-in .14s ease-out;
     }
-    .kill-row.mine { border-right-color: var(--accent); color: var(--paper); }
-    .kill-row .killer { color: var(--paper); font-weight: 700; }
-    .kill-row .weapon { color: var(--accent-hi); font: 700 9px var(--font-mono); }
-    .kill-row .head-badge { color: #e6bf79; font: 8px var(--font-mono); }
-
+    .kill-row.mine { border-right-color: var(--accent); background: rgb(201 130 43 / .22); color: #ffffff; }
+    .kill-row .killer { color: #ffffff; font-weight: 800; }
+    .kill-row .weapon { color: var(--accent-hi); font: 800 12px var(--font-mono); padding: 1px 4px; background: rgb(0 0 0 / .4); border-radius: 2px; }
+    .kill-row .head-badge { color: #f59e0b; font: 800 10px var(--font-mono); padding: 1px 5px; background: rgba(245, 158, 11, 0.2); border: 1px solid #f59e0b; border-radius: 2px; }
     #player-labels { position: absolute; inset: 0; overflow: hidden; }
     .player-label {
       position: absolute;
@@ -457,15 +461,18 @@
     .player-hp { width: 21px; color: var(--paper); font: 700 9px var(--font-mono); text-align: right; }
 
     #crosshair {
-      position: absolute;
+      position: fixed;
       left: 50%;
       top: 50%;
       width: 24px;
       height: 24px;
       transform: translate(-50%, -50%);
+      pointer-events: none;
+      contain: layout style;
       --spread: 0px;
     }
     .ch-line, .ch-dot { position: absolute; background: #e8e7dd; box-shadow: 0 0 1px #0b0d0b; }
+    .ch-line { transition: transform 70ms linear; will-change: transform; }
     .ch-top, .ch-bot { width: 2px; height: 6px; left: 11px; }
     .ch-top { top: 0; }
     .ch-top { transform: translateY(calc(-1 * var(--spread))); }
@@ -474,6 +481,44 @@
     .ch-left { left: 0; transform: translateX(calc(-1 * var(--spread))); }
     .ch-right { right: 0; transform: translateX(var(--spread)); }
     .ch-dot { width: 2px; height: 2px; left: 11px; top: 11px; background: var(--accent-hi); }
+    #crosshair.reloading .ch-line { background: var(--accent-hi); opacity: 0.55; }
+    #crosshair.reloading .ch-dot { background: var(--accent-hi); transform: scale(1.6); box-shadow: 0 0 6px var(--accent-hi); }
+    #reload-bar-wrap {
+      position: fixed;
+      left: 50%;
+      bottom: 42px;
+      transform: translateX(-50%);
+      display: none;
+      width: min(340px, 80vw);
+      padding: 7px 12px;
+      background: rgb(11 13 11 / .95);
+      border: 1px solid var(--accent);
+      border-bottom: 3px solid var(--accent-hi);
+      box-shadow: 0 0 24px rgb(201 130 43 / .35);
+      z-index: 40;
+      pointer-events: none;
+    }
+    .reload-label {
+      display: flex;
+      justify-content: space-between;
+      font: 700 11px var(--font-mono);
+      color: var(--accent-hi);
+      letter-spacing: .08em;
+      margin-bottom: 4px;
+    }
+    .reload-track {
+      width: 100%;
+      height: 6px;
+      background: rgb(255 255 255 / .15);
+      overflow: hidden;
+    }
+    .reload-fill {
+      width: 0%;
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), var(--accent-hi));
+      box-shadow: 0 0 10px var(--accent-hi);
+      transition: width 35ms linear;
+    }
     #hitmarker {
       position: absolute;
       left: 50%;
@@ -500,6 +545,19 @@
       display: none;
       background: radial-gradient(circle, transparent 44%, rgb(143 40 34 / .56) 100%);
     }
+    #death-countdown {
+      position: absolute;
+      left: 50%;
+      top: 62%;
+      display: none;
+      transform: translateX(-50%);
+      border: 1px solid var(--line-strong);
+      border-left: 3px solid var(--danger);
+      background: rgb(11 13 11 / .9);
+      padding: 8px 12px;
+      color: var(--paper);
+      font: 700 12px var(--font-mono);
+    }
     #vitals {
       position: absolute;
       left: 18px;
@@ -516,20 +574,43 @@
     .vital-val { margin-top: 1px; color: var(--paper); font: 700 24px var(--font-mono); line-height: 1; }
     #ammo-wrap {
       position: absolute;
-      right: 18px;
-      bottom: 18px;
-      min-width: 182px;
+      left: 18px;
+      bottom: 74px;
+      min-width: 320px;
       border: 1px solid rgb(240 234 220 / .3);
-      border-right: 3px solid var(--accent);
+      border-left: 3px solid var(--accent);
       background: rgb(11 13 11 / .9);
       padding: 8px 11px;
-      text-align: right;
+      text-align: left;
     }
     #weapon-name { color: var(--accent-hi); font: 700 10px var(--font-mono); letter-spacing: .05em; }
     #ammo { color: var(--paper); font: 700 27px var(--font-mono); line-height: 1; }
     #ammo .reserve { color: var(--dim); font-size: 15px; }
-    .nade-row { margin-top: 4px; color: var(--muted); font: 9px var(--font-mono); }
-    #grenades { color: var(--paper); }
+    #inventory {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(74px, 1fr));
+      gap: 2px;
+      margin-bottom: 8px;
+      text-align: left;
+    }
+    .inventory-item {
+      min-width: 0;
+      border: 1px solid var(--line);
+      background: rgb(255 255 255 / .035);
+      padding: 4px 5px;
+      color: var(--dim);
+      font: 700 8px var(--font-mono);
+    }
+    .inventory-item.active {
+      border-color: var(--accent-hi);
+      background: rgb(34 197 94 / .14);
+      color: var(--paper);
+    }
+    .inventory-item.primed { border-color: #f0b429; color: #ffd166; }
+    .item-head { display: flex; justify-content: space-between; gap: 4px; }
+    .item-key { color: var(--accent-hi); }
+    .item-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .item-ammo { display: block; margin-top: 2px; color: var(--muted); font-size: 7px; }
     #sniper-scope {
       position: absolute;
       inset: 0;
@@ -589,9 +670,6 @@
     .dialog.danger .dialog-label { color: #e0857d; }
     .dialog h2 { margin-top: 7px; font: 32px/.98 var(--font-display); letter-spacing: .035em; }
     .dialog p { margin-top: 9px; color: var(--muted); font-size: 12px; line-height: 1.55; }
-    #respawn-count { color: var(--accent-hi); font: 700 23px var(--font-mono); }
-    #killer-label { color: var(--paper); }
-    .dialog-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 16px; }
     .dialog-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 16px; }
     .dialog-actions button { min-height: 42px; }
     .settings-stack { display: grid; gap: 13px; margin-top: 16px; }
@@ -600,17 +678,6 @@
       accent-color: var(--accent);
       cursor: pointer;
     }
-    #bot-control { display: none; border-top: 1px solid var(--line); padding-top: 13px; }
-    .bot-pills { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; margin-top: 7px; }
-    .bot-pill {
-      min-height: 34px;
-      border: 1px solid var(--line-strong);
-      border-radius: 0;
-      background: var(--base);
-      color: var(--muted);
-      font: 700 10px var(--font-mono);
-    }
-    .bot-pill:hover, .bot-pill.active { border-color: var(--accent-hi); background: var(--accent); color: #17110a; }
 
     @keyframes feed-in { from { opacity: 0; transform: translateX(10px); } }
     @keyframes dialog-in { from { opacity: 0; transform: translateY(8px); } }
@@ -647,13 +714,13 @@
       #net-stats { right: 10px; top: 10px; }
       #killfeed { right: 10px; top: 50px; }
       #vitals { left: 10px; bottom: 10px; }
-      #ammo-wrap { right: 10px; bottom: 10px; }
+      #ammo-wrap { left: 10px; bottom: 70px; right: auto; text-align: left; }
     }
     @media (max-width: 560px) {
       .wordmark small { display: none; }
       .wordmark strong { font-size: 22px; }
       .deploy-title { font-size: 44px; }
-      .loadout-grid, .dialog-fields, .dialog-actions { grid-template-columns: 1fr; }
+      .loadout-grid, .dialog-actions { grid-template-columns: 1fr; }
       .field.full { grid-column: auto; }
       .stat-grid { grid-template-columns: 1fr 1fr; }
       .metric { padding-inline: 7px; }
@@ -666,7 +733,8 @@
       #vitals { grid-template-columns: repeat(3, 62px); }
       .vital-box { padding-inline: 7px; }
       .vital-val { font-size: 20px; }
-      #ammo-wrap { min-width: 145px; }
+      #ammo-wrap { min-width: 170px; max-width: calc(100vw - 20px); }
+      #inventory { grid-template-columns: repeat(2, minmax(74px, 1fr)); }
       #scoreboard { padding: 10px; }
       #scoreboard table { min-width: 680px; }
     }
@@ -697,8 +765,8 @@
 
           <div class="metric-rail" aria-label="服务器规格">
             <div class="metric"><b>60 Hz</b><span>权威物理</span></div>
-            <div class="metric"><b>256 × 256</b><span>地图尺寸</span></div>
-            <div class="metric"><b>174</b><span>安全出生点</span></div>
+            <div class="metric"><b>512 × 512</b><span>地图尺寸</span></div>
+            <div class="metric"><b>245</b><span>安全出生点</span></div>
           </div>
 
           <div>
@@ -710,6 +778,7 @@
               <div class="field">
                 <label for="primary-select">主武器 / PRIMARY</label>
                 <select class="control" id="primary-select">
+                  <option value="-1" selected>🎲 随机主武器（每次重生随机）</option>
                   <option value="3">AK-47 经典突击步枪</option>
                   <option value="4">M4A4 特战突击步枪</option>
                   <option value="2">MP5-SD 微声冲锋枪</option>
@@ -719,6 +788,7 @@
               <div class="field">
                 <label for="secondary-select">副武器 / SECONDARY</label>
                 <select class="control" id="secondary-select">
+                  <option value="-1" selected>🎲 随机副武器（每次重生随机）</option>
                   <option value="0">GLOCK-18 战术手枪</option>
                   <option value="1">DESERT EAGLE 沙漠之鹰</option>
                 </select>
@@ -780,7 +850,7 @@
               <div class="key-row"><kbd>右键</kbd><span>精确瞄准</span></div>
               <div class="key-row"><kbd>R</kbd><span>换弹</span></div>
               <div class="key-row"><kbd>G</kbd><span>投掷手雷</span></div>
-              <div class="key-row"><kbd>1 2 3</kbd><span>切换武器</span></div>
+              <div class="key-row"><kbd>1 2 3 4 / 滚轮</kbd><span>主/副/刀/雷 装备切换</span></div>
               <div class="key-row"><kbd>Tab</kbd><span>实时战绩</span></div>
             </div>
           </div>
@@ -792,7 +862,7 @@
   <div id="hud" aria-label="战斗界面">
     <div id="radar-wrap">
       <canvas id="radar" width="256" height="256" aria-label="战术雷达"></canvas>
-      <div class="radar-meta"><span>SECTOR 256M</span><span>在线 <strong id="online-count">0</strong></span></div>
+      <div class="radar-meta"><span>SECTOR 512M</span><span>在线 <strong id="online-count">0</strong></span></div>
     </div>
 
     <div id="match-strip"><span>FREE FOR ALL</span><span id="shield-badge">出生保护</span></div>
@@ -808,6 +878,7 @@
     </div>
     <div id="hitmarker" aria-hidden="true"></div>
     <div id="damage-flash" aria-hidden="true"></div>
+    <div id="death-countdown" role="status" aria-live="polite"></div>
 
     <div id="vitals">
       <div class="vital-box"><div class="vital-title">HEALTH</div><div class="vital-val" id="hp">100</div></div>
@@ -815,11 +886,19 @@
       <div class="vital-box"><div class="vital-title">RANK</div><div class="vital-val" id="rank-line">-</div></div>
     </div>
     <div id="ammo-wrap">
+      <div id="inventory" aria-label="物品栏">
+        <div class="inventory-item active" id="item-slot-1" aria-current="true"><div class="item-head"><span class="item-key">1</span><span class="item-name" id="item-1-name">AK-47</span></div><span class="item-ammo" id="item-1-ammo">30/90</span></div>
+        <div class="inventory-item" id="item-slot-2" aria-current="false"><div class="item-head"><span class="item-key">2</span><span class="item-name" id="item-2-name">GLOCK-18</span></div><span class="item-ammo" id="item-2-ammo">20/120</span></div>
+        <div class="inventory-item" id="item-slot-3" aria-current="false"><div class="item-head"><span class="item-key">3</span><span class="item-name">KNIFE</span></div><span class="item-ammo">MELEE</span></div>
+        <div class="inventory-item" id="item-slot-4" aria-current="false"><div class="item-head"><span class="item-key">4</span><span class="item-name">GRENADE</span></div><span class="item-ammo" id="item-4-ammo">×1</span></div>
+      </div>
       <div id="weapon-name">AK-47</div>
       <div id="ammo">30 <span class="reserve">/ 90</span></div>
-      <div class="nade-row">GRENADE × <span id="grenades">1</span></div>
     </div>
-    <div id="sniper-scope" aria-hidden="true"></div>
+    <div id="reload-bar-wrap">
+      <div class="reload-label"><span>RELOADING 换弹中</span><span id="reload-pct">0%</span></div>
+      <div class="reload-track"><div id="reload-fill" class="reload-fill"></div></div>
+    </div>
   </div>
 
   <section id="scoreboard" aria-label="实时战绩">
@@ -828,35 +907,12 @@
       <div class="mode-label">按住 TAB 查看</div>
     </div>
     <div class="table-shell">
-      <table>
         <thead><tr><th>排名</th><th>玩家</th><th>状态</th><th>武器</th><th>击杀</th><th>阵亡</th><th>K/D</th></tr></thead>
         <tbody id="sb-body"></tbody>
       </table>
     </div>
   </section>
 
-  <div id="death-overlay" class="overlay" role="dialog" aria-modal="true" aria-labelledby="death-title">
-    <div class="dialog danger">
-      <div class="dialog-label">OPERATOR DOWN / 战术阵亡</div>
-      <h2 id="death-title">被 <span id="killer-label">未知目标</span> 击杀</h2>
-      <p><span id="respawn-count">3</span> 秒后重新部署。现在修改配装，复活时立即生效。</p>
-      <div class="dialog-fields">
-        <div class="field">
-          <label for="death-primary">主武器 / PRIMARY</label>
-          <select class="control" id="death-primary">
-            <option value="3">AK-47</option><option value="4">M4A4</option>
-            <option value="2">MP5-SD</option><option value="5">AWP</option>
-          </select>
-        </div>
-        <div class="field">
-          <label for="death-secondary">副武器 / SECONDARY</label>
-          <select class="control" id="death-secondary">
-            <option value="0">GLOCK-18</option><option value="1">DESERT EAGLE</option>
-          </select>
-        </div>
-      </div>
-    </div>
-  </div>
 
   <div id="pause-overlay" class="overlay" role="dialog" aria-modal="true" aria-labelledby="pause-title">
     <div class="dialog">
@@ -890,16 +946,6 @@
             <option value="medium" selected>平衡 / 1.0 ×</option>
             <option value="high">超清 / DPR 1.5</option>
           </select>
-        </div>
-        <div id="bot-control">
-          <div class="field"><label>房主人机数量</label></div>
-          <div class="bot-pills">
-            <button class="bot-pill" data-bots="0" type="button">0</button>
-            <button class="bot-pill" data-bots="2" type="button">2</button>
-            <button class="bot-pill active" data-bots="6" type="button">6</button>
-            <button class="bot-pill" data-bots="10" type="button">10</button>
-            <button class="bot-pill" data-bots="12" type="button">12</button>
-          </div>
         </div>
       </div>
       <div class="dialog-actions">

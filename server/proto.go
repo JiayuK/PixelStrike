@@ -6,7 +6,7 @@ import (
 	"unicode/utf8"
 )
 
-const ProtocolVersion = 2
+const ProtocolVersion = 3
 
 const (
 	OpJoin          = 0x01
@@ -14,7 +14,6 @@ const (
 	OpFire          = 0x03
 	OpReload        = 0x04
 	OpGrenade       = 0x06
-	OpSetBots       = 0x07
 	OpSwitch        = 0x08
 	OpLoadout       = 0x09
 	OpRosterRequest = 0x0A
@@ -68,16 +67,11 @@ func (w *Buf) F32(v float64) {
 func (w *Buf) V3(v Vec3)     { w.F32(v.X); w.F32(v.Y); w.F32(v.Z) }
 func (w *Buf) Bytes() []byte { return w.b }
 
-func Welcome(id uint16, mapRevision uint32, isAdmin bool) []byte {
+func Welcome(id uint16, mapRevision uint32) []byte {
 	w := NewBuf(OpWelcome)
 	w.U8(ProtocolVersion)
 	w.U16(id)
 	w.U32(mapRevision)
-	if isAdmin {
-		w.U8(1)
-	} else {
-		w.U8(0)
-	}
 	return w.Bytes()
 }
 
@@ -92,15 +86,29 @@ func Reject(reason string) []byte {
 	return w.Bytes()
 }
 
+type compactSelfState struct {
+	slot, weapon, mag, nades uint8
+	reserve                  uint16
+}
+
+func compactSelf(p *PlayerState) compactSelfState {
+	mag, reserve := p.ActiveAmmo()
+	return compactSelfState{
+		slot: p.ActiveSlot, weapon: p.Weapon,
+		mag: uint8(max(0, min(mag, 255))), reserve: uint16(max(0, min(reserve, 65535))),
+		nades: uint8(max(0, min(p.Grenades, 255))),
+	}
+}
+
 func SelfState(p *PlayerState) []byte {
+	state := compactSelf(p)
 	w := NewBuf(OpSelf)
 	w.U16(p.LastInputSeq)
-	w.U8(p.ActiveSlot)
-	w.U8(p.Weapon)
-	mag, reserve := p.ActiveAmmo()
-	w.U8(uint8(max(0, min(mag, 255))))
-	w.U16(uint16(max(0, min(reserve, 65535))))
-	w.U8(uint8(max(0, min(p.Grenades, 255))))
+	w.U8(state.slot)
+	w.U8(state.weapon)
+	w.U8(state.mag)
+	w.U16(state.reserve)
+	w.U8(state.nades)
 	return w.Bytes()
 }
 

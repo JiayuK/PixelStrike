@@ -4,6 +4,8 @@ const SFX_NAMES = [
   'fire_glock', 'fire_deagle', 'fire_mp5', 'fire_ak47', 'fire_m4a4', 'fire_awp',
   'headshot_ding', 'hitmarker', 'death', 'hurt', 'grenade_explode',
   'step', 'reload_click', 'bolt_rack',
+  'mag_out', 'mag_in', 'bolt_cycle', 'empty_click',
+  'knife_slash', 'knife_hit', 'weapon_switch',
 ] as const;
 
 export type SfxName = (typeof SFX_NAMES)[number];
@@ -157,6 +159,37 @@ export class AudioEngine {
       case 'bolt_rack':
         osc('sawtooth', 350, 180, 0.12);
         noise(0.08, 4000);
+        break;
+      case 'mag_out':
+        noise(0.07, 3200);
+        osc('square', 750, 240, 0.06);
+        break;
+      case 'mag_in':
+        noise(0.09, 2200);
+        osc('sine', 160, 45, 0.09);
+        osc('sawtooth', 880, 280, 0.04);
+        break;
+      case 'bolt_cycle':
+        osc('sawtooth', 420, 160, 0.09);
+        noise(0.07, 4500);
+        osc('triangle', 720, 220, 0.06);
+        break;
+      case 'empty_click':
+        osc('triangle', 1800, 400, 0.03);
+        noise(0.02, 7000);
+        break;
+      case 'knife_slash':
+        noise(0.08, 4200);
+        osc('sine', 1100, 240, 0.08);
+        break;
+      case 'knife_hit':
+        osc('sine', 130, 40, 0.12);
+        osc('sawtooth', 1400, 300, 0.05);
+        noise(0.06, 2800);
+        break;
+      case 'weapon_switch':
+        noise(0.04, 5200);
+        osc('sawtooth', 720, 220, 0.05);
         break;
     }
   }

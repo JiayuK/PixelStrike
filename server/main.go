@@ -2,8 +2,11 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -18,6 +21,8 @@ func main() {
 	dbPath := envOr("DB_PATH", "./stats.db")
 	mapPath := envOr("MAP_PATH", "../map.json")
 	allowedOrigin := os.Getenv("ALLOWED_ORIGIN")
+	adminPassword := os.Getenv("ADMIN_PASSWORD")
+	adminPasswordHash := sha256.Sum256([]byte(adminPassword))
 
 	if _, err := os.Stat(mapPath); err != nil {
 		// also try next to the executable
@@ -60,7 +65,7 @@ func main() {
 			http.Error(w, "forbidden origin", http.StatusForbidden)
 			return
 		}
-		ServeWS(hub, w, r)
+		ServeWS(hub, w, r, allowedOrigin)
 	})
 	mux.HandleFunc("/api/leaderboard", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -95,9 +100,48 @@ func main() {
 			"tickP99Ms":       p99,
 		})
 	})
+	mux.HandleFunc("/api/admin/bots", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Content-Type", "application/json")
+		if adminPassword == "" {
+			http.Error(w, `{"error":"admin password is not configured"}`, http.StatusServiceUnavailable)
+			return
+		}
+		provided := sha256.Sum256([]byte(r.Header.Get("X-Admin-Password")))
+		if subtle.ConstantTimeCompare(provided[:], adminPasswordHash[:]) != 1 {
+			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+			return
+		}
+		switch r.Method {
+		case http.MethodGet:
+			count, rooms := hub.BotStatus()
+			json.NewEncoder(w).Encode(map[string]int{"bots": count, "rooms": rooms})
+		case http.MethodPost:
+			r.Body = http.MaxBytesReader(w, r.Body, 1024)
+			var request struct {
+				Bots int `json:"bots"`
+			}
+			decoder := json.NewDecoder(r.Body)
+			decoder.DisallowUnknownFields()
+			if err := decoder.Decode(&request); err != nil || decoder.Decode(&struct{}{}) != io.EOF || request.Bots < 0 || request.Bots > len(BotNames) {
+				http.Error(w, `{"error":"bots must be an integer from 0 to 12"}`, http.StatusBadRequest)
+				return
+			}
+			count, rooms := hub.SetBotCount(request.Bots)
+			json.NewEncoder(w).Encode(map[string]int{"bots": count, "rooms": rooms})
+		default:
+			w.Header().Set("Allow", "GET, POST")
+			http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
+		}
+	})
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("ok")) })
 
-	srv := &http.Server{Addr: ":" + port, Handler: mux}
+	srv := &http.Server{
+		Addr:              ":" + port,
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
 	go func() {
 		log.Printf("listening on :%s", port)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {

@@ -387,27 +387,27 @@ export class WorldView {
   private setupSky() {
     // Luminous Voxel Sun
     const sunBox = new THREE.Mesh(
-      new THREE.BoxGeometry(14, 14, 4),
+      new THREE.BoxGeometry(22, 22, 6),
       new THREE.MeshBasicMaterial({ color: 0xfffae0 })
     );
-    sunBox.position.set(50, 80, -75);
+    sunBox.position.set(110, 160, -150);
     sunBox.lookAt(0, 0, 0);
     this.sun.add(sunBox);
     this.scene.add(this.sun);
 
-    // High Stratified Volumetric Clouds
+    // High Stratified Volumetric Clouds across 512x512 arena
     const cloudMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.88 });
     const cloudGeos: THREE.BufferGeometry[] = [];
     let cSeed = 42;
     const cRnd = () => (cSeed = (cSeed * 16807) % 2147483647) / 2147483647;
 
-    for (let x = -100; x <= 100; x += 24) {
-      for (let z = -100; z <= 100; z += 24) {
-        if (cRnd() > 0.4) {
-          const cw = 16 + Math.floor(cRnd() * 20);
-          const cd = 16 + Math.floor(cRnd() * 20);
-          const cg = new THREE.BoxGeometry(cw, 3.0, cd);
-          cg.translate(x + cRnd() * 6, 45 + cRnd() * 4, z + cRnd() * 6);
+    for (let x = -240; x <= 240; x += 48) {
+      for (let z = -240; z <= 240; z += 48) {
+        if (cRnd() > 0.38) {
+          const cw = 24 + Math.floor(cRnd() * 28);
+          const cd = 24 + Math.floor(cRnd() * 28);
+          const cg = new THREE.BoxGeometry(cw, 3.5, cd);
+          cg.translate(x + cRnd() * 10, 55 + cRnd() * 6, z + cRnd() * 10);
           cloudGeos.push(cg);
         }
       }
@@ -417,7 +417,6 @@ export class WorldView {
     this.clouds.add(new THREE.Mesh(mergedClouds, cloudMat));
     this.scene.add(this.clouds);
   }
-
   raycastDistance(origin: THREE.Vector3, dir: THREE.Vector3, maxDist: number): number {
     let best = maxDist;
     for (const b of this.boxes) {
@@ -472,6 +471,7 @@ export function canOccupy(boxes: Box[], pos: THREE.Vector3, height: number): boo
   return true;
 }
 
+
 function stepBlocked(boxes: Box[], px: number, newFeet: number, pz: number, height: number): boolean {
   for (const b of boxes) if (overlaps(px, newFeet + EPS, pz, b, height)) return true;
   return false;
@@ -499,7 +499,7 @@ export function moveAABB(
         : startX - PH >= b.x1 - EPS && nextX - PH < b.x1;
       if (!crossed) continue;
       const stepH = b.y1 - pos.y;
-      if ((canStep || vel.y > 0) && stepH > 0 && stepH <= SU && !stepBlocked(boxes, nextX, b.y1, pos.z, height)) {
+      if (canStep && stepH > 0 && stepH <= SU && !stepBlocked(boxes, nextX, b.y1, pos.z, height)) {
         pos.y = b.y1 + EPS;
         grounded = true;
         continue;
@@ -523,7 +523,7 @@ export function moveAABB(
         : startZ - PH >= b.z1 - EPS && nextZ - PH < b.z1;
       if (!crossed) continue;
       const stepH = b.y1 - pos.y;
-      if ((canStep || vel.y > 0) && stepH > 0 && stepH <= SU && !stepBlocked(boxes, pos.x, b.y1, nextZ, height)) {
+      if (canStep && stepH > 0 && stepH <= SU && !stepBlocked(boxes, pos.x, b.y1, nextZ, height)) {
         pos.y = b.y1 + EPS;
         grounded = true;
         continue;

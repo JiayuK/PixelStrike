@@ -1,4 +1,4 @@
-export const PROTOCOL_VERSION = 2;
+export const PROTOCOL_VERSION = 3;
 
 export const OP = {
   Join: 0x01,
@@ -6,7 +6,6 @@ export const OP = {
   Fire: 0x03,
   Reload: 0x04,
   Grenade: 0x06,
-  SetBots: 0x07,
   Switch: 0x08,
   Loadout: 0x09,
   RosterRequest: 0x0a,

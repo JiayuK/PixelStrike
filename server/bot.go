@@ -38,10 +38,6 @@ type BotAI struct {
 	ShotSeq    uint16
 }
 
-func (r *Room) InitBots() {
-	r.SetBotCount(6) // Default 6 active bots
-}
-
 func (r *Room) SetBotCount(count int) {
 	if count < 0 {
 		count = 0
@@ -71,6 +67,11 @@ func (r *Room) SetBotCount(count int) {
 		// Trim excess bots
 		for _, bot := range currentBots[count:] {
 			delete(r.botAIs, bot.Id)
+			delete(r.history, bot.Id)
+			for _, other := range r.Players {
+				delete(other.netCache, bot.Id)
+				delete(other.netFullAt, bot.Id)
+			}
 			r.Emit(Event{Type: EvPlayerLeave, Player: bot.Id})
 		}
 		r.Players = append(humanPlayers, currentBots[:count]...)
@@ -78,8 +79,7 @@ func (r *Room) SetBotCount(count int) {
 		// Spawn more bots
 		for i := len(currentBots); i < count; i++ {
 			name := BotNames[i]
-			id := r.nextIdSeq
-			r.nextIdSeq++
+			id := r.allocPlayerID()
 			bot := &Player{
 				PlayerState: PlayerState{
 					Id:         id,
@@ -287,10 +287,15 @@ func (r *Room) StepBots(now time.Time) {
 			// Patrol mode: navigate across whole map
 			waypointDX, waypointDZ := p.Pos.X-ai.TargetPos.X, p.Pos.Z-ai.TargetPos.Z
 			if now.After(ai.NextWaypointAt) || waypointDX*waypointDX+waypointDZ*waypointDZ < 9 {
-				ai.NextWaypointAt = now.Add(time.Duration(5+rand.IntN(8)) * time.Second)
+				ai.NextWaypointAt = now.Add(time.Duration(4+rand.IntN(6)) * time.Second)
 				if len(r.World.Spawns) > 0 {
-					sp := r.World.Spawns[rand.IntN(len(r.World.Spawns))]
-					ai.TargetPos = Vec3{sp[0], sp[1], sp[2]}
+					// 65% chance to patrol central engagement zone
+					if rand.Float64() < 0.65 {
+						ai.TargetPos = Vec3{(rand.Float64() - 0.5) * 48.0, 0, (rand.Float64() - 0.5) * 48.0}
+					} else {
+						sp := r.World.Spawns[rand.IntN(len(r.World.Spawns))]
+						ai.TargetPos = Vec3{sp[0], sp[1], sp[2]}
+					}
 				}
 			}
 

@@ -83,7 +83,7 @@ func (w *World) MoveAABB(pos *Vec3, vel *Vec3, dt, height float64, canStep bool)
 				continue
 			}
 			stepH := b.Max.Y - pos.Y
-			if (canStep || vel.Y > 0) && stepH > 0 && stepH <= StepUp && !stepBlocked(w, Vec3{nextX, pos.Y, pos.Z}, b.Max.Y, height) {
+			if canStep && stepH > 0 && stepH <= StepUp && !stepBlocked(w, Vec3{nextX, pos.Y, pos.Z}, b.Max.Y, height) {
 				pos.Y = b.Max.Y + Epsilon
 				grounded = true
 				continue
@@ -114,7 +114,7 @@ func (w *World) MoveAABB(pos *Vec3, vel *Vec3, dt, height float64, canStep bool)
 				continue
 			}
 			stepH := b.Max.Y - pos.Y
-			if (canStep || vel.Y > 0) && stepH > 0 && stepH <= StepUp && !stepBlocked(w, Vec3{pos.X, pos.Y, nextZ}, b.Max.Y, height) {
+			if canStep && stepH > 0 && stepH <= StepUp && !stepBlocked(w, Vec3{pos.X, pos.Y, nextZ}, b.Max.Y, height) {
 				pos.Y = b.Max.Y + Epsilon
 				grounded = true
 				continue
@@ -161,6 +161,16 @@ func (w *World) CanOccupy(pos Vec3, height float64) bool {
 		}
 	}
 	return true
+}
+
+func (w *World) HasSupport(pos Vec3) bool {
+	for _, b := range w.aabbs {
+		gap := pos.Y - b.Max.Y
+		if gap >= -Epsilon && gap <= .02 && pos.X-PlayerHalf < b.Max.X && pos.X+PlayerHalf > b.Min.X && pos.Z-PlayerHalf < b.Max.Z && pos.Z+PlayerHalf > b.Min.Z {
+			return true
+		}
+	}
+	return false
 }
 
 func (w *World) depenetrate(pos *Vec3, vel *Vec3, height float64) bool {

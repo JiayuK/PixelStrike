@@ -5,7 +5,9 @@ import (
 	"log"
 	"math"
 	"net/http"
+	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -17,24 +19,40 @@ const (
 	readDeadlineS = 30
 )
 
-var upgrader = websocket.Upgrader{ReadBufferSize: 2048, WriteBufferSize: 2048, CheckOrigin: func(*http.Request) bool { return true }}
+var upgrader = websocket.Upgrader{ReadBufferSize: 2048, WriteBufferSize: 2048, CheckOrigin: sameOrigin}
+
+func sameOrigin(r *http.Request) bool {
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return true
+	}
+	u, err := url.Parse(origin)
+	return err == nil && strings.EqualFold(u.Host, r.Host)
+}
 
 type Player struct {
 	PlayerState
 	ws                    *websocket.Conn
 	send                  chan []byte
+	sendMu                sync.RWMutex
+	closeOnce             sync.Once
 	Room                  *Room
 	Hub                   *Hub
 	IP, Fingerprint       string
 	joined, ready, closed bool
 	netCache              map[uint16]quantState
 	netFullAt             map[uint16]uint32
-	lastSelf              []byte
+	lastSelf              compactSelfState
+	hasLastSelf           bool
 	rosterRequested       bool
 }
 
-func ServeWS(hub *Hub, w http.ResponseWriter, r *http.Request) {
-	conn, err := upgrader.Upgrade(w, r, nil)
+func ServeWS(hub *Hub, w http.ResponseWriter, r *http.Request, allowedOrigin string) {
+	connectionUpgrader := upgrader
+	connectionUpgrader.CheckOrigin = func(request *http.Request) bool {
+		return sameOrigin(request) || allowedOrigin != "" && request.Header.Get("Origin") == allowedOrigin
+	}
+	conn, err := connectionUpgrader.Upgrade(w, r, nil)
 	if err != nil {
 		return
 	}
@@ -72,6 +90,10 @@ func (p *Player) readPump(hub *Hub) {
 		p.ws.SetReadDeadline(time.Now().Add(readDeadlineS * time.Second))
 		op, payload := data[0], data[1:]
 		now := time.Now()
+		if p.joined && op != OpPing && !p.InputRateOK(now) {
+			log.Printf("player %d message flood", p.Id)
+			return
+		}
 		switch op {
 		case OpJoin:
 			if p.joined || len(payload) < 4 {
@@ -103,10 +125,6 @@ func (p *Player) readPump(hub *Hub) {
 			if !p.joined || len(payload) < 11 {
 				continue
 			}
-			if !p.InputRateOK(now) {
-				log.Printf("player %d input flood", p.Id)
-				return
-			}
 			seq := binary.LittleEndian.Uint16(payload)
 			keys := payload[2] & 0x7f
 			yaw := float64(math.Float32frombits(binary.LittleEndian.Uint32(payload[3:])))
@@ -115,6 +133,7 @@ func (p *Player) readPump(hub *Hub) {
 				continue
 			}
 			pitch = math.Max(-1.55, math.Min(1.55, pitch))
+			yaw = math.Remainder(yaw, 2*math.Pi)
 			if room := p.Room; room != nil {
 				room.mu.Lock()
 				if keys&KeyAim != 0 && (p.CmdKeys&KeyAim == 0 || p.AimStarted.IsZero()) {
@@ -155,17 +174,10 @@ func (p *Player) readPump(hub *Hub) {
 			yaw := float64(math.Float32frombits(binary.LittleEndian.Uint32(payload)))
 			pitch := float64(math.Float32frombits(binary.LittleEndian.Uint32(payload[4:])))
 			if room := p.Room; room != nil && finite(yaw) && finite(pitch) {
+				yaw = math.Remainder(yaw, 2*math.Pi)
+				pitch = math.Max(-1.55, math.Min(1.55, pitch))
 				room.mu.Lock()
 				room.ThrowGrenade(&p.PlayerState, yaw, pitch, now)
-				room.mu.Unlock()
-			}
-		case OpSetBots:
-			if len(payload) < 1 || !p.IsAdmin {
-				continue
-			}
-			if room := p.Room; room != nil {
-				room.mu.Lock()
-				room.SetBotCount(int(payload[0]))
 				room.mu.Unlock()
 			}
 		case OpSwitch:
@@ -206,16 +218,21 @@ func (p *Player) readPump(hub *Hub) {
 }
 
 func (p *Player) Send(msg []byte) {
-	if p.IsBot || p.send == nil {
+	if p.IsBot {
+		return
+	}
+	p.sendMu.RLock()
+	if p.closed || p.send == nil {
+		p.sendMu.RUnlock()
 		return
 	}
 	select {
 	case p.send <- msg:
+		p.sendMu.RUnlock()
 	default:
+		p.sendMu.RUnlock()
 		droppedMessages.Add(1)
-		if p.ws != nil {
-			go p.ws.Close()
-		}
+		p.closeOnce.Do(func() { go p.ws.Close() })
 	}
 }
 func (p *Player) writePump() {

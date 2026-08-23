@@ -50,29 +50,25 @@ export class Hud {
   sensitivity = 0.00216;
   volume = 0.8;
   quality: 'low' | 'medium' | 'high' = 'medium';
-  botCount = 6;
-  private loadoutPrimary = 3;
-  private loadoutSecondary = 0;
-
+  private loadoutPrimary = -1;
+  private loadoutSecondary = -1;
   onJoin: ((name: string, primary: number, secondary: number) => void) | null = null;
   onVolumeChange: ((v: number) => void) | null = null;
   onQualityChange: ((q: 'low' | 'medium' | 'high') => void) | null = null;
+  onLoadoutChange: ((primary: number, secondary: number) => void) | null = null;
   onExit: (() => void) | null = null;
-  onBotCountChange: ((n: number) => void) | null = null;
-  onLoadoutChange: ((p: number, s: number) => void) | null = null;
   onSettingsClose: (() => void) | null = null;
-
   private menu = el('menu');
   private scoreboard = el('scoreboard');
   private settings = el('settings-modal');
   private pause = el('pause-overlay');
-  private death = el('death-overlay');
   private disconnect = el('disconnect-overlay');
   private killfeed = el('killfeed');
   private hit = el('hitmarker');
   private crosshair = el('crosshair');
   private damage = el('damage-flash');
   private scope = el('sniper-scope');
+  private deathCountdown = el('death-countdown');
   private radar = el('radar') as HTMLCanvasElement;
   private radarBase = document.createElement('canvas');
 
@@ -83,10 +79,13 @@ export class Hud {
   private lastHp = -1;
   private lastArmor = -1;
   private lastWeapon = '';
+  private lastInventory = '';
   private lastNetwork = '';
   private lastShield = false;
   private lastCrosshair = -1;
-  private respawnTimer = 0;
+  private lastDeathCountdown = -2;
+  private lastReloading: boolean | null = null;
+  private lastReloadPct = -1;
 
   constructor() {
     const name = el('name-input') as HTMLInputElement;
@@ -100,10 +99,14 @@ export class Hud {
     const savedPrimary = localStorage.getItem('pixel_strike_primary');
     if (savedPrimary && primary) {
       primary.value = savedPrimary;
+    } else if (primary) {
+      primary.value = '-1';
     }
     const savedSecondary = localStorage.getItem('pixel_strike_secondary');
     if (savedSecondary && secondary) {
       secondary.value = savedSecondary;
+    } else if (secondary) {
+      secondary.value = '-1';
     }
     name.addEventListener('input', () => {
       const val = name.value.trim();
@@ -114,13 +117,22 @@ export class Hud {
     });
 
     const updateWeaponSpecs = (id: number) => {
-      const weapon = WEAPONS[id];
       const tag = el('weapon-spec-tag');
       const dmgVal = el('spec-dmg-val');
       const rpmVal = el('spec-rpm-val');
       const headVal = el('spec-head-val');
       const magVal = el('spec-mag-val');
-      if (!weapon || !tag) return;
+      if (!tag || !dmgVal || !rpmVal || !headVal || !magVal) return;
+      if (id === -1) {
+        tag.textContent = '随机武器 / 每次重生随机生成';
+        dmgVal.textContent = 'RANDOM';
+        rpmVal.textContent = 'RANDOM';
+        headVal.textContent = 'RANDOM';
+        magVal.textContent = 'RANDOM';
+        return;
+      }
+      const weapon = WEAPONS[id];
+      if (!weapon) return;
       tag.textContent = `${weapon.name.toUpperCase()} / ${id === 5 ? '重型狙击' : id === 2 ? '微声冲锋' : '突击步枪'}`;
       dmgVal.textContent = String(weapon.dmg);
       rpmVal.textContent = `${weapon.rpm} RPM`;
@@ -128,15 +140,21 @@ export class Hud {
       magVal.textContent = `${weapon.mag} / ${weapon.reserve}`;
     };
 
+    this.loadoutPrimary = +primary.value;
+    this.loadoutSecondary = +secondary.value;
     if (primary) {
-      updateWeaponSpecs(+primary.value);
+      updateWeaponSpecs(this.loadoutPrimary);
       primary.addEventListener('change', () => {
         localStorage.setItem('pixel_strike_primary', primary.value);
-        updateWeaponSpecs(+primary.value);
+        this.loadoutPrimary = +primary.value;
+        updateWeaponSpecs(this.loadoutPrimary);
+        this.onLoadoutChange?.(this.loadoutPrimary, this.loadoutSecondary);
       });
     }
     secondary?.addEventListener('change', () => {
       localStorage.setItem('pixel_strike_secondary', secondary.value);
+      this.loadoutSecondary = +secondary.value;
+      this.onLoadoutChange?.(this.loadoutPrimary, this.loadoutSecondary);
     });
 
     el('join-btn').addEventListener('click', () => {
@@ -159,29 +177,8 @@ export class Hud {
 
     el('lb-refresh-btn')?.addEventListener('click', () => this.loadLeaderboard());
 
-    const bot = el('bot-slider') as HTMLInputElement;
-    bot?.addEventListener('input', () => {
-      this.botCount = +bot.value;
-      const countBadge = el('bot-count-display');
-      if (countBadge) countBadge.textContent = `${bot.value} BOTS`;
-      this.onBotCountChange?.(this.botCount);
-    });
-
-    document.querySelectorAll('.bot-pill').forEach((p) => {
-      p.addEventListener('click', () => {
-        const val = parseInt((p as HTMLElement).dataset.bots || '6');
-        this.botCount = val;
-        if (bot) bot.value = String(val);
-        const countBadge = el('bot-count-display');
-        if (countBadge) countBadge.textContent = `${val} BOTS`;
-        document.querySelectorAll('.bot-pill').forEach((b) => b.classList.remove('active'));
-        p.classList.add('active');
-        this.onBotCountChange?.(val);
-      });
-    });
 
     this.setupSettings();
-    this.setupDeathModal();
     this.loadLeaderboard();
   }
 
@@ -226,30 +223,7 @@ export class Hud {
     el('pause-exit-btn')?.addEventListener('click', () => this.onExit?.());
   }
 
-  private setupDeathModal() {
-    const dp = el('death-primary') as HTMLSelectElement;
-    const ds = el('death-secondary') as HTMLSelectElement;
-    const primary = el('primary-select') as HTMLSelectElement;
-    const secondary = el('secondary-select') as HTMLSelectElement;
-    const update = () => {
-      if (dp && ds) {
-        this.loadoutPrimary = +dp.value;
-        this.loadoutSecondary = +ds.value;
-        primary.value = dp.value;
-        secondary.value = ds.value;
-        localStorage.setItem('pixel_strike_primary', dp.value);
-        localStorage.setItem('pixel_strike_secondary', ds.value);
-        this.onLoadoutChange?.(this.loadoutPrimary, this.loadoutSecondary);
-      }
-    };
-    dp?.addEventListener('change', update);
-    ds?.addEventListener('change', update);
-  }
 
-  setAdmin(admin: boolean) {
-    const control = document.getElementById('bot-control');
-    if (control) control.style.display = admin ? 'block' : 'none';
-  }
 
   setMap(map: MapData) {
     this.map = map;
@@ -317,22 +291,60 @@ export class Hud {
     if (armorEl) armorEl.textContent = String(v);
   }
 
-  setWeapon(id: number, mag: number, reserve: number, nades: number) {
-    const state = `${id}:${mag}:${reserve}:${nades}`;
+  setWeapon(id: number, mag: number, reserve: number, nades: number, activeSlot = 1) {
+    const state = `${id}:${mag}:${reserve}:${nades}:${activeSlot}`;
     if (state === this.lastWeapon) return;
     this.lastWeapon = state;
+    const grenade = activeSlot === 4;
     const nameEl = el('weapon-name');
-    if (nameEl) nameEl.textContent = WEAPON_BADGES[id] ?? 'HE GRENADE';
+    if (nameEl) nameEl.textContent = grenade ? 'HE GRENADE' : WEAPON_BADGES[id] ?? 'UNKNOWN';
     const ammoEl = el('ammo');
-    if (ammoEl) ammoEl.innerHTML = id === 6 ? '-' : `${mag} <span class="reserve">/ ${reserve}</span>`;
+    if (ammoEl) ammoEl.innerHTML = grenade ? `× ${nades}` : id === 6 ? '-' : `${mag} <span class="reserve">/ ${reserve}</span>`;
     const nadeEl = el('grenades');
     if (nadeEl) nadeEl.textContent = String(nades);
   }
 
+  setInventory(primary: number, secondary: number, active: number, mags: readonly number[], reserves: readonly number[], nades: number, primed: boolean) {
+    const state = `${primary}:${secondary}:${active}:${mags[1]}:${reserves[1]}:${mags[2]}:${reserves[2]}:${nades}:${primed}`;
+    if (state === this.lastInventory) return;
+    this.lastInventory = state;
+    el('item-1-name').textContent = WEAPON_BADGES[primary] ?? 'PRIMARY';
+    el('item-1-ammo').textContent = `${mags[1]}/${reserves[1]}`;
+    el('item-2-name').textContent = WEAPON_BADGES[secondary] ?? 'SECONDARY';
+    el('item-2-ammo').textContent = `${mags[2]}/${reserves[2]}`;
+    el('item-4-ammo').textContent = primed ? 'PIN OUT' : `×${nades}`;
+    for (let slot = 1; slot <= 4; slot++) {
+      const item = el(`item-slot-${slot}`);
+      item.classList.toggle('active', slot === active);
+      item.setAttribute('aria-current', slot === active ? 'true' : 'false');
+    }
+    el('item-slot-4').classList.toggle('primed', primed);
+  }
+
+  setReloading(reloading: boolean, progress = 0) {
+    if (reloading !== this.lastReloading) {
+      this.lastReloading = reloading;
+      const wrap = el('reload-bar-wrap');
+      if (wrap) wrap.style.display = reloading ? 'block' : 'none';
+      const ammoEl = el('ammo');
+      if (ammoEl) ammoEl.style.color = reloading ? 'var(--accent-hi)' : 'var(--paper)';
+      this.crosshair.classList.toggle('reloading', reloading);
+      if (!reloading) this.lastReloadPct = -1;
+    }
+    if (!reloading) return;
+    const pct = Math.round(Math.max(0, Math.min(1, progress)) * 100);
+    if (pct === this.lastReloadPct) return;
+    this.lastReloadPct = pct;
+    const pctEl = el('reload-pct');
+    const fillEl = el('reload-fill');
+    if (pctEl) pctEl.textContent = `${pct}%`;
+    if (fillEl) fillEl.style.width = `${pct}%`;
+  }
   setScope(v: boolean) {
     if (this.scope) this.scope.style.display = v ? 'block' : 'none';
     this.crosshair.style.display = v ? 'none' : 'block';
   }
+
 
   setSpawnShield(v: boolean) {
     if (v === this.lastShield) return;
@@ -369,10 +381,18 @@ export class Hud {
   }
 
   setCrosshair(spread: number) {
-    const px = Math.round(Math.max(0, Math.min(18, spread)));
-    if (px === this.lastCrosshair) return;
+    const px = Math.max(0, spread);
+    if (Math.abs(px - this.lastCrosshair) < 0.1) return;
     this.lastCrosshair = px;
-    this.crosshair.style.setProperty('--spread', `${px}px`);
+    this.crosshair.style.setProperty('--spread', `${px.toFixed(1)}px`);
+  }
+
+
+  setDeathCountdown(seconds: number) {
+    if (seconds === this.lastDeathCountdown) return;
+    this.lastDeathCountdown = seconds;
+    this.deathCountdown.style.display = seconds >= 0 ? 'block' : 'none';
+    if (seconds >= 0) this.deathCountdown.textContent = `${seconds} 秒后重新部署`;
   }
 
   damageFlash() {
@@ -397,29 +417,7 @@ export class Hud {
     setTimeout(() => row.remove(), 4200);
   }
 
-  deathScreen(killer: string) {
-    const killerEl = el('killer-label');
-    if (killerEl) killerEl.textContent = killer;
-    if (this.death) this.death.style.display = 'flex';
-    this.showPause(false);
-    document.exitPointerLock?.();
-    (el('death-primary') as HTMLSelectElement).value = String(this.loadoutPrimary);
-    (el('death-secondary') as HTMLSelectElement).value = String(this.loadoutSecondary);
-    let left = 3.0;
-    const countEl = el('respawn-count');
-    if (countEl) countEl.textContent = '3';
-    clearInterval(this.respawnTimer);
-    this.respawnTimer = window.setInterval(() => {
-      left -= 0.1;
-      if (countEl) countEl.textContent = String(Math.max(1, Math.ceil(left)));
-      if (left <= 0) clearInterval(this.respawnTimer);
-    }, 100);
-  }
 
-  respawned() {
-    clearInterval(this.respawnTimer);
-    if (this.death) this.death.style.display = 'none';
-  }
 
   updateScoreboard(roster: RosterEntry[], states: Map<number, PlayerSnap>, myId: number) {
     const sorted = [...roster].sort((a, b) => b.kills - a.kills || a.deaths - b.deaths || a.id - b.id);
@@ -485,14 +483,12 @@ export class Hud {
   }
 
   exitMatch() {
-    clearInterval(this.respawnTimer);
     document.exitPointerLock?.();
     this.root.style.display = 'none';
     this.menu.style.display = 'block';
     if (this.pause) this.pause.style.display = 'none';
     if (this.settings) this.settings.style.display = 'none';
     if (this.scoreboard) this.scoreboard.style.display = 'none';
-    if (this.death) this.death.style.display = 'none';
     this.loadLeaderboard();
   }
 

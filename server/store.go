@@ -57,6 +57,14 @@ func NewStore(path string) (*Store, error) {
 			}
 		}
 	}
+	for _, index := range []string{
+		`CREATE INDEX IF NOT EXISTS stats_fingerprint_idx ON stats(fingerprint) WHERE fingerprint != ''`,
+		`CREATE INDEX IF NOT EXISTS stats_ip_idx ON stats(ip) WHERE ip != ''`,
+	} {
+		if _, err := db.Exec(index); err != nil {
+			return nil, err
+		}
+	}
 	// Clean up historical bot records from persistent stats ([BOT] in-game
 	// bots plus legacy tools/bots.mjs load-test names).
 	_, _ = db.Exec(`DELETE FROM stats WHERE name LIKE '[BOT]%' OR name LIKE 'bot%' OR name LIKE 'CombatBot%'
@@ -94,13 +102,16 @@ func (s *Store) writer() {
 		}
 		for _, d := range batch {
 			if _, err := tx.Exec(upsert, d.name, d.kills, d.deaths); err != nil {
+				_ = tx.Rollback()
 				log.Printf("store upsert: %v", err)
+				return
 			}
 		}
 		if err := tx.Commit(); err != nil {
 			log.Printf("store commit: %v", err)
+			return
 		}
-		batch = make(map[string]delta)
+		clear(batch)
 	}
 	for {
 		select {
@@ -215,14 +226,21 @@ func (s *Store) GetOrCreatePlayer(ip, fp, name string) string {
 		}
 	}
 
-	// New player: insert or update record
-	_, _ = s.db.Exec(`INSERT INTO stats(name, ip, fingerprint, updated_at) VALUES(?, ?, ?, strftime('%s','now')) ON CONFLICT(name) DO UPDATE SET ip=excluded.ip, fingerprint=excluded.fingerprint`, name, ip, fp)
+	var resolved string
+	err := s.db.QueryRow(`INSERT INTO stats(name, ip, fingerprint, updated_at)
+		VALUES(CASE WHEN EXISTS(SELECT 1 FROM stats WHERE name=?1)
+			THEN ?1 || '-' || lower(hex(randomblob(6))) ELSE ?1 END,
+			?2, ?3, strftime('%s','now')) RETURNING name`, name, ip, fp).Scan(&resolved)
+	if err != nil {
+		log.Printf("create player: %v", err)
+		return name
+	}
 	if key != "" {
 		s.cacheMu.Lock()
-		s.cache[key] = name
+		s.cache[key] = resolved
 		s.cacheMu.Unlock()
 	}
-	return name
+	return resolved
 }
 
 type LeaderRow struct {

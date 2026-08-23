@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { KEY, PHYS, WEAPONS, type PlayerSnap } from './constants.js';
 import { moveAABB, type Box } from './world.js';
 
@@ -10,7 +11,6 @@ export class LocalPlayer {
   keys = 0;
   onGround = true;
   crouch = false;
-  jumpLatched = false;
   weaponId = 3;
   update(dt: number, canStand = true) {
     let forward = 0, side = 0;
@@ -31,40 +31,52 @@ export class LocalPlayer {
     const accel = (this.onGround ? (moving ? PHYS.groundAccel : PHYS.stopAccel) : PHYS.airAccel) * dt;
     this.vel.x = approach(this.vel.x, targetX, accel);
     this.vel.z = approach(this.vel.z, targetZ, accel);
+    const horizontalSpeedSq = this.vel.x * this.vel.x + this.vel.z * this.vel.z;
+    if (horizontalSpeedSq > speed * speed) {
+      const scale = speed / Math.sqrt(horizontalSpeedSq);
+      this.vel.x *= scale;
+      this.vel.z *= scale;
+    }
 
-    const jumpPressed = !!(this.keys & KEY.Jump);
-    if (jumpPressed && !this.jumpLatched && this.onGround) {
+    if (this.keys & KEY.Jump && this.onGround) {
       this.vel.y = PHYS.jumpVel;
       this.onGround = false;
     }
-    this.jumpLatched = jumpPressed;
     this.vel.y += PHYS.gravity * dt;
   }
 
   eyeY() { return this.pos.y + (this.crouch ? PHYS.crouchEye : PHYS.eyeHeight); }
   height() { return this.crouch ? PHYS.crouchingHeight : PHYS.standingHeight; }
 
-  reconcile(x: number, y: number, z: number, vx = 0, vz = 0, latencyMs = 0, boxes?: Box[]) {
+  reconcile(x: number, y: number, z: number, vx = 0, vz = 0, latencyMs = 0, boxes?: Box[], canStep = false) {
     const lead = Math.min(0.12, 0.018 + latencyMs * 0.0005);
-    target.set(x + vx * lead, y, z + vz * lead);
+    target.set(x, y, z);
+    if (boxes) moveAABB(target, prediction.set(vx, 0, vz), lead, boxes, this.height(), canStep);
+    else target.addScaledVector(prediction.set(vx, 0, vz), lead);
+
     const errorSq = this.pos.distanceToSquared(target);
-    if (errorSq > 9) {
+    if (errorSq > 4) {
       this.pos.copy(target);
-      if (boxes) moveAABB(this.pos, correction.set(0, 0, 0), 0, boxes, this.height(), false);
-    } else if (errorSq > 0.09) {
-      correction.subVectors(target, this.pos).clampLength(0, 0.06);
-      if (boxes) moveAABB(this.pos, correction, 1, boxes, this.height(), false);
-      else this.pos.add(correction);
+      this.vel.x = vx;
+      this.vel.z = vz;
+      return;
     }
+    if (errorSq < 0.0004) return;
+    const cy = this.onGround ? (target.y - this.pos.y) * 0.15 : 0;
+    correction.set((target.x - this.pos.x) * 0.15, cy, (target.z - this.pos.z) * 0.15);
+    if (boxes) moveAABB(this.pos, correction, 1, boxes, this.height(), false);
+    else this.pos.add(correction);
   }
 }
 
 const MAX_PLAYERS = 100;
+const STALE_AFTER_MS = 3000;
 const hidden = new THREE.Matrix4().makeScale(0, 0, 0);
 const target = new THREE.Vector3();
 const correction = new THREE.Vector3();
 const goal = new THREE.Vector3();
 const bodyColor = new THREE.Color();
+const prediction = new THREE.Vector3();
 const gunColor = new THREE.Color();
 const approach = (value: number, wanted: number, amount: number) => value < wanted ? Math.min(wanted, value + amount) : Math.max(wanted, value - amount);
 const angleLerp = (a: number, b: number, t: number) => a + Math.atan2(Math.sin(b - a), Math.cos(b - a)) * t;
@@ -101,6 +113,143 @@ interface WorldOccluder {
 
 const MAX_LABELS = 24;
 
+function createSteveHeadTexture(): THREE.Texture {
+  const canvas = new OffscreenCanvas(32, 16);
+  const ctx = canvas.getContext('2d')!;
+
+  const H = '#482b18'; // Dark Brown Hair
+  const H2 = '#381e0f';
+  const S = '#d9a377'; // Skin Tone
+  const N = '#be7e50'; // Nose
+  const W = '#ffffff'; // White Eye Sclera
+  const P = '#2c3577'; // Blue/Purple Pupil
+  const B = '#582f1b'; // Beard/Mouth
+  const B2 = '#42200f';
+
+  // Fill base hair
+  ctx.fillStyle = H;
+  ctx.fillRect(0, 0, 32, 16);
+
+  // Top hair (+Y, x: 8 to 16, y: 0 to 8)
+  for (let y = 0; y < 8; y++) {
+    for (let x = 8; x < 16; x++) {
+      ctx.fillStyle = (x + y) % 3 === 0 ? H2 : H;
+      ctx.fillRect(x, y, 1, 1);
+    }
+  }
+
+  // Front Face (+Z, x: 8 to 16, y: 8 to 16) - Iconic Minecraft Steve Face
+  const face = [
+    [H, H, H, H, H, H, H, H],
+    [H, H, H, H, H, H, H, H],
+    [H, S, S, S, S, S, S, H],
+    [S, S, S, S, S, S, S, S],
+    [S, W, P, S, S, P, W, S], // Iconic Steve Eyes
+    [S, S, S, N, N, S, S, S], // Nose
+    [S, B, B, B, B, B, B, S], // Beard / Smile
+    [H, H, B2, B2, B2, B2, H, H],
+  ];
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      ctx.fillStyle = face[r][c];
+      ctx.fillRect(8 + c, 8 + r, 1, 1);
+    }
+  }
+
+  // Right Face (+X, x: 0 to 8, y: 8 to 16) & Left Face (-X, x: 16 to 24, y: 8 to 16)
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      ctx.fillStyle = r < 3 ? H : (r < 5 && (c === 0 || c === 7) ? H : S);
+      ctx.fillRect(0 + c, 8 + r, 1, 1);
+      ctx.fillRect(16 + c, 8 + r, 1, 1);
+    }
+  }
+
+  const tex = new THREE.CanvasTexture(canvas as unknown as HTMLCanvasElement);
+  tex.magFilter = THREE.NearestFilter;
+  tex.minFilter = THREE.NearestFilter;
+  tex.generateMipmaps = false;
+  return tex;
+}
+
+function createSteveTorsoTexture(): THREE.Texture {
+  const canvas = new OffscreenCanvas(16, 16);
+  const ctx = canvas.getContext('2d')!;
+
+  const C = '#00a8aa'; // Steve Cyan Shirt
+  const C2 = '#008e90';
+  const S = '#d9a377'; // Skin V-neck
+
+  ctx.fillStyle = C;
+  ctx.fillRect(0, 0, 16, 16);
+
+  // Front (+Z, x: 4 to 12, y: 0 to 16) with V-neck collar
+  for (let y = 0; y < 16; y++) {
+    for (let x = 4; x < 12; x++) {
+      if (y < 4 && (x >= 6 && x <= 9)) {
+        ctx.fillStyle = S; // V-neck skin
+      } else {
+        ctx.fillStyle = (x + y) % 5 === 0 ? C2 : C;
+      }
+      ctx.fillRect(x, y, 1, 1);
+    }
+  }
+
+  const tex = new THREE.CanvasTexture(canvas as unknown as HTMLCanvasElement);
+  tex.magFilter = THREE.NearestFilter;
+  tex.minFilter = THREE.NearestFilter;
+  tex.generateMipmaps = false;
+  return tex;
+}
+
+function createSteveArmTexture(): THREE.Texture {
+  const canvas = new OffscreenCanvas(16, 16);
+  const ctx = canvas.getContext('2d')!;
+
+  const C = '#00a8aa'; // Cyan Sleeve
+  const S = '#d9a377'; // Skin Arm
+
+  // Top 1/3 is sleeve, bottom 2/3 is skin
+  ctx.fillStyle = S;
+  ctx.fillRect(0, 0, 16, 16);
+  ctx.fillStyle = C;
+  ctx.fillRect(0, 0, 16, 6);
+
+  const tex = new THREE.CanvasTexture(canvas as unknown as HTMLCanvasElement);
+  tex.magFilter = THREE.NearestFilter;
+  tex.minFilter = THREE.NearestFilter;
+  tex.generateMipmaps = false;
+  return tex;
+}
+
+function createSteveLegTexture(): THREE.Texture {
+  const canvas = new OffscreenCanvas(16, 16);
+  const ctx = canvas.getContext('2d')!;
+
+  const J = '#2b3577'; // Denim Jeans Blue
+  const J2 = '#222b64';
+  const B = '#3a3a3a'; // Dark Gray Shoes
+
+  ctx.fillStyle = J;
+  ctx.fillRect(0, 0, 16, 16);
+
+  // Texture details
+  for (let y = 0; y < 12; y++) {
+    for (let x = 0; x < 16; x++) {
+      ctx.fillStyle = (x + y) % 4 === 0 ? J2 : J;
+      ctx.fillRect(x, y, 1, 1);
+    }
+  }
+  // Shoes on bottom
+  ctx.fillStyle = B;
+  ctx.fillRect(0, 12, 16, 4);
+
+  const tex = new THREE.CanvasTexture(canvas as unknown as HTMLCanvasElement);
+  tex.magFilter = THREE.NearestFilter;
+  tex.minFilter = THREE.NearestFilter;
+  tex.generateMipmaps = false;
+  return tex;
+}
 export class RemotePlayers {
   group = new THREE.Group();
   onShot: ((state: PlayerSnap, position: THREE.Vector3) => void) | null = null;
@@ -115,45 +264,137 @@ export class RemotePlayers {
   private labelRay = new THREE.Vector3();
   private viewDir = new THREE.Vector3();
   private lastUpdate = performance.now();
-  private bodyGeo = new THREE.BoxGeometry(0.44, 0.6, 0.24);
+  private headTex = createSteveHeadTexture();
+  private torsoTex = createSteveTorsoTexture();
+  private armTex = createSteveArmTexture();
+  private legTex = createSteveLegTexture();
+
   private headGeo = (() => {
-    const g = new THREE.BoxGeometry(0.36, 0.36, 0.36);
-    g.translate(0, 0.18, 0); // Pivot at neck
-    return g;
-  })();
-  private armRGeo = (() => {
-    const g = new THREE.BoxGeometry(0.14, 0.56, 0.14);
-    g.translate(0, -0.28, 0); // Pivot at right shoulder
-    return g;
-  })();
-  private armLGeo = (() => {
-    const g = new THREE.BoxGeometry(0.14, 0.56, 0.14);
-    g.translate(0, -0.28, 0); // Pivot at left shoulder
-    return g;
-  })();
-  private legRGeo = (() => {
-    const g = new THREE.BoxGeometry(0.17, 0.6, 0.18);
-    g.translate(0, -0.3, 0); // Pivot at right hip
-    return g;
-  })();
-  private legLGeo = (() => {
-    const g = new THREE.BoxGeometry(0.17, 0.6, 0.18);
-    g.translate(0, -0.3, 0); // Pivot at left hip
-    return g;
-  })();
-  private gunGeo = (() => {
-    const g = new THREE.BoxGeometry(0.09, 0.14, 0.68);
-    g.translate(0, 0, -0.24); // Pivot at grip
-    return g;
+    const geo = new THREE.BoxGeometry(0.36, 0.36, 0.36);
+    const uvs = geo.attributes.uv;
+    const faceUVs = [
+      [0.00, 0.25, 0.00, 0.50], // +X (Right side)
+      [0.50, 0.75, 0.00, 0.50], // -X (Left side)
+      [0.25, 0.50, 0.50, 1.00], // +Y (Top hair)
+      [0.50, 0.75, 0.50, 1.00], // -Y (Bottom neck)
+      [0.25, 0.50, 0.00, 0.50], // +Z (Front face with Steve eyes!)
+      [0.75, 1.00, 0.00, 0.50], // -Z (Back hair)
+    ];
+    for (let f = 0; f < 6; f++) {
+      const [u0, u1, v0, v1] = faceUVs[f];
+      const base = f * 4;
+      uvs.setXY(base + 0, u0, v1);
+      uvs.setXY(base + 1, u1, v1);
+      uvs.setXY(base + 2, u0, v0);
+      uvs.setXY(base + 3, u1, v0);
+    }
+    uvs.needsUpdate = true;
+    geo.translate(0, 0.18, 0); // Pivot at neck
+    return geo;
   })();
 
-  private body = this.mesh(this.bodyGeo, 0xffffff);
-  private head = this.mesh(this.headGeo, 0xd9a377);
-  private armR = this.mesh(this.armRGeo, 0x5dada9);
-  private armL = this.mesh(this.armLGeo, 0x5dada9);
-  private legR = this.mesh(this.legRGeo, 0x273573);
-  private legL = this.mesh(this.legLGeo, 0x273573);
-  private gun = this.mesh(this.gunGeo, 0xffffff);
+  private bodyGeo = (() => {
+    const geo = new THREE.BoxGeometry(0.44, 0.60, 0.24);
+    const uvs = geo.attributes.uv;
+    const faceUVs = [
+      [0.00, 0.25, 0.00, 1.00], // +X
+      [0.75, 1.00, 0.00, 1.00], // -X
+      [0.25, 0.75, 0.75, 1.00], // +Y
+      [0.25, 0.75, 0.00, 0.25], // -Y
+      [0.25, 0.75, 0.00, 1.00], // +Z (Front with V-neck)
+      [0.25, 0.75, 0.00, 1.00], // -Z
+    ];
+    for (let f = 0; f < 6; f++) {
+      const [u0, u1, v0, v1] = faceUVs[f];
+      const base = f * 4;
+      uvs.setXY(base + 0, u0, v1);
+      uvs.setXY(base + 1, u1, v1);
+      uvs.setXY(base + 2, u0, v0);
+      uvs.setXY(base + 3, u1, v0);
+    }
+    uvs.needsUpdate = true;
+    return geo;
+  })();
+
+  private armRGeo = (() => {
+    const geo = new THREE.BoxGeometry(0.16, 0.60, 0.16);
+    const uvs = geo.attributes.uv;
+    for (let f = 0; f < 6; f++) {
+      const base = f * 4;
+      uvs.setXY(base + 0, 0, 1);
+      uvs.setXY(base + 1, 1, 1);
+      uvs.setXY(base + 2, 0, 0);
+      uvs.setXY(base + 3, 1, 0);
+    }
+    uvs.needsUpdate = true;
+    geo.translate(0, -0.30, 0); // Pivot at right shoulder
+    return geo;
+  })();
+
+  private armLGeo = (() => {
+    const geo = new THREE.BoxGeometry(0.16, 0.60, 0.16);
+    const uvs = geo.attributes.uv;
+    for (let f = 0; f < 6; f++) {
+      const base = f * 4;
+      uvs.setXY(base + 0, 0, 1);
+      uvs.setXY(base + 1, 1, 1);
+      uvs.setXY(base + 2, 0, 0);
+      uvs.setXY(base + 3, 1, 0);
+    }
+    uvs.needsUpdate = true;
+    geo.translate(0, -0.30, 0); // Pivot at left shoulder
+    return geo;
+  })();
+
+  private legRGeo = (() => {
+    const geo = new THREE.BoxGeometry(0.18, 0.60, 0.18);
+    const uvs = geo.attributes.uv;
+    for (let f = 0; f < 6; f++) {
+      const base = f * 4;
+      uvs.setXY(base + 0, 0, 1);
+      uvs.setXY(base + 1, 1, 1);
+      uvs.setXY(base + 2, 0, 0);
+      uvs.setXY(base + 3, 1, 0);
+    }
+    uvs.needsUpdate = true;
+    geo.translate(0, -0.30, 0); // Pivot at right hip
+    return geo;
+  })();
+
+  private legLGeo = (() => {
+    const geo = new THREE.BoxGeometry(0.18, 0.60, 0.18);
+    const uvs = geo.attributes.uv;
+    for (let f = 0; f < 6; f++) {
+      const base = f * 4;
+      uvs.setXY(base + 0, 0, 1);
+      uvs.setXY(base + 1, 1, 1);
+      uvs.setXY(base + 2, 0, 0);
+      uvs.setXY(base + 3, 1, 0);
+    }
+    uvs.needsUpdate = true;
+    geo.translate(0, -0.30, 0); // Pivot at left hip
+    return geo;
+  })();
+
+  private gunGeo = (() => {
+    const body = new THREE.BoxGeometry(0.08, 0.14, 0.58);
+    body.translate(0, 0, -0.18);
+    const barrel = new THREE.BoxGeometry(0.035, 0.035, 0.35);
+    barrel.translate(0, 0.04, -0.56);
+    const mag = new THREE.BoxGeometry(0.055, 0.22, 0.11);
+    mag.translate(0, -0.12, -0.15);
+    const scope = new THREE.BoxGeometry(0.05, 0.04, 0.22);
+    scope.translate(0, 0.09, -0.14);
+    return mergeGeometries([body, barrel, mag, scope])!;
+  })();
+
+  private head = this.mesh(this.headGeo, this.headTex);
+  private body = this.mesh(this.bodyGeo, this.torsoTex);
+  private armR = this.mesh(this.armRGeo, this.armTex);
+  private armL = this.mesh(this.armLGeo, this.armTex);
+  private legR = this.mesh(this.legRGeo, this.legTex);
+  private legL = this.mesh(this.legLGeo, this.legTex);
+  private gun = this.mesh(this.gunGeo, null, 0xffffff);
   private layers = [this.body, this.head, this.armR, this.armL, this.legR, this.legL, this.gun];
   nameOf: (id: number) => string = (id) => `特战队员${id}`;
 
@@ -172,13 +413,15 @@ export class RemotePlayers {
     }
   }
 
-  private mesh(geometry: THREE.BufferGeometry, color: number) {
-    const mesh = new THREE.InstancedMesh(geometry, new THREE.MeshLambertMaterial({ color }), MAX_PLAYERS);
+  private mesh(geometry: THREE.BufferGeometry, texture: THREE.Texture | null = null, color = 0xffffff) {
+    const mat = texture
+      ? new THREE.MeshLambertMaterial({ map: texture })
+      : new THREE.MeshLambertMaterial({ color });
+    const mesh = new THREE.InstancedMesh(geometry, mat, MAX_PLAYERS);
     mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     mesh.frustumCulled = false;
     return mesh;
   }
-
   sample(state: PlayerSnap, now: number) {
     let model = this.models.get(state.id);
     if (!model) {
@@ -238,7 +481,7 @@ export class RemotePlayers {
 
     for (const model of this.models.values()) {
       const state = model.state;
-      if (!(state.state & 1)) {
+      if (!(state.state & 1) || now - model.sampleAt > STALE_AFTER_MS) {
         if (model.visible) {
           this.hide(model.index);
           model.visible = false;
@@ -274,22 +517,32 @@ export class RemotePlayers {
 
       // Head (Pivots at neck)
       this.place(this.head, model.index, model, sin, cos, 0, headY, 0, model.pitch);
+      // Two-handed forward triangular V-shape weapon grip (尖尖双手持枪)
+      const isKnife = state.weapon === 6;
+      const isPistol = state.weapon === 0 || state.weapon === 1;
 
-      // Right Arm (Aims weapon along pitch)
-      this.place(this.armR, model.index, model, sin, cos, 0.29, shoulderY, 0, -Math.PI / 2 + model.pitch);
+      if (isKnife) {
+        // Knife stance: Right hand holds blade forward-down, left arm swings with walking
+        this.place(this.armR, model.index, model, sin, cos, 0.22, shoulderY, -0.04, Math.PI / 2.6 + model.pitch * 0.8, -0.15, -0.25);
+        this.place(this.armL, model.index, model, sin, cos, -0.24, shoulderY, 0, -swing * 0.75, 0, 0);
+        this.place(this.gun, model.index, model, sin, cos, 0.14, bodyY + 0.08, -0.28, model.pitch, 0, 0);
+      } else if (isPistol) {
+        // Two-handed pistol grip: Both arms angle forward-inward meeting at pistol grip
+        this.place(this.armR, model.index, model, sin, cos, 0.24, shoulderY, 0, Math.PI / 2.15 + model.pitch, 0.42, 0);
+        this.place(this.armL, model.index, model, sin, cos, -0.24, shoulderY, 0, Math.PI / 2.15 + model.pitch, -0.42, 0);
+        this.place(this.gun, model.index, model, sin, cos, 0.0, bodyY + 0.20, -0.44, model.pitch, 0, 0);
+      } else {
+        // Rifle / SMG / Sniper stance: Both arms angle forward-inward forming sharp V-shape holding rifle
+        this.place(this.armR, model.index, model, sin, cos, 0.24, shoulderY, 0, Math.PI / 2.15 + model.pitch, 0.42, 0);
+        this.place(this.armL, model.index, model, sin, cos, -0.24, shoulderY, 0, Math.PI / 2.15 + model.pitch, -0.42, 0);
+        this.place(this.gun, model.index, model, sin, cos, 0.0, bodyY + 0.20, -0.48, model.pitch, 0, 0);
+      }
 
-      // Left Arm (Swings when walking)
-      this.place(this.armL, model.index, model, sin, cos, -0.29, shoulderY, 0, -swing * 0.75);
-
-      // Right Leg (Swings forward/backward)
-      this.place(this.legR, model.index, model, sin, cos, 0.12, hipY, 0, swing);
+      // Right Leg (Swings forward/backward when walking)
+      this.place(this.legR, model.index, model, sin, cos, 0.12, hipY, 0, swing, 0, 0);
 
       // Left Leg (Swings opposite)
-      this.place(this.legL, model.index, model, sin, cos, -0.12, hipY, 0, -swing);
-
-      // Gun (Held in front of chest/hands, aiming with pitch)
-      this.place(this.gun, model.index, model, sin, cos, 0.22, bodyY + 0.08, -0.26, model.pitch);
-
+      this.place(this.legL, model.index, model, sin, cos, -0.12, hipY, 0, -swing, 0, 0);
       const wantedBodyColor = now < model.flashUntil ? 0xf43f5e : state.state & 2 ? 0xb89a61 : 0x009aa6;
       if (wantedBodyColor !== model.bodyColor) {
         model.bodyColor = wantedBodyColor;
@@ -313,7 +566,7 @@ export class RemotePlayers {
     camera.getWorldDirection(this.viewDir);
     let count = 0;
     for (const model of this.models.values()) {
-      if (!(model.state.state & 1)) continue;
+      if (!model.visible) continue;
       const dx = model.position.x - camera.position.x;
       const dy = model.position.y + 1.7 - camera.position.y;
       const dz = model.position.z - camera.position.z;
@@ -366,14 +619,26 @@ export class RemotePlayers {
     for (let i = count; i < MAX_LABELS; i++) this.labels[i].root.style.display = 'none';
   }
 
-  private place(mesh: THREE.InstancedMesh, index: number, model: RemoteModel, sin: number, cos: number, lx: number, ly: number, lz: number, pitch: number) {
-    const yaw = model.yaw;
+  private place(
+    mesh: THREE.InstancedMesh,
+    index: number,
+    model: RemoteModel,
+    sin: number,
+    cos: number,
+    lx: number,
+    ly: number,
+    lz: number,
+    pitch: number,
+    yawOffset = 0,
+    roll = 0,
+  ) {
+    const yaw = model.yaw + yawOffset;
     this.dummy.position.set(
       model.position.x + lx * cos + lz * sin,
       model.position.y + ly,
       model.position.z - lx * sin + lz * cos,
     );
-    this.dummy.rotation.set(pitch, yaw, 0, 'YXZ');
+    this.dummy.rotation.set(pitch, yaw, roll, 'YXZ');
     this.dummy.scale.setScalar(1);
     this.dummy.updateMatrix();
     mesh.setMatrixAt(index, this.dummy.matrix);

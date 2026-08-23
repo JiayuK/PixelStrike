@@ -61,7 +61,7 @@ type PlayerState struct {
 	Pos, Vel                                                       Vec3
 	Yaw, Pitch                                                     float64
 	HP, Armor                                                      uint8
-	Alive, IsBot, IsAdmin, OnGround, Crouch, JumpLatched           bool
+	Alive, IsBot, OnGround, Crouch                                 bool
 	Primary, Secondary, ActiveSlot, Weapon                         uint8
 	Mags                                                           [2]int
 	Reserves                                                       [2]int
@@ -215,12 +215,16 @@ func (r *Room) Move(p *PlayerState, now time.Time) {
 	}
 	p.Vel.X = approach(p.Vel.X, wishX, accel)
 	p.Vel.Z = approach(p.Vel.Z, wishZ, accel)
-	jumpPressed := k&KeyJump != 0
-	if jumpPressed && !p.JumpLatched && p.OnGround {
+	horizontalSpeed := math.Hypot(p.Vel.X, p.Vel.Z)
+	if horizontalSpeed > speed {
+		scale := speed / horizontalSpeed
+		p.Vel.X *= scale
+		p.Vel.Z *= scale
+	}
+	if k&KeyJump != 0 && p.OnGround {
 		p.Vel.Y = JumpVel
 		p.OnGround = false
 	}
-	p.JumpLatched = jumpPressed
 	p.Vel.Y += Gravity * TickDT
 	p.OnGround = r.World.MoveAABB(&p.Pos, &p.Vel, TickDT, p.Height(), p.OnGround)
 	if !wasGrounded && p.OnGround {
@@ -244,6 +248,8 @@ func (r *Room) TryFire(p *PlayerState, yaw, pitch float64, mode uint8, seenTick 
 	if !p.Alive || p.Reloading || now.Before(p.NextFire) || !finite(yaw) || !finite(pitch) {
 		return false
 	}
+	yaw = math.Remainder(yaw, 2*math.Pi)
+	pitch = math.Max(-1.55, math.Min(1.55, pitch))
 	if p.HasShot && shotSeq == p.LastShotSeq {
 		return false
 	}
@@ -266,6 +272,9 @@ func (r *Room) TryFire(p *PlayerState, yaw, pitch float64, mode uint8, seenTick 
 		p.NextFire = now.Add(gap)
 	} else {
 		p.NextFire = p.NextFire.Add(gap)
+	}
+	if weapon < 6 && mag == 1 && reserve > 0 {
+		r.StartReload(p, now)
 	}
 	if now.Sub(p.LastShotAt) > 420*time.Millisecond {
 		p.ShotCounter = 0
@@ -294,7 +303,7 @@ func (r *Room) TryFire(p *PlayerState, yaw, pitch float64, mode uint8, seenTick 
 			spread = math.Max(spread, def.MoveSpreadDeg*2.2+1)
 		}
 		if p.Crouch {
-			spread *= .78
+			spread *= .6
 		}
 		if now.Before(p.LandingUntil) {
 			spread = math.Max(spread, def.MoveSpreadDeg*1.35)
@@ -419,7 +428,8 @@ func (r *Room) Respawn(p *PlayerState, now time.Time) {
 	p.HP = MaxHP
 	p.Armor = 100
 	p.Alive = true
-	p.OnGround = true
+	p.OnGround, p.Crouch = true, false
+	p.CmdKeys = 0
 	p.ApplyLoadout(p.Primary, p.Secondary)
 	p.InvincibleUntil = now.Add(SpawnProtectS)
 	p.LandingUntil, p.AimStarted = time.Time{}, time.Time{}
@@ -526,14 +536,25 @@ func (r *Room) StepGrenades(now time.Time) {
 			continue
 		}
 		g.Vel.Y += Gravity * TickDT
-		g.Pos.X += g.Vel.X * TickDT
-		g.Pos.Y += g.Vel.Y * TickDT
-		g.Pos.Z += g.Vel.Z * TickDT
+		delta := Vec3{g.Vel.X * TickDT, g.Vel.Y * TickDT, g.Vel.Z * TickDT}
+		travel := math.Sqrt(delta.X*delta.X + delta.Y*delta.Y + delta.Z*delta.Z)
+		if travel > 0 {
+			dir := Vec3{delta.X / travel, delta.Y / travel, delta.Z / travel}
+			if hit, distance := r.World.Raycast(g.Pos, dir, travel); hit && distance < travel {
+				stop := math.Max(0, distance-.03)
+				g.Pos.X += dir.X * stop
+				g.Pos.Y += dir.Y * stop
+				g.Pos.Z += dir.Z * stop
+				g.Vel = Vec3{}
+			} else {
+				g.Pos.X += delta.X
+				g.Pos.Y += delta.Y
+				g.Pos.Z += delta.Z
+			}
+		}
 		if g.Pos.Y < 0 {
 			g.Pos.Y = 0
-			g.Vel.Y = -g.Vel.Y * .45
-			g.Vel.X *= .75
-			g.Vel.Z *= .75
+			g.Vel = Vec3{}
 		}
 		live = append(live, g)
 	}
@@ -591,11 +612,14 @@ func patternDir(dir Vec3, deg float64, shot, weapon int) Vec3 {
 	if deg <= 0 {
 		return dir
 	}
-	rad := deg * math.Pi / 180
+	seed := uint32(shot)*747796405 + uint32(weapon+1)*2891336453
+	seed = seed*1664525 + 1013904223
+	radius := math.Sqrt(float64(seed)/4294967296) * math.Tan(deg*math.Pi/180)
+	seed = seed*1664525 + 1013904223
+	angle := float64(seed) / 4294967296 * math.Pi * 2
 	right := norm(cross(dir, Vec3{0, 1, 0}))
 	up := cross(right, dir)
-	a := math.Sin(float64(shot*17+weapon*31)) * rad * .72
-	b := math.Cos(float64(shot*11+weapon*7))*rad + float64(max(0, shot-1))*rad*.08
+	a, b := math.Cos(angle)*radius, math.Sin(angle)*radius
 	return norm(Vec3{dir.X + right.X*a + up.X*b, dir.Y + right.Y*a + up.Y*b, dir.Z + right.Z*a + up.Z*b})
 }
 func cross(a, b Vec3) Vec3 { return Vec3{a.Y*b.Z - a.Z*b.Y, a.Z*b.X - a.X*b.Z, a.X*b.Y - a.Y*b.X} }

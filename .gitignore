@@ -6,6 +6,7 @@
 *.dylib
 server/pixelstrike
 server/pixelstrike.exe
+server/pixelstrike-*
 
 # Database
 server/*.db
@@ -13,6 +14,8 @@ server/*.db-shm
 server/*.db-wal
 server/*.log
 *.log
+data/
+.env
 
 # Node
 node_modules/
