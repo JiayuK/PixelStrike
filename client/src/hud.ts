@@ -76,6 +76,7 @@ export class Hud {
   private disconnect = el('disconnect-overlay');
   private killfeed = el('killfeed');
   private hit = el('hitmarker');
+  private streak = el('kill-streak');
   private crosshair = el('crosshair');
   private damage = el('damage-flash');
   private scope = el('sniper-scope');
@@ -87,6 +88,7 @@ export class Hud {
   private lastRadar = 0;
   private hitTimer = 0;
   private damageTimer = 0;
+  private streakTimer = 0;
   private lastHp = -1;
   private lastArmor = -1;
   private lastInventory = '';
@@ -432,13 +434,20 @@ export class Hud {
   }
 
   hitMarker(head = false) {
-    if (!this.hit) return;
-    this.hit.style.display = 'block';
-    this.hit.style.color = head ? '#e4b762' : '#bd5146';
+    this.hit.className = '';
+    void this.hit.offsetWidth;
+    this.hit.className = head ? 'active head' : 'active';
     clearTimeout(this.hitTimer);
-    this.hitTimer = window.setTimeout(() => {
-      if (this.hit) this.hit.style.display = 'none';
-    }, 110);
+    this.hitTimer = window.setTimeout(() => { this.hit.className = ''; }, head ? 220 : 150);
+  }
+
+  showKillStreak(count: number, head = false) {
+    if (count < 2) return;
+    const title = count === 2 ? '双杀' : count === 3 ? '三杀' : count === 4 ? '疯狂四杀' : `${count} 连杀`;
+    this.streak.innerHTML = `<strong>${title}</strong><span>${head ? '爆头 · ' : ''}连续击杀 ${count} 人</span>`;
+    this.streak.className = 'active';
+    clearTimeout(this.streakTimer);
+    this.streakTimer = window.setTimeout(() => { this.streak.className = ''; }, 1500);
   }
 
   setCrosshair(spread: number) {
@@ -470,7 +479,7 @@ export class Hud {
     const row = document.createElement('div');
     row.className = 'kill-row' + (mine ? ' mine' : '');
     const badge = WEAPON_BADGES[weapon] ?? 'HE';
-    row.innerHTML = `<span class="killer">${esc(killer)}</span><span class="weapon">${esc(badge)}</span>${head ? '<span class="head-badge">HEAD</span>' : ''}<span class="victim">${esc(victim)}</span>`;
+    row.innerHTML = `<span class="killer">${esc(killer)}</span><span class="action">使用</span><span class="weapon">${esc(badge)}</span>${head ? '<span class="head-badge">爆头</span>' : ''}<span class="action">击杀</span><span class="victim">${esc(victim)}</span>`;
     this.killfeed.prepend(row);
     while (this.killfeed.children.length > 6) {
       this.killfeed.lastElementChild?.remove();

@@ -81,6 +81,7 @@ docker compose up -d --build
 ```
 
 - 游戏：<http://localhost:8000>
+- 管理面板：<http://localhost:12888/admin.html>（需配置 `ADMIN_PASSWORD`）
 - 服务端健康检查：<http://localhost:8080/healthz>
 - 运行指标：<http://localhost:8080/api/stats>
 
@@ -148,7 +149,12 @@ location = /map.json {
 | `DB_PATH` | `./stats.db` | SQLite 文件 |
 | `MAP_PATH` | `../map.json` | 地图文件 |
 | `ALLOWED_ORIGIN` | 空 | 生产环境允许的完整 Origin |
+| `ADMIN_PASSWORD` | 空 | 管理面板密码；为空时禁用管理接口 |
+| `ADMIN_COOKIE_SECURE` | `false` | 强制后台会话 Cookie 仅通过 HTTPS 发送 |
+| `TRUSTED_PROXY_CIDRS` | 空 | 信任的反向代理 CIDR 列表，用于正确获取客户端 IP |
 | `VITE_WS_URL` | 空 | 跨域部署时的 WebSocket URL；同域保持空 |
+
+Compose 默认强制后台 Cookie 使用 HTTPS，并将 `TRUSTED_PROXY_CIDRS` 设为 Docker 网段 `172.16.0.0/12`；明文 HTTP 调试时设置 `PIXEL_STRIKE_ADMIN_COOKIE_SECURE=false`，其他代理网络请按实际网段覆盖。`ADMIN_PASSWORD` 通过宿主机变量 `PIXEL_STRIKE_ADMIN_PASSWORD` 注入。
 
 Compose 已限制服务端 512 MB、静态前端 128 MB，总上限 640 MB。
 

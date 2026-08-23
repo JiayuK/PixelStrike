@@ -2,8 +2,13 @@ package main
 
 import (
 	"database/sql"
+	"errors"
 	"log"
 	"math"
+	"net"
+	"net/netip"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -17,6 +22,14 @@ type Store struct {
 	stopCh  chan chan struct{}
 	cacheMu sync.RWMutex
 	cache   map[string]string
+	banMu   sync.RWMutex
+	ipBans  map[string]IPBan
+}
+
+type IPBan struct {
+	IP        string `json:"ip"`
+	Reason    string `json:"reason"`
+	CreatedAt int64  `json:"createdAt"`
 }
 
 type delta struct {
@@ -42,6 +55,10 @@ func NewStore(path string) (*Store, error) {
 			updated_at INTEGER)`,
 		`CREATE TABLE IF NOT EXISTS meta(
 			key TEXT PRIMARY KEY, val INTEGER DEFAULT 0)`,
+		`CREATE TABLE IF NOT EXISTS ip_bans(
+			ip TEXT PRIMARY KEY,
+			reason TEXT NOT NULL DEFAULT '',
+			created_at INTEGER NOT NULL)`,
 	} {
 		if _, err := db.Exec(schema); err != nil {
 			return nil, err
@@ -72,12 +89,40 @@ func NewStore(path string) (*Store, error) {
 		OR name IN ('VoxelKing','ShadowSniper','ApexGhost','ViperZero','Phoenix','Maverick','CyberWolf',
 			'Soldier','VoxelMaster','BugHunter','ColTest','Commander','Tester','ApexHunter','General')`)
 
+	ipBans := make(map[string]IPBan)
+	rows, err := db.Query(`SELECT ip, reason, created_at FROM ip_bans`)
+	if err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+	for rows.Next() {
+		var ban IPBan
+		if err := rows.Scan(&ban.IP, &ban.Reason, &ban.CreatedAt); err != nil {
+			_ = rows.Close()
+			_ = db.Close()
+			return nil, err
+		}
+		ip, err := normalizeBanIP(ban.IP)
+		if err != nil {
+			continue
+		}
+		ban.IP = ip
+		ipBans[ip] = ban
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		_ = db.Close()
+		return nil, err
+	}
+	_ = rows.Close()
+
 	s := &Store{
 		db:      db,
 		ch:      make(chan delta, 4096),
 		flushCh: make(chan chan struct{}, 16),
 		stopCh:  make(chan chan struct{}, 1),
 		cache:   make(map[string]string),
+		ipBans:  ipBans,
 	}
 	go s.writer()
 	return s, nil
@@ -192,6 +237,83 @@ func (s *Store) Invalidate(ip, fp string) {
 	s.cacheMu.Lock()
 	delete(s.cache, key)
 	s.cacheMu.Unlock()
+}
+
+func normalizeBanIP(value string) (string, error) {
+	value = strings.TrimSpace(value)
+	if host, _, err := net.SplitHostPort(value); err == nil {
+		value = host
+	}
+	address, err := netip.ParseAddr(value)
+	if err != nil || address.Zone() != "" {
+		if err == nil {
+			err = errors.New("IP zones are not supported")
+		}
+		return "", err
+	}
+	return address.Unmap().String(), nil
+}
+
+// AddIPBan persists a ban before publishing it to the in-memory admission cache.
+func (s *Store) AddIPBan(ip, reason string) error {
+	ip, err := normalizeBanIP(ip)
+	if err != nil {
+		return err
+	}
+	reason = strings.TrimSpace(reason)
+	createdAt := time.Now().Unix()
+
+	s.banMu.Lock()
+	defer s.banMu.Unlock()
+	if _, err := s.db.Exec(`INSERT INTO ip_bans(ip, reason, created_at) VALUES(?, ?, ?)
+		ON CONFLICT(ip) DO UPDATE SET reason=excluded.reason, created_at=excluded.created_at`, ip, reason, createdAt); err != nil {
+		return err
+	}
+	s.ipBans[ip] = IPBan{IP: ip, Reason: reason, CreatedAt: createdAt}
+	return nil
+}
+
+// DeleteIPBan removes a persisted ban before evicting it from the admission cache.
+func (s *Store) DeleteIPBan(ip string) error {
+	ip, err := normalizeBanIP(ip)
+	if err != nil {
+		return err
+	}
+
+	s.banMu.Lock()
+	defer s.banMu.Unlock()
+	if _, err := s.db.Exec(`DELETE FROM ip_bans WHERE ip=?`, ip); err != nil {
+		return err
+	}
+	delete(s.ipBans, ip)
+	return nil
+}
+
+func (s *Store) IsIPBanned(ip string) bool {
+	ip, err := normalizeBanIP(ip)
+	if err != nil {
+		return false
+	}
+	s.banMu.RLock()
+	_, banned := s.ipBans[ip]
+	s.banMu.RUnlock()
+	return banned
+}
+
+func (s *Store) ListIPBans() []IPBan {
+	s.banMu.RLock()
+	out := make([]IPBan, 0, len(s.ipBans))
+	for _, ban := range s.ipBans {
+		out = append(out, ban)
+	}
+	s.banMu.RUnlock()
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].CreatedAt != out[j].CreatedAt {
+			return out[i].CreatedAt > out[j].CreatedAt
+		}
+		return out[i].IP < out[j].IP
+	})
+	return out
 }
 
 func (s *Store) GetOrCreatePlayer(ip, fp, name string) string {

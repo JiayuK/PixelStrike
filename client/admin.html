@@ -18,7 +18,7 @@
       min-height: 100vh;
       margin: 0;
       display: grid;
-      place-items: center;
+      place-items: start center;
       padding: 24px;
       background:
         linear-gradient(120deg, rgb(201 130 43 / .08), transparent 42%),
@@ -26,7 +26,7 @@
         #0b0d0b;
     }
     main {
-      width: min(620px, 100%);
+      width: min(1180px, 100%);
       border: 1px solid #4a5145;
       border-top: 3px solid #c9822b;
       background: #171b16;
@@ -73,8 +73,29 @@
     .status { min-height: 24px; font: 12px/1.5 Consolas, monospace; }
     .status.ok { color: #8fc787; }
     .status.error { color: #e0857d; }
+    .panel { border-top: 1px solid #353b32; }
+    .panel:first-child { border-top: 0; }
+    .panel-title { margin: 0 0 14px; font: 700 17px/1.2 Consolas, monospace; letter-spacing: .08em; text-transform: uppercase; }
+    .metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+    .metric { min-height: 82px; border: 1px solid #353b32; background: #10130f; padding: 13px; }
+    .metric b { display: block; margin-top: 9px; color: #f0eadc; font: 700 21px/1 Consolas, monospace; }
+    .metric small { color: #aaa99f; font: 11px/1.4 Consolas, monospace; }
+    .two-column { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(300px, 1fr); gap: 24px; }
+    .table-wrap { overflow-x: auto; border: 1px solid #353b32; }
+    table { width: 100%; border-collapse: collapse; min-width: 590px; font: 12px/1.4 Consolas, monospace; }
+    th, td { padding: 10px 11px; border-bottom: 1px solid #2a3028; text-align: left; white-space: nowrap; }
+    th { color: #e09a43; background: #10130f; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
+    tr:last-child td { border-bottom: 0; }
+    td { color: #d4d0c5; }
+    td.empty { color: #77796f; text-align: center; }
+    .table-button { width: auto; min-height: 30px; padding: 0 9px; font: 700 11px Consolas, monospace; }
+    .table-button.secondary { border-color: #62695b; background: #20251f; color: #f0eadc; }
+    .inline-form { display: grid; grid-template-columns: minmax(140px, 1fr) minmax(140px, 1.4fr) auto; gap: 8px; margin-bottom: 12px; }
+    .inline-form input, .inline-form button { min-height: 38px; }
+    .muted { color: #aaa99f; }
     [hidden] { display: none !important; }
-    @media (max-width: 520px) { header, section { padding: 19px; } .actions { grid-template-columns: 1fr; } #logout { width: 100%; } }
+    @media (max-width: 900px) { .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } .two-column { grid-template-columns: 1fr; } }
+    @media (max-width: 520px) { body { padding: 12px; } header, section { padding: 19px; } .actions { grid-template-columns: 1fr; } #logout { width: 100%; } .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } .inline-form { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
@@ -82,7 +103,7 @@
     <header>
       <div class="eyebrow">Restricted Operations Console</div>
       <h1>ADMIN</h1>
-      <p>全局人机配置会立即应用到所有活动房间，并作为新房间的默认值。</p>
+      <p>实时运行总览与基础运营控制台。修改会立即应用到活动房间。</p>
     </header>
 
     <section id="login-panel">
@@ -98,10 +119,29 @@
     <section id="control-panel" hidden>
       <div class="stack">
         <div class="row">
-          <div><div class="eyebrow">Global Bot Count</div><p id="room-status" class="meta"></p></div>
+          <div><div class="eyebrow">Live Operations</div><p id="room-status" class="meta"></p></div>
+          <button id="logout" class="secondary" type="button">退出</button>
+        </div>
+        <div class="metrics" aria-live="polite">
+          <div class="metric"><div class="eyebrow">Online</div><b id="metric-online">0</b><small>在线真人</small></div>
+          <div class="metric"><div class="eyebrow">Rooms</div><b id="metric-rooms">0</b><small>活动房间</small></div>
+          <div class="metric"><div class="eyebrow">Bots</div><b id="metric-bots">0</b><small>每房间人机</small></div>
+          <div class="metric"><div class="eyebrow">Joins</div><b id="metric-joins">0</b><small>累计加入</small></div>
+          <div class="metric"><div class="eyebrow">Outbound</div><b id="metric-bandwidth">0.0</b><small>Mbps</small></div>
+          <div class="metric"><div class="eyebrow">Dropped</div><b id="metric-dropped">0</b><small>发送队列丢弃</small></div>
+          <div class="metric"><div class="eyebrow">Tick P95</div><b id="metric-tick-p95">0</b><small>毫秒</small></div>
+          <div class="metric"><div class="eyebrow">Tick P99</div><b id="metric-tick">0</b><small>毫秒</small></div>
+        </div>
+        <div id="control-status" class="status" role="status" aria-live="polite">正在连接实时数据…</div>
+      </div>
+
+      <section class="panel">
+        <h2 class="panel-title">Bot Configuration</h2>
+        <div class="row">
+          <div><p class="muted">每个房间的人机数量</p></div>
           <output id="count-output" for="count">6</output>
         </div>
-        <label>每个房间的人机数量
+        <label>人机数量
           <input id="count" type="range" min="0" max="12" step="1" value="6">
         </label>
         <div class="pills" aria-label="快捷人机数量">
@@ -111,11 +151,34 @@
           <button type="button" data-count="10">10</button>
           <button type="button" data-count="12">12</button>
         </div>
-        <div class="actions">
-          <button id="apply" type="button">应用到全部房间</button>
-          <button id="logout" class="secondary" type="button">退出</button>
-        </div>
-        <div id="control-status" class="status" role="status" aria-live="polite"></div>
+        <button id="apply" type="button">应用到全部房间</button>
+      </section>
+
+      <div class="two-column">
+        <section class="panel">
+          <h2 class="panel-title">Online Players</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>ID</th><th>名称</th><th>IP</th><th>房间</th><th>状态</th><th>HP</th><th>击杀/死亡</th><th>操作</th></tr></thead>
+              <tbody id="players-body"><tr><td class="empty" colspan="8">暂无在线玩家</td></tr></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2 class="panel-title">IP Blacklist</h2>
+          <form id="ban-form" class="inline-form">
+            <input id="ban-ip" type="text" inputmode="decimal" placeholder="IP 地址" aria-label="IP 地址" required>
+            <input id="ban-reason" type="text" maxlength="120" placeholder="理由（可选）" aria-label="封禁理由">
+            <button type="submit">封禁 IP</button>
+          </form>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>IP</th><th>理由</th><th>时间</th><th>操作</th></tr></thead>
+              <tbody id="bans-body"><tr><td class="empty" colspan="4">暂无封禁</td></tr></tbody>
+            </table>
+          </div>
+        </section>
       </div>
     </section>
   </main>
@@ -131,43 +194,201 @@
     const countInput = document.querySelector('#count');
     const countOutput = document.querySelector('#count-output');
     const pills = [...document.querySelectorAll('[data-count]')];
-    let password = '';
+    const playersBody = document.querySelector('#players-body');
+    const bansBody = document.querySelector('#bans-body');
+    const banForm = document.querySelector('#ban-form');
+    const banIPInput = document.querySelector('#ban-ip');
+    const banReasonInput = document.querySelector('#ban-reason');
+    let pollTimer = 0;
+    let overviewLoading = false;
 
     function showCount(value) {
-      countInput.value = String(value);
-      countOutput.value = String(value);
-      pills.forEach((button) => button.classList.toggle('active', +button.dataset.count === +value));
+      const count = Math.max(0, Math.min(12, Number(value) || 0));
+      countInput.value = String(count);
+      countOutput.value = String(count);
+      pills.forEach((button) => button.classList.toggle('active', +button.dataset.count === count));
     }
 
-    async function request(method, bots) {
-      const response = await fetch('/api/admin/bots', {
-        method,
+    function valueOf(value, fallback = '-') {
+      return value === null || value === undefined || value === '' ? fallback : String(value);
+    }
+
+    function setStatus(element, message, kind = '') {
+      element.className = `status${kind ? ` ${kind}` : ''}`;
+      element.textContent = message;
+    }
+
+    async function request(path, options = {}) {
+      const headers = new Headers(options.headers || {});
+      const init = {
+        method: options.method || 'GET',
         cache: 'no-store',
-        headers: { 'Content-Type': 'application/json', 'X-Admin-Password': password },
-        body: method === 'POST' ? JSON.stringify({ bots }) : undefined,
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(response.status === 401 ? '密码错误' : data.error || `请求失败 (${response.status})`);
+        credentials: 'same-origin',
+        headers,
+      };
+      if (options.body !== undefined) {
+        headers.set('Content-Type', 'application/json');
+        init.body = JSON.stringify(options.body);
+      }
+      const response = await fetch(path, init);
+      const data = response.status === 204 ? {} : await response.json().catch(() => ({}));
+      if (!response.ok) {
+        if (response.status === 401 && path !== '/api/admin/login' && !controlPanel.hidden) {
+          clearTimeout(pollTimer);
+          pollTimer = 0;
+          loginPanel.hidden = false;
+          controlPanel.hidden = true;
+          setStatus(loginStatus, '会话已过期，请重新登录', 'error');
+          passwordInput.focus();
+        }
+        const error = new Error(data.error || `请求失败 (${response.status})`);
+        error.status = response.status;
+        throw error;
+      }
       return data;
+    }
+
+    function setMetric(id, value) {
+      document.querySelector(`#${id}`).textContent = valueOf(value, '0');
+    }
+
+    function formatBandwidth(bytesPerSecond) {
+      const bytes = Number(bytesPerSecond);
+      return Number.isFinite(bytes) ? (bytes * 8 / 1e6).toFixed(1) : '0.0';
+    }
+
+    function formatTime(value) {
+      if (value === null || value === undefined || value === '') return '-';
+      const numeric = Number(value);
+      const date = Number.isFinite(numeric)
+        ? new Date(numeric < 1e12 ? numeric * 1000 : numeric)
+        : new Date(value);
+      return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString();
+    }
+
+    function addCell(row, value) {
+      const cell = document.createElement('td');
+      cell.textContent = valueOf(value);
+      row.append(cell);
+      return cell;
+    }
+
+    function renderPlayers(players) {
+      playersBody.replaceChildren();
+      if (!players.length) {
+        const row = document.createElement('tr');
+        const cell = document.createElement('td');
+        cell.className = 'empty';
+        cell.colSpan = 8;
+        cell.textContent = '暂无在线玩家';
+        row.append(cell);
+        playersBody.append(row);
+        return;
+      }
+      const fragment = document.createDocumentFragment();
+      players.forEach((player) => {
+        const row = document.createElement('tr');
+        const ip = valueOf(player.ip, '');
+        addCell(row, player.id);
+        addCell(row, player.name);
+        addCell(row, ip);
+        addCell(row, player.room ?? player.roomId);
+        addCell(row, player.bot || player.isBot ? 'BOT' : player.alive ? '存活' : '死亡');
+        addCell(row, player.hp);
+        addCell(row, `${valueOf(player.kills, '0')}/${valueOf(player.deaths, '0')}`);
+        const actionCell = document.createElement('td');
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'table-button secondary';
+        button.dataset.action = 'ban-player';
+        button.dataset.ip = ip;
+        button.textContent = '封禁 IP';
+        button.disabled = !ip;
+        actionCell.append(button);
+        row.append(actionCell);
+        fragment.append(row);
+      });
+      playersBody.append(fragment);
+    }
+
+    function renderBans(bans) {
+      bansBody.replaceChildren();
+      if (!bans.length) {
+        const row = document.createElement('tr');
+        const cell = document.createElement('td');
+        cell.className = 'empty';
+        cell.colSpan = 4;
+        cell.textContent = '暂无封禁';
+        row.append(cell);
+        bansBody.append(row);
+        return;
+      }
+      const fragment = document.createDocumentFragment();
+      bans.forEach((ban) => {
+        const row = document.createElement('tr');
+        const ip = valueOf(ban.ip, '');
+        addCell(row, ip);
+        addCell(row, ban.reason);
+        addCell(row, formatTime(ban.createdAt ?? ban.created_at ?? ban.created));
+        const actionCell = document.createElement('td');
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'table-button secondary';
+        button.dataset.action = 'unban';
+        button.dataset.ip = ip;
+        button.textContent = '解封';
+        actionCell.append(button);
+        row.append(actionCell);
+        fragment.append(row);
+      });
+      bansBody.append(fragment);
+    }
+
+    function updateOverview(data) {
+      const rooms = data.rooms ?? 0;
+      setMetric('metric-online', data.online);
+      setMetric('metric-rooms', rooms);
+      setMetric('metric-bots', data.bots);
+      setMetric('metric-joins', data.totalJoins);
+      setMetric('metric-bandwidth', formatBandwidth(data.outboundBps));
+      setMetric('metric-dropped', data.droppedMessages);
+      setMetric('metric-tick-p95', data.tickP95Ms);
+      setMetric('metric-tick', data.tickP99Ms);
+      showCount(data.bots);
+      roomStatus.textContent = `${rooms} 个活动房间 · ${new Date().toLocaleTimeString()}`;
+      renderPlayers(Array.isArray(data.players) ? data.players : []);
+      renderBans(Array.isArray(data.bans) ? data.bans : []);
+    }
+
+    async function refreshOverview() {
+      if (overviewLoading || controlPanel.hidden) return;
+      overviewLoading = true;
+      try {
+        const data = await request('/api/admin/overview');
+        updateOverview(data);
+        setStatus(controlStatus, '实时数据已连接', 'ok');
+      } catch (error) {
+        if (error.status !== 401) setStatus(controlStatus, error.message, 'error');
+      } finally {
+        overviewLoading = false;
+        clearTimeout(pollTimer);
+        if (!controlPanel.hidden) pollTimer = setTimeout(refreshOverview, 2000);
+      }
     }
 
     loginForm.addEventListener('submit', async (event) => {
       event.preventDefault();
-      loginStatus.className = 'status';
-      loginStatus.textContent = '正在验证…';
-      password = passwordInput.value;
+      setStatus(loginStatus, '正在验证…');
       try {
-        const data = await request('GET');
+        await request('/api/admin/login', { method: 'POST', body: { password: passwordInput.value } });
         passwordInput.value = '';
         loginPanel.hidden = true;
         controlPanel.hidden = false;
-        showCount(data.bots);
-        roomStatus.textContent = `${data.rooms} 个活动房间`;
-        loginStatus.textContent = '';
+        setStatus(loginStatus, '');
+        refreshOverview();
       } catch (error) {
-        password = '';
-        loginStatus.className = 'status error';
-        loginStatus.textContent = error.message;
+        passwordInput.value = '';
+        setStatus(loginStatus, error.status === 429 ? '尝试次数过多，请稍后再试' : error.message, 'error');
         passwordInput.select();
       }
     });
@@ -175,20 +396,66 @@
     countInput.addEventListener('input', () => showCount(countInput.value));
     pills.forEach((button) => button.addEventListener('click', () => showCount(button.dataset.count)));
     document.querySelector('#apply').addEventListener('click', async () => {
-      controlStatus.className = 'status';
-      controlStatus.textContent = '正在同步…';
+      setStatus(controlStatus, '正在同步…');
       try {
-        const data = await request('POST', +countInput.value);
+        const data = await request('/api/admin/bots', { method: 'POST', body: { bots: +countInput.value } });
         showCount(data.bots);
-        roomStatus.textContent = `${data.rooms} 个活动房间`;
-        controlStatus.className = 'status ok';
-        controlStatus.textContent = `已应用：每个房间 ${data.bots} 个人机`;
+        await refreshOverview();
+        setStatus(controlStatus, `已应用：每个房间 ${data.bots} 个人机`, 'ok');
       } catch (error) {
-        controlStatus.className = 'status error';
-        controlStatus.textContent = error.message;
+        setStatus(controlStatus, error.message, 'error');
       }
     });
-    document.querySelector('#logout').addEventListener('click', () => location.reload());
+
+    banForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const ip = banIPInput.value.trim();
+      setStatus(controlStatus, '正在封禁…');
+      try {
+        await request('/api/admin/bans', { method: 'POST', body: { ip, reason: banReasonInput.value.trim() } });
+        banForm.reset();
+        await refreshOverview();
+        setStatus(controlStatus, `已封禁 ${ip}`, 'ok');
+      } catch (error) {
+        setStatus(controlStatus, error.message, 'error');
+      }
+    });
+
+    playersBody.addEventListener('click', (event) => {
+      const button = event.target.closest?.('[data-action="ban-player"]');
+      if (!button) return;
+      banIPInput.value = button.dataset.ip || '';
+      banReasonInput.focus();
+    });
+
+    bansBody.addEventListener('click', async (event) => {
+      const button = event.target.closest?.('[data-action="unban"]');
+      if (!button) return;
+      const ip = button.dataset.ip || '';
+      if (!ip || !confirm(`确定解封 ${ip}？`)) return;
+      setStatus(controlStatus, '正在解封…');
+      try {
+        await request('/api/admin/bans', { method: 'DELETE', body: { ip } });
+        await refreshOverview();
+        setStatus(controlStatus, `已解封 ${ip}`, 'ok');
+      } catch (error) {
+        setStatus(controlStatus, error.message, 'error');
+      }
+    });
+
+    document.querySelector('#logout').addEventListener('click', async () => {
+      clearTimeout(pollTimer);
+      pollTimer = 0;
+      try { await request('/api/admin/logout', { method: 'POST' }); } finally { location.reload(); }
+    });
+
+    request('/api/admin/overview').then((data) => {
+      loginPanel.hidden = true;
+      controlPanel.hidden = false;
+      updateOverview(data);
+      setStatus(controlStatus, '实时数据已连接', 'ok');
+      pollTimer = setTimeout(refreshOverview, 2000);
+    }).catch(() => {});
   </script>
 </body>
 </html>

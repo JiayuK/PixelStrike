@@ -2,16 +2,14 @@ package main
 
 import (
 	"context"
-	"crypto/sha256"
-	"crypto/subtle"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"syscall"
 	"time"
 )
@@ -22,7 +20,14 @@ func main() {
 	mapPath := envOr("MAP_PATH", "../map.json")
 	allowedOrigin := os.Getenv("ALLOWED_ORIGIN")
 	adminPassword := os.Getenv("ADMIN_PASSWORD")
-	adminPasswordHash := sha256.Sum256([]byte(adminPassword))
+	trustedProxies, err := NewIPResolver(os.Getenv("TRUSTED_PROXY_CIDRS"))
+	if err != nil {
+		log.Fatalf("trusted proxies: %v", err)
+	}
+	secureAdminCookie, err := strconv.ParseBool(envOr("ADMIN_COOKIE_SECURE", "false"))
+	if err != nil {
+		log.Fatalf("ADMIN_COOKIE_SECURE: %v", err)
+	}
 
 	if _, err := os.Stat(mapPath); err != nil {
 		// also try next to the executable
@@ -61,11 +66,7 @@ func main() {
 		w.Write(world.rawJSON)
 	})
 	mux.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
-		if allowedOrigin != "" && r.Header.Get("Origin") != allowedOrigin {
-			http.Error(w, "forbidden origin", http.StatusForbidden)
-			return
-		}
-		ServeWS(hub, w, r, allowedOrigin)
+		ServeWS(hub, w, r, allowedOrigin, trustedProxies)
 	})
 	mux.HandleFunc("/api/leaderboard", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -76,64 +77,11 @@ func main() {
 		}
 		json.NewEncoder(w).Encode(rows)
 	})
-	mux.HandleFunc("/api/visit", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		visits := store.IncrMeta("visits", 1)
-		json.NewEncoder(w).Encode(map[string]int64{"visits": visits})
-	})
 	mux.HandleFunc("/api/stats", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		p50, p95, p99 := tickPercentiles()
-		hub.mu.Lock()
-		rooms := len(hub.rooms)
-		hub.mu.Unlock()
-		json.NewEncoder(w).Encode(map[string]any{
-			"visits":          store.GetMeta("visits"),
-			"totalJoins":      store.GetMeta("total_joins"),
-			"online":          OnlinePlayers.Load(),
-			"rooms":           rooms,
-			"outboundBytes":   outboundBytes.Load(),
-			"outboundBps":     outboundBPS.Load(),
-			"droppedMessages": droppedMessages.Load(),
-			"tickP50Ms":       p50,
-			"tickP95Ms":       p95,
-			"tickP99Ms":       p99,
-		})
+		_ = json.NewEncoder(w).Encode(runtimeStats(hub, store))
 	})
-	mux.HandleFunc("/api/admin/bots", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Cache-Control", "no-store")
-		w.Header().Set("Content-Type", "application/json")
-		if adminPassword == "" {
-			http.Error(w, `{"error":"admin password is not configured"}`, http.StatusServiceUnavailable)
-			return
-		}
-		provided := sha256.Sum256([]byte(r.Header.Get("X-Admin-Password")))
-		if subtle.ConstantTimeCompare(provided[:], adminPasswordHash[:]) != 1 {
-			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
-			return
-		}
-		switch r.Method {
-		case http.MethodGet:
-			count, rooms := hub.BotStatus()
-			json.NewEncoder(w).Encode(map[string]int{"bots": count, "rooms": rooms})
-		case http.MethodPost:
-			r.Body = http.MaxBytesReader(w, r.Body, 1024)
-			var request struct {
-				Bots int `json:"bots"`
-			}
-			decoder := json.NewDecoder(r.Body)
-			decoder.DisallowUnknownFields()
-			if err := decoder.Decode(&request); err != nil || decoder.Decode(&struct{}{}) != io.EOF || request.Bots < 0 || request.Bots > len(BotNames) {
-				http.Error(w, `{"error":"bots must be an integer from 0 to 12"}`, http.StatusBadRequest)
-				return
-			}
-			count, rooms := hub.SetBotCount(request.Bots)
-			json.NewEncoder(w).Encode(map[string]int{"bots": count, "rooms": rooms})
-		default:
-			w.Header().Set("Allow", "GET, POST")
-			http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
-		}
-	})
+	registerAdminHandlers(mux, hub, store, adminPassword, trustedProxies, secureAdminCookie)
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("ok")) })
 
 	srv := &http.Server{
@@ -162,4 +110,22 @@ func envOr(k, def string) string {
 		return v
 	}
 	return def
+}
+
+func runtimeStats(hub *Hub, store *Store) map[string]any {
+	p50, p95, p99 := tickPercentiles()
+	hub.mu.Lock()
+	rooms := len(hub.rooms)
+	hub.mu.Unlock()
+	return map[string]any{
+		"totalJoins":      store.GetMeta("total_joins"),
+		"online":          OnlinePlayers.Load(),
+		"rooms":           rooms,
+		"outboundBytes":   outboundBytes.Load(),
+		"outboundBps":     outboundBPS.Load(),
+		"droppedMessages": droppedMessages.Load(),
+		"tickP50Ms":       p50,
+		"tickP95Ms":       p95,
+		"tickP99Ms":       p99,
+	}
 }

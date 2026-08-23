@@ -13,9 +13,21 @@ type Hub struct {
 	World    *World
 	Store    *Store
 	mu       sync.Mutex
+	banMu    sync.RWMutex
 	rooms    []*Room
 	nextId   int
 	botCount int
+}
+
+type AdminPlayer struct {
+	Id     uint16 `json:"id"`
+	Name   string `json:"name"`
+	IP     string `json:"ip"`
+	Room   int    `json:"room"`
+	Alive  bool   `json:"alive"`
+	HP     uint8  `json:"hp"`
+	Kills  uint16 `json:"kills"`
+	Deaths uint16 `json:"deaths"`
 }
 
 func NewHub(w *World, s *Store) *Hub { return &Hub{World: w, Store: s, botCount: 6} }
@@ -24,6 +36,71 @@ func (h *Hub) BotStatus() (count, rooms int) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	return h.botCount, len(h.rooms)
+}
+
+func (h *Hub) OnlineSnapshot() []AdminPlayer {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	players := make([]AdminPlayer, 0)
+	for _, room := range h.rooms {
+		room.mu.Lock()
+		for _, p := range room.Players {
+			if p.IsBot {
+				continue
+			}
+			players = append(players, AdminPlayer{
+				Id: p.Id, Name: p.Name, IP: p.IP, Room: room.Id, Alive: p.Alive,
+				HP: p.HP, Kills: p.Kills, Deaths: p.Deaths,
+			})
+		}
+		room.mu.Unlock()
+	}
+	return players
+}
+
+func (h *Hub) JoinIfAllowed(p *Player, name string, primary, secondary uint8) bool {
+	h.banMu.RLock()
+	defer h.banMu.RUnlock()
+	if h.Store.IsIPBanned(p.IP) {
+		return false
+	}
+	h.Join(p, name, primary, secondary)
+	return true
+}
+
+func (h *Hub) BanIP(ip, reason string) (int, error) {
+	h.banMu.Lock()
+	defer h.banMu.Unlock()
+	if err := h.Store.AddIPBan(ip, reason); err != nil {
+		return 0, err
+	}
+	return h.KickIP(ip), nil
+}
+
+func (h *Hub) KickIP(ip string) int {
+	ip, err := normalizeBanIP(ip)
+	if err != nil {
+		return 0
+	}
+	h.mu.Lock()
+	var kicked []*Player
+	for _, room := range h.rooms {
+		room.mu.Lock()
+		for _, p := range room.Players {
+			if !p.IsBot && p.IP == ip {
+				kicked = append(kicked, p)
+			}
+		}
+		room.mu.Unlock()
+	}
+	h.mu.Unlock()
+
+	for _, p := range kicked {
+		if p.ws != nil {
+			p.closeOnce.Do(func() { _ = p.ws.Close() })
+		}
+	}
+	return len(kicked)
 }
 
 func (h *Hub) SetBotCount(count int) (int, int) {

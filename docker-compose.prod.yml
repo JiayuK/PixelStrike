@@ -11,6 +11,8 @@ services:
       DB_PATH: /data/stats.db
       MAP_PATH: /app/map.json
       ADMIN_PASSWORD: ${PIXEL_STRIKE_ADMIN_PASSWORD:-}
+      ADMIN_COOKIE_SECURE: ${PIXEL_STRIKE_ADMIN_COOKIE_SECURE:-true}
+      TRUSTED_PROXY_CIDRS: ${PIXEL_STRIKE_TRUSTED_PROXY_CIDRS:-172.16.0.0/12}
     volumes:
       - ./data:/data
 

@@ -78,6 +78,7 @@ const correction = new THREE.Vector3();
 const goal = new THREE.Vector3();
 const bodyColor = new THREE.Color();
 const prediction = new THREE.Vector3();
+const PLAYER_SKINS = [0x00a8aa, 0xc45f48, 0x5f79c8, 0x79994d, 0xac6aa2, 0xcf963e];
 const gunColor = new THREE.Color();
 const approach = (value: number, wanted: number, amount: number) => value < wanted ? Math.min(wanted, value + amount) : Math.max(wanted, value - amount);
 const angleLerp = (a: number, b: number, t: number) => a + Math.atan2(Math.sin(b - a), Math.cos(b - a)) * t;
@@ -544,7 +545,7 @@ export class RemotePlayers {
 
       // Left Leg (Swings opposite)
       this.place(this.legL, model.index, model, sin, cos, -0.12, hipY, 0, -swing, 0, 0);
-      const wantedBodyColor = now < model.flashUntil ? 0xf43f5e : state.state & 2 ? 0xb89a61 : 0x009aa6;
+      const wantedBodyColor = now < model.flashUntil ? 0xf43f5e : state.state & 2 ? 0xb89a61 : PLAYER_SKINS[state.id % PLAYER_SKINS.length];
       if (wantedBodyColor !== model.bodyColor) {
         model.bodyColor = wantedBodyColor;
         this.body.setColorAt(model.index, bodyColor.setHex(wantedBodyColor));

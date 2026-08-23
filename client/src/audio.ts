@@ -24,6 +24,7 @@ export class AudioEngine {
     this.masterGain = this.ctx.createGain();
     this.masterGain.gain.value = this.volume;
     this.masterGain.connect(this.ctx.destination);
+    for (const name of SFX_NAMES) void this.load(name);
   }
 
   private async load(name: SfxName) {

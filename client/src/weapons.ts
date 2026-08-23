@@ -25,6 +25,8 @@ interface SoundCue {
   pitch?: number;
 }
 
+const RELOAD_PITCH = [1.12, 0.82, 1.18, 0.92, 1, 0.72];
+
 export type SoundCallback = (name: SfxName, volume?: number, pitch?: number) => void;
 
 export class Weapons {
@@ -769,10 +771,11 @@ export class Weapons {
 
     // Schedule high-definition synchronized reload sound cues
     const isPistol = this.weaponId === 0 || this.weaponId === 1;
+    const pitch = RELOAD_PITCH[this.weaponId] ?? 1;
     this.scheduledSounds = [
-      { time: t + def.reloadMs * 0.18, name: 'mag_out', vol: 0.75 },
-      { time: t + def.reloadMs * 0.54, name: 'mag_in', vol: 0.85 },
-      { time: t + def.reloadMs * 0.78, name: isPistol ? 'reload_click' : 'bolt_cycle', vol: 0.82 },
+      { time: t + def.reloadMs * 0.18, name: 'mag_out', vol: 0.75, pitch: pitch * 1.04 },
+      { time: t + def.reloadMs * 0.54, name: 'mag_in', vol: 0.85, pitch },
+      { time: t + def.reloadMs * 0.78, name: isPistol ? 'reload_click' : 'bolt_cycle', vol: 0.82, pitch: pitch * 0.96 },
     ];
 
     return true;
@@ -825,7 +828,7 @@ export class Weapons {
     if (this.weaponId === 5) {
       this.boltCycleStartedAt = t;
       this.boltCycleUntil = this.nextFireAt;
-      this.scheduledSounds.push({ time: t + interval * 0.28, name: 'bolt_cycle', vol: 0.9 });
+      this.scheduledSounds.push({ time: t + interval * 0.28, name: 'bolt_cycle', vol: 0.9, pitch: RELOAD_PITCH[5] });
     }
     if (this.weaponId === 6) return;
     this.ammoLocal = Math.max(0, this.ammoLocal - 1);

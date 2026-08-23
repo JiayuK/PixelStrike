@@ -8,6 +8,7 @@ const pColor = new THREE.Color();
 const grenadeStep = new THREE.Vector3();
 const FIRE_COLORS = [0xff2200, 0xff5500, 0xff9900, 0xffdd33, 0xfffa88];
 const SMOKE_COLORS = [0x1e1e22, 0x38383e, 0x55555c, 0x777780];
+const DEATH_COLORS = [0x00a8aa, 0x2b3577, 0xd9a377, 0x3a3a3a];
 
 interface ParticleData {
   x: number;
@@ -96,6 +97,28 @@ export class ParticleSystem {
       });
     }
   }
+  spawnDeath(pos: THREE.Vector3, headshot = false) {
+    const count = Math.min(headshot ? 42 : 30, MAX_PARTICLES - this.particles.length);
+    const now = performance.now();
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 2.5 + Math.random() * (headshot ? 7 : 5);
+      this.particles.push({
+        x: pos.x + (Math.random() - 0.5) * 0.45,
+        y: pos.y + (Math.random() - 0.5) * 0.9,
+        z: pos.z + (Math.random() - 0.5) * 0.3,
+        vx: Math.cos(angle) * speed,
+        vy: 2 + Math.random() * (headshot ? 8 : 5),
+        vz: Math.sin(angle) * speed,
+        color: headshot && i % 4 === 0 ? 0xc92a2a : DEATH_COLORS[i % DEATH_COLORS.length],
+        born: now,
+        life: 650 + Math.random() * 500,
+        size: 1.8 + Math.random() * 2.2,
+        gravity: 18,
+      });
+    }
+  }
+
   spawnGrenade(player: number, pos: THREE.Vector3, vel: THREE.Vector3) {
     const now = performance.now();
     const existing = this.grenades.find((g) => g.player === player && now - g.born < 400);

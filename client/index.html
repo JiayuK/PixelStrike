@@ -433,6 +433,25 @@
     .kill-row .killer { color: #ffffff; font-weight: 800; }
     .kill-row .weapon { color: var(--accent-hi); font: 800 12px var(--font-mono); padding: 1px 4px; background: rgb(0 0 0 / .4); border-radius: 2px; }
     .kill-row .head-badge { color: #f59e0b; font: 800 10px var(--font-mono); padding: 1px 5px; background: rgba(245, 158, 11, 0.2); border: 1px solid #f59e0b; border-radius: 2px; }
+    .kill-row .action { color: var(--muted); font-size: 10px; }
+    #kill-streak {
+      position: absolute;
+      left: 50%;
+      top: 82px;
+      display: none;
+      transform: translateX(-50%);
+      padding: 9px 28px 8px;
+      border-top: 1px solid var(--accent-hi);
+      border-bottom: 3px solid var(--accent);
+      background: linear-gradient(90deg, transparent, rgb(11 13 11 / .94) 18%, rgb(11 13 11 / .94) 82%, transparent);
+      color: #fff;
+      text-align: center;
+      text-shadow: 0 2px 5px #000;
+      pointer-events: none;
+    }
+    #kill-streak.active { display: grid; animation: streak-in .2s ease-out; }
+    #kill-streak strong { color: var(--accent-hi); font: 28px/.95 var(--font-display); letter-spacing: .12em; }
+    #kill-streak span { margin-top: 4px; color: var(--paper); font: 700 10px var(--font-mono); letter-spacing: .08em; }
     #player-labels { position: absolute; inset: 0; overflow: hidden; }
     .player-label {
       position: absolute;
@@ -538,22 +557,27 @@
       transition: width 35ms linear;
     }
     #hitmarker {
+      --hit-size: 27px;
       position: absolute;
       left: 50%;
       top: 50%;
       display: none;
-      width: 25px;
-      height: 25px;
+      width: var(--hit-size);
+      height: var(--hit-size);
       transform: translate(-50%, -50%) rotate(45deg);
-      border: 0 solid var(--danger);
+      color: #d8574f;
+      filter: drop-shadow(0 0 3px rgb(216 87 79 / .8));
+      pointer-events: none;
     }
+    #hitmarker.active { display: block; animation: hit-confirm .15s ease-out; }
+    #hitmarker.head { --hit-size: 38px; color: #f2c14e; filter: drop-shadow(0 0 7px rgb(242 193 78 / .95)); animation-duration: .22s; }
     #hitmarker::before, #hitmarker::after {
       content: "";
       position: absolute;
-      left: 11px;
-      top: 1px;
-      width: 2px;
-      height: 23px;
+      left: calc(50% - 1px);
+      top: 0;
+      width: 3px;
+      height: 100%;
       background: currentColor;
     }
     #hitmarker::after { transform: rotate(90deg); }
@@ -771,6 +795,8 @@
     }
 
     @keyframes feed-in { from { opacity: 0; transform: translateX(10px); } }
+    @keyframes hit-confirm { from { opacity: 0; transform: translate(-50%, -50%) rotate(45deg) scale(1.7); } to { opacity: 1; transform: translate(-50%, -50%) rotate(45deg) scale(1); } }
+    @keyframes streak-in { from { opacity: 0; transform: translate(-50%, -10px) scale(.9); } to { opacity: 1; transform: translateX(-50%) scale(1); } }
     @keyframes dialog-in { from { opacity: 0; transform: translateY(8px); } }
     @keyframes menu-in { from { opacity: 0; transform: translateY(6px); } }
     @media (prefers-reduced-motion: no-preference) {
@@ -962,6 +988,7 @@
       <span>总带宽 <strong id="bandwidth-value">0.0 Mbps</strong></span>
     </div>
     <div id="killfeed" aria-live="polite"></div>
+    <div id="kill-streak" role="status" aria-live="assertive"></div>
     <div id="player-labels" aria-hidden="true"></div>
     <div id="crosshair" aria-hidden="true">
       <div class="ch-line ch-top"></div><div class="ch-line ch-bot"></div>

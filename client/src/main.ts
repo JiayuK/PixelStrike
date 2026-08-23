@@ -42,6 +42,7 @@ let joined = false;
 let alive = false;
 let myName = '';
 let killerId = -1;
+let killStreak = 0;
 let respawnAt = 0;
 let screenShake = 0;
 let aiming = false;
@@ -482,6 +483,7 @@ hud.onPauseClick(() => {
 
 hud.onJoin = (name, primary, secondary) => {
   myName = name;
+  killStreak = 0;
   userPrimaryChoice = primary;
   userSecondaryChoice = secondary;
   const resolved = resolveLoadout(primary, secondary);
@@ -642,7 +644,12 @@ function handleEvent(e: GameEvent) {
     const victim = nameOf(e.victim);
     const mine = e.killer === net.yourId || e.victim === net.yourId;
     hud.killFeedEntry(killer, victim, e.weapon ?? 3, e.headshot === 1, mine);
+    if (e.killer === net.yourId && e.victim !== net.yourId) {
+      hud.showKillStreak(++killStreak, e.headshot === 1);
+    }
     const victimState = states.get(e.victim ?? -1);
+    if (victimState) particles.spawnDeath(eventOrigin.set(victimState.x, victimState.y + 0.9, victimState.z), e.headshot === 1);
+    else if (e.victim === net.yourId) particles.spawnDeath(eventOrigin.set(local.pos.x, local.pos.y + 0.9, local.pos.z), e.headshot === 1);
     if (e.victim === net.yourId) audio.play('death', 0.65);
     else if (victimState) playSpatial('death', victimState.x, victimState.z, 0.35, 45);
     const k = roster.get(e.killer ?? -1);
@@ -651,6 +658,7 @@ function handleEvent(e: GameEvent) {
     if (v) v.deaths++;
     refreshScoreboard();
     if (e.victim === net.yourId) {
+      killStreak = 0;
       alive = false;
       weapons.group.visible = false;
       respawnAt = performance.now() + 3000;
@@ -676,8 +684,13 @@ function handleEvent(e: GameEvent) {
     if (e.player === net.yourId) {
       const headshot = e.headshot === 1;
       hud.hitMarker(headshot);
-      audio.play(headshot ? 'headshot_ding' : 'hitmarker', headshot ? 0.9 : 0.55);
+      audio.play(headshot ? 'headshot_ding' : 'hitmarker', headshot ? 1 : 0.65, 1, 0, headshot);
       remotes.flashHit(e.victim ?? -1);
+      const hitState = states.get(e.victim ?? -1);
+      if (hitState) {
+        particles.spawnImpact(eventOrigin.set(hitState.x, hitState.y + (headshot ? 1.65 : 1), hitState.z), impactNormal, headshot ? 0xf2c14e : 0xd8574f, headshot ? 10 : 6);
+      }
+      screenShake = Math.max(screenShake, headshot ? 0.035 : 0.012);
     }
     return;
   }
@@ -787,7 +800,7 @@ remotes.onShot = (s, position) => {
   const d = shotDirection(remoteShotDir, s.yaw, s.pitch, remoteSpread(s), s.shot, s.weapon);
   const dist = world.raycastDistance(o, d, 180);
   weapons.spawnTracer(o, d, dist);
-  playSpatial(fireSound(s.weapon), position.x, position.z, 0.65, 120);
+  playSpatial(fireSound(s.weapon), position.x, position.z, 0.65, 120, 0.97 + Math.random() * 0.06);
 };
 
 remotes.onStep = (position) => playSpatial('step', position.x, position.z, 0.16, 26, 0.92);
@@ -942,7 +955,7 @@ function fire(mode: number, t: number) {
   if (activeSlot === 1 || activeSlot === 2) slotMags[activeSlot] = mag;
   refreshWeaponHud();
   if (weapons.weaponId < 6) {
-    audio.play(fireSound(weapons.weaponId), 1, 1, 0, true);
+    audio.play(fireSound(weapons.weaponId), 1, 0.985 + Math.random() * 0.03, 0, true);
     const dist = world?.raycastDistance(origin, dir, 180) ?? 180;
     weapons.spawnTracer(origin, dir, dist);
     if (dist < 180) {

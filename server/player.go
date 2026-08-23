@@ -2,9 +2,11 @@ package main
 
 import (
 	"encoding/binary"
+	"fmt"
 	"log"
 	"math"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"strings"
 	"sync"
@@ -30,6 +32,71 @@ func sameOrigin(r *http.Request) bool {
 	return err == nil && strings.EqualFold(u.Host, r.Host)
 }
 
+type IPResolver []netip.Prefix
+
+func NewIPResolver(value string) (IPResolver, error) {
+	var resolver IPResolver
+	for _, raw := range strings.Split(value, ",") {
+		raw = strings.TrimSpace(raw)
+		if raw == "" {
+			continue
+		}
+		prefix, err := netip.ParsePrefix(raw)
+		if err != nil {
+			if address, addressErr := netip.ParseAddr(raw); addressErr == nil {
+				address = address.Unmap()
+				prefix = netip.PrefixFrom(address, address.BitLen())
+			} else {
+				return nil, fmt.Errorf("invalid trusted proxy %q: %w", raw, err)
+			}
+		}
+		resolver = append(resolver, prefix.Masked())
+	}
+	return resolver, nil
+}
+
+func (resolver IPResolver) ClientIP(r *http.Request) string {
+	peer, ok := parseRequestIP(r.RemoteAddr)
+	if !ok {
+		return ""
+	}
+	if !resolver.trusted(peer) {
+		return peer.String()
+	}
+	forwarded := strings.Split(r.Header.Get("X-Forwarded-For"), ",")
+	for i := len(forwarded) - 1; i >= 0; i-- {
+		if address, valid := parseRequestIP(forwarded[i]); valid && !resolver.trusted(address) {
+			return address.String()
+		}
+	}
+	if address, valid := parseRequestIP(r.Header.Get("X-Real-IP")); valid && !resolver.trusted(address) {
+		return address.String()
+	}
+	return peer.String()
+}
+
+func (resolver IPResolver) trusted(address netip.Addr) bool {
+	for _, prefix := range resolver {
+		if prefix.Contains(address) {
+			return true
+		}
+	}
+	return false
+}
+
+func parseRequestIP(value string) (netip.Addr, bool) {
+	value = strings.TrimSpace(value)
+	if addressPort, err := netip.ParseAddrPort(value); err == nil {
+		address := addressPort.Addr()
+		return address.Unmap(), address.Zone() == ""
+	}
+	address, err := netip.ParseAddr(strings.Trim(value, "[]"))
+	if err != nil || address.Zone() != "" {
+		return netip.Addr{}, false
+	}
+	return address.Unmap(), true
+}
+
 type Player struct {
 	PlayerState
 	ws                    *websocket.Conn
@@ -47,24 +114,26 @@ type Player struct {
 	rosterRequested       bool
 }
 
-func ServeWS(hub *Hub, w http.ResponseWriter, r *http.Request, allowedOrigin string) {
+func ServeWS(hub *Hub, w http.ResponseWriter, r *http.Request, allowedOrigin string, ips IPResolver) {
 	connectionUpgrader := upgrader
 	connectionUpgrader.CheckOrigin = func(request *http.Request) bool {
-		return sameOrigin(request) || allowedOrigin != "" && request.Header.Get("Origin") == allowedOrigin
+		if allowedOrigin != "" {
+			return request.Header.Get("Origin") == allowedOrigin
+		}
+		return sameOrigin(request)
+	}
+	ip := ips.ClientIP(r)
+	if ip == "" {
+		http.Error(w, "invalid client address", http.StatusBadRequest)
+		return
+	}
+	if hub.Store.IsIPBanned(ip) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
 	}
 	conn, err := connectionUpgrader.Upgrade(w, r, nil)
 	if err != nil {
 		return
-	}
-	ip := r.Header.Get("X-Forwarded-For")
-	if i := strings.IndexByte(ip, ','); i >= 0 {
-		ip = strings.TrimSpace(ip[:i])
-	}
-	if ip == "" {
-		ip = r.Header.Get("X-Real-IP")
-	}
-	if ip == "" {
-		ip = r.RemoteAddr
 	}
 	p := &Player{ws: conn, send: make(chan []byte, writeChanSize), Hub: hub, IP: ip}
 	p.ApplyLoadout(3, 0)
@@ -99,6 +168,11 @@ func (p *Player) readPump(hub *Hub) {
 			if p.joined || len(payload) < 4 {
 				return
 			}
+			if hub.Store.IsIPBanned(p.IP) {
+				p.Send(Reject("访问已被封禁"))
+				time.Sleep(20 * time.Millisecond)
+				return
+			}
 			if payload[0] != ProtocolVersion {
 				p.Send(Reject("版本已更新，请刷新页面"))
 				time.Sleep(50 * time.Millisecond)
@@ -120,7 +194,11 @@ func (p *Player) readPump(hub *Hub) {
 				name = "player"
 			}
 			resolved := hub.Store.GetOrCreatePlayer(p.IP, p.Fingerprint, name)
-			hub.Join(p, resolved, primary, secondary)
+			if !hub.JoinIfAllowed(p, resolved, primary, secondary) {
+				p.Send(Reject("访问已被封禁"))
+				time.Sleep(20 * time.Millisecond)
+				return
+			}
 		case OpInput:
 			if !p.joined || len(payload) < 11 {
 				continue
