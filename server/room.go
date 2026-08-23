@@ -1,0 +1,181 @@
+package main
+
+import (
+	"bytes"
+	"log"
+	"sync"
+	"time"
+)
+
+type Room struct {
+	Id                    int
+	World                 *World
+	Store                 *Store
+	mu                    sync.Mutex
+	running, closed       bool
+	Players               []*Player
+	Grenades              []*Grenade
+	nextNadeId, nextIdSeq uint16
+	tick                  uint32
+	pending               []Event
+	botAIs                map[uint16]*BotAI
+	history               map[uint16]*poseHistory
+}
+
+const RoomCap = 100
+
+func NewRoom(id int, w *World, s *Store) *Room {
+	r := &Room{Id: id, World: w, Store: s, nextIdSeq: 1, botAIs: make(map[uint16]*BotAI), history: make(map[uint16]*poseHistory)}
+	r.InitBots()
+	return r
+}
+
+func (r *Room) Remove(p *Player) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for i, q := range r.Players {
+		if q == p {
+			r.Players = append(r.Players[:i], r.Players[i+1:]...)
+			break
+		}
+	}
+	delete(r.botAIs, p.Id)
+	delete(r.history, p.Id)
+	if !p.IsBot && r.HumanCountLocked() == 0 {
+		r.closed, r.Players = true, nil
+		r.botAIs = make(map[uint16]*BotAI)
+		r.history = make(map[uint16]*poseHistory)
+		r.Grenades, r.pending = nil, nil
+		return
+	}
+	r.Emit(Event{Type: EvPlayerLeave, Player: p.Id})
+}
+func (r *Room) Empty() bool { r.mu.Lock(); defer r.mu.Unlock(); return r.closed || len(r.Players) == 0 }
+func (r *Room) HumanCountLocked() int {
+	n := 0
+	for _, p := range r.Players {
+		if !p.IsBot {
+			n++
+		}
+	}
+	return n
+}
+
+type outbound struct {
+	p                              *Player
+	snapshot, self, events, roster []byte
+}
+
+func (r *Room) Run() {
+	ticker := time.NewTicker(time.Second / TickRate)
+	defer ticker.Stop()
+	for now := range ticker.C {
+		start := time.Now()
+		r.mu.Lock()
+		if r.closed || len(r.Players) == 0 {
+			r.running = false
+			r.mu.Unlock()
+			return
+		}
+		r.FinishReloads(now)
+		r.Step(now)
+		var evts []Event
+		if r.tick%2 == 0 {
+			evts = r.pending
+			r.pending = make([]Event, 0, 32)
+		}
+		var outs []outbound
+		if r.tick%2 == 0 {
+			players := append([]*Player(nil), r.Players...)
+			outs = make([]outbound, 0, len(players))
+			var periodicRoster []byte
+			if r.tick%600 == 0 {
+				periodicRoster = Roster(players)
+			}
+			nowUnixNano := now.UnixNano()
+			for _, p := range players {
+				if p.IsBot || !p.ready {
+					continue
+				}
+				out := outbound{p: p, snapshot: p.BuildSnapshot(r.tick, players, nowUnixNano)}
+				self := SelfState(&p.PlayerState)
+				if r.tick%60 == 0 || len(p.lastSelf) == 0 || !bytes.Equal(self[3:], p.lastSelf[3:]) {
+					out.self, p.lastSelf = self, self
+				}
+				if len(evts) > 0 {
+					if filtered := r.eventsFor(p, evts); len(filtered) > 0 {
+						out.events = Events(filtered)
+					}
+				}
+				if periodicRoster != nil {
+					out.roster = periodicRoster
+				} else if p.rosterRequested {
+					out.roster = Roster(players)
+				}
+				if periodicRoster != nil || p.rosterRequested {
+					p.rosterRequested = false
+				}
+				outs = append(outs, out)
+			}
+		}
+		r.tick++
+		r.mu.Unlock()
+		for _, out := range outs {
+			out.p.Send(out.snapshot)
+			if out.self != nil {
+				out.p.Send(out.self)
+			}
+			if out.events != nil {
+				out.p.Send(out.events)
+			}
+			if out.roster != nil {
+				out.p.Send(out.roster)
+			}
+		}
+		took := time.Since(start)
+		recordTick(took)
+		if took > time.Second/TickRate {
+			log.Printf("room %d: slow tick %v", r.Id, took)
+		}
+	}
+}
+
+func (r *Room) eventsFor(target *Player, evts []Event) []Event {
+	out := make([]Event, 0, len(evts))
+	for _, e := range evts {
+		send := false
+		switch e.Type {
+		case EvKill, EvPlayerName, EvPlayerLeave:
+			send = true
+		case EvHit:
+			send = e.Player == target.Id || e.Victim == target.Id
+		case EvRespawn:
+			send = e.Player == target.Id || horizontalWithin(target.Pos, e.Origin, 120)
+		case EvExplosion, EvNadeThrow:
+			send = horizontalWithin(target.Pos, e.Origin, 120)
+		case EvReloadStart:
+			if e.Player == target.Id {
+				send = true
+			} else if p := r.findPlayer(e.Player); p != nil {
+				send = horizontalWithin(target.Pos, p.Pos, 80)
+			}
+		}
+		if send {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+func horizontalWithin(a, b Vec3, distance float64) bool {
+	dx, dz := a.X-b.X, a.Z-b.Z
+	return dx*dx+dz*dz <= distance*distance
+}
+func (r *Room) findPlayer(id uint16) *Player {
+	for _, p := range r.Players {
+		if p.Id == id {
+			return p
+		}
+	}
+	return nil
+}
+func (r *Room) Emit(e Event) { r.pending = append(r.pending, e) }

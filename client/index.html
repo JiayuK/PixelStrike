@@ -1,0 +1,922 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#111411">
+  <meta name="description" content="Pixel Strike 百人同房体素战术射击游戏">
+  <title>PIXEL STRIKE | 体素战术死斗</title>
+  <!-- Native CSS interpretation of CS tactical hierarchy and Minecraft block materiality. -->
+  <style>
+    :root {
+      color-scheme: dark;
+      --ink: #0b0d0b;
+      --base: #111411;
+      --panel: #181c18;
+      --panel-2: #20251f;
+      --panel-3: #292f28;
+      --line: #3c4339;
+      --line-strong: #62695b;
+      --paper: #f0eadc;
+      --muted: #aaa99f;
+      --dim: #74766d;
+      --accent: #c9822b;
+      --accent-hi: #e09a43;
+      --danger: #bd5146;
+      --font-display: Impact, Haettenschweiler, "Arial Narrow Bold", "Microsoft YaHei", sans-serif;
+      --font-ui: Tahoma, "Microsoft YaHei", "PingFang SC", Arial, sans-serif;
+      --font-mono: Consolas, "Cascadia Mono", "SFMono-Regular", monospace;
+      --shadow: 0 18px 48px rgb(3 5 3 / .52);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: var(--ink);
+      color: var(--paper);
+      font-family: var(--font-ui);
+      -webkit-font-smoothing: antialiased;
+    }
+    body > canvas { position: fixed; inset: 0; z-index: 0; }
+    button, input, select { font: inherit; color: inherit; }
+    button { cursor: pointer; }
+    input, select { user-select: text; }
+    canvas { display: block; }
+    :focus-visible { outline: 2px solid var(--accent-hi); outline-offset: 3px; }
+
+    #menu {
+      position: fixed;
+      inset: 0;
+      z-index: 30;
+      min-height: 100dvh;
+      overflow: auto;
+      padding: 18px;
+      background:
+        linear-gradient(90deg, rgb(11 13 11 / .94), rgb(11 13 11 / .84)),
+        repeating-conic-gradient(from 90deg at 1px 1px, #171a16 0 25%, #121511 0 50%) 0 0 / 48px 48px;
+    }
+    #menu::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background:
+        linear-gradient(115deg, transparent 0 62%, rgb(201 130 43 / .08) 62% 74%, transparent 74%),
+        linear-gradient(25deg, rgb(255 255 255 / .018) 25%, transparent 25% 75%, rgb(255 255 255 / .018) 75%);
+    }
+
+    .menu-frame {
+      position: relative;
+      width: min(1260px, 100%);
+      min-height: calc(100dvh - 36px);
+      margin: 0 auto;
+      display: grid;
+      grid-template-rows: auto 1fr;
+      gap: 12px;
+    }
+    .command-bar {
+      min-height: 54px;
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      border: 1px solid var(--line);
+      border-left: 4px solid var(--accent);
+      background: rgb(24 28 24 / .97);
+      box-shadow: var(--shadow);
+      padding: 8px 12px;
+    }
+    .wordmark { display: flex; align-items: center; gap: 11px; min-width: 0; }
+    .voxel-mark {
+      width: 26px;
+      height: 26px;
+      flex: 0 0 auto;
+      background:
+        linear-gradient(135deg, var(--accent-hi) 0 50%, transparent 50%),
+        linear-gradient(315deg, #87521b 0 50%, var(--accent) 50%);
+      border: 2px solid #f2b35f;
+      box-shadow: 4px 4px 0 #080a08;
+    }
+    .wordmark strong {
+      font: 28px/.9 var(--font-display);
+      letter-spacing: .055em;
+      white-space: nowrap;
+    }
+    .wordmark small { color: var(--muted); font: 10px var(--font-mono); white-space: nowrap; }
+    .sync-readout {
+      color: var(--muted);
+      font: 11px var(--font-mono);
+      letter-spacing: .04em;
+      text-align: center;
+    }
+    .sync-readout b { color: var(--paper); }
+    .command-actions { justify-self: end; }
+
+    .ghost-button, .secondary-button, .danger-button, #lb-refresh-btn {
+      min-height: 36px;
+      border: 1px solid var(--line-strong);
+      border-radius: 0;
+      background: var(--panel-2);
+      color: var(--paper);
+      padding: 8px 13px;
+      font-weight: 700;
+      letter-spacing: .02em;
+      transition: transform .12s ease, background-color .12s ease, border-color .12s ease;
+    }
+    .ghost-button:hover, .secondary-button:hover, #lb-refresh-btn:hover {
+      background: var(--panel-3);
+      border-color: var(--accent-hi);
+    }
+    button:active { transform: translateY(1px); }
+    .danger-button { border-color: #7c3b36; color: #f0b3ad; background: #2a1817; }
+    .danger-button:hover { background: #3b201e; border-color: var(--danger); }
+
+    .menu-grid {
+      min-height: 0;
+      display: grid;
+      grid-template-columns: minmax(0, 1.35fr) minmax(350px, .82fr);
+      gap: 12px;
+    }
+    .deploy-panel, .intel-panel {
+      position: relative;
+      border: 1px solid var(--line);
+      background: rgb(24 28 24 / .97);
+      box-shadow: var(--shadow);
+      padding: clamp(16px, 2.2vw, 28px);
+      overflow: hidden;
+    }
+    .deploy-panel::after, .intel-panel::after, .dialog::after, #scoreboard::after {
+      content: "";
+      position: absolute;
+      right: 0;
+      top: 0;
+      width: 34px;
+      height: 5px;
+      background: var(--accent);
+    }
+    .deploy-panel {
+      display: grid;
+      grid-template-rows: auto auto auto auto;
+      align-content: space-between;
+      gap: 15px;
+    }
+    .intel-panel {
+      display: grid;
+      grid-template-rows: auto minmax(150px, 1fr) auto;
+      gap: 14px;
+    }
+    .mode-label {
+      color: var(--accent-hi);
+      font: 700 11px var(--font-mono);
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+    .deploy-title {
+      margin-top: 6px;
+      max-width: 720px;
+      font: clamp(42px, 6vw, 76px)/.88 var(--font-display);
+      letter-spacing: .03em;
+      text-wrap: balance;
+    }
+    .deploy-copy {
+      max-width: 60ch;
+      margin-top: 9px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+    .metric-rail {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      border: 1px solid var(--line);
+      background: var(--base);
+    }
+    .metric {
+      min-width: 0;
+      padding: 10px 12px;
+      border-right: 1px solid var(--line);
+    }
+    .metric:last-child { border-right: 0; }
+    .metric b { display: block; color: var(--paper); font: 700 17px var(--font-mono); }
+    .metric span { display: block; margin-top: 2px; color: var(--dim); font: 10px var(--font-mono); }
+
+    .loadout-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .field { display: grid; gap: 6px; min-width: 0; }
+    .field.full { grid-column: 1 / -1; }
+    .field label {
+      color: var(--muted);
+      font: 700 10px var(--font-mono);
+      letter-spacing: .07em;
+      text-transform: uppercase;
+    }
+    .control {
+      width: 100%;
+      min-height: 42px;
+      border: 1px solid var(--line-strong);
+      border-radius: 0;
+      background: var(--base);
+      color: var(--paper);
+      padding: 9px 11px;
+      transition: border-color .12s ease, background-color .12s ease;
+    }
+    .control:hover { border-color: #828875; }
+    .control:focus { border-color: var(--accent-hi); background: #151915; outline: none; }
+    .control::placeholder { color: #85877e; opacity: 1; }
+    select.control {
+      appearance: none;
+      background-image:
+        linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+        linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+      background-position: calc(100% - 16px) 17px, calc(100% - 11px) 17px;
+      background-size: 5px 5px;
+      background-repeat: no-repeat;
+      padding-right: 30px;
+    }
+
+    .loadout-brief {
+      border-top: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+      padding: 10px 0;
+    }
+    .brief-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 8px;
+      color: var(--muted);
+      font: 10px var(--font-mono);
+    }
+    #weapon-spec-tag { color: var(--accent-hi); text-align: right; }
+    .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--line); }
+    .stat-cell { min-width: 0; padding: 8px; background: var(--panel-2); }
+    .stat-cell span { display: block; color: var(--dim); font: 9px var(--font-mono); }
+    .stat-cell b { display: block; margin-top: 3px; color: var(--paper); font: 700 12px var(--font-mono); }
+
+    .deploy-bottom { display: grid; grid-template-columns: minmax(0, 1fr) minmax(210px, .58fr); gap: 10px; }
+    .zone-brief { border: 1px solid var(--line); background: var(--base); padding: 10px; }
+    .zone-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      color: var(--muted);
+      font: 10px var(--font-mono);
+    }
+    .zone-head b { color: var(--paper); }
+    .zone-list { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; margin-top: 8px; }
+    .zone-list span {
+      border-left: 2px solid var(--line-strong);
+      background: var(--panel-2);
+      color: var(--muted);
+      padding: 6px;
+      font-size: 10px;
+      line-height: 1.25;
+    }
+    #join-btn {
+      width: 100%;
+      min-height: 64px;
+      border: 2px solid #efb15d;
+      border-radius: 0;
+      background: var(--accent);
+      color: #17110a;
+      box-shadow: inset 0 -5px 0 #87521b, 5px 5px 0 #080a08;
+      font: 28px var(--font-display);
+      letter-spacing: .07em;
+      transition: transform .12s ease, background-color .12s ease;
+    }
+    #join-btn:hover { background: var(--accent-hi); transform: translate(-1px, -1px); }
+    #join-btn:active { transform: translate(2px, 3px); box-shadow: inset 0 -3px 0 #87521b, 2px 2px 0 #080a08; }
+
+    .section-head { display: flex; justify-content: space-between; align-items: end; gap: 10px; }
+    .section-head h2 { font: 25px var(--font-display); letter-spacing: .04em; }
+    .section-head p { margin-top: 3px; color: var(--dim); font-size: 11px; }
+    #lb-refresh-btn { min-height: 32px; padding: 6px 10px; font-size: 11px; }
+    .table-shell { min-height: 0; overflow: auto; border: 1px solid var(--line); background: var(--base); }
+    table { width: 100%; border-collapse: collapse; font-size: 11px; }
+    th {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      background: var(--panel-3);
+      color: var(--muted);
+      padding: 8px 9px;
+      text-align: left;
+      font: 700 9px var(--font-mono);
+      letter-spacing: .05em;
+      text-transform: uppercase;
+    }
+    td { border-bottom: 1px solid #2b3029; padding: 8px 9px; color: var(--muted); }
+    tbody tr:last-child td { border-bottom: 0; }
+    tbody tr:hover { background: #1e231e; }
+    .rank-badge { display: inline-grid; place-items: center; width: 22px; height: 20px; font: 700 10px var(--font-mono); }
+    .rank-gold { color: #e4b762; }
+    .rank-silver { color: #b8bcb4; }
+    .rank-bronze { color: #b57d54; }
+    .loading-line {
+      display: inline-block;
+      min-width: 130px;
+      color: var(--dim);
+      background: linear-gradient(90deg, transparent, rgb(201 130 43 / .12), transparent);
+      background-size: 200% 100%;
+    }
+
+    .controls-brief { border-top: 1px solid var(--line); padding-top: 12px; }
+    .controls-brief h3 { color: var(--muted); font: 700 10px var(--font-mono); letter-spacing: .08em; }
+    .key-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 12px; margin-top: 8px; }
+    .key-row { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 10px; }
+    kbd {
+      min-width: 56px;
+      border: 1px solid var(--line-strong);
+      border-bottom-width: 3px;
+      background: var(--base);
+      color: var(--paper);
+      padding: 4px 6px;
+      text-align: center;
+      font: 700 9px var(--font-mono);
+    }
+
+    #hud {
+      position: fixed;
+      inset: 0;
+      z-index: 20;
+      display: none;
+      pointer-events: none;
+      font-family: var(--font-ui);
+    }
+    #radar-wrap {
+      position: absolute;
+      left: 18px;
+      top: 18px;
+      width: 174px;
+      border: 1px solid rgb(240 234 220 / .42);
+      border-left: 3px solid var(--accent);
+      background: rgb(11 13 11 / .88);
+      box-shadow: 4px 4px 0 rgb(3 5 3 / .46);
+      padding: 6px;
+    }
+    #radar { width: 160px; height: 160px; image-rendering: pixelated; opacity: .94; }
+    .radar-meta {
+      display: flex;
+      justify-content: space-between;
+      border-top: 1px solid var(--line);
+      padding: 6px 2px 0;
+      color: var(--muted);
+      font: 9px var(--font-mono);
+    }
+    #match-strip {
+      position: absolute;
+      left: 50%;
+      top: 18px;
+      transform: translateX(-50%);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border: 1px solid rgb(240 234 220 / .3);
+      background: rgb(11 13 11 / .9);
+      padding: 7px 12px;
+      color: var(--paper);
+      font: 700 10px var(--font-mono);
+      letter-spacing: .08em;
+    }
+    #shield-badge {
+      display: none;
+      border-left: 2px solid var(--accent);
+      padding-left: 9px;
+      color: var(--accent-hi);
+    }
+    #net-stats {
+      position: absolute;
+      right: 18px;
+      top: 18px;
+      display: grid;
+      grid-template-columns: auto auto;
+      border: 1px solid rgb(240 234 220 / .3);
+      background: rgb(11 13 11 / .9);
+      font: 9px var(--font-mono);
+    }
+    #net-stats span { display: flex; gap: 7px; padding: 7px 9px; color: var(--dim); }
+    #net-stats span + span { border-left: 1px solid var(--line); }
+    #net-stats strong { color: var(--paper); }
+    #killfeed {
+      position: absolute;
+      right: 18px;
+      top: 57px;
+      display: flex;
+      flex-direction: column;
+      align-items: end;
+      gap: 4px;
+    }
+    .kill-row {
+      display: flex;
+      align-items: center;
+      justify-content: end;
+      gap: 6px;
+      min-height: 27px;
+      border-right: 3px solid var(--line-strong);
+      background: rgb(11 13 11 / .88);
+      padding: 5px 8px;
+      color: var(--muted);
+      font-size: 10px;
+      animation: feed-in .14s ease-out;
+    }
+    .kill-row.mine { border-right-color: var(--accent); color: var(--paper); }
+    .kill-row .killer { color: var(--paper); font-weight: 700; }
+    .kill-row .weapon { color: var(--accent-hi); font: 700 9px var(--font-mono); }
+    .kill-row .head-badge { color: #e6bf79; font: 8px var(--font-mono); }
+
+    #player-labels { position: absolute; inset: 0; overflow: hidden; }
+    .player-label {
+      position: absolute;
+      left: 0;
+      top: 0;
+      display: none;
+      align-items: center;
+      gap: 5px;
+      width: 124px;
+      padding-bottom: 7px;
+      transform-origin: 50% 100%;
+      will-change: transform;
+      filter: drop-shadow(0 1px 2px rgb(0 0 0 / .9));
+    }
+    .player-identity { display: grid; flex: 1; min-width: 0; gap: 3px; }
+    .player-name {
+      overflow: hidden;
+      color: #fff;
+      font: 700 10px var(--font-ui);
+      line-height: 1;
+      text-overflow: ellipsis;
+      text-shadow: 0 1px 2px #000;
+      white-space: nowrap;
+    }
+    .player-health { height: 4px; overflow: hidden; border: 1px solid rgb(240 234 220 / .35); background: rgb(11 13 11 / .88); }
+    .player-health i { display: block; width: 100%; height: 100%; transform-origin: left; }
+    .player-hp { width: 21px; color: var(--paper); font: 700 9px var(--font-mono); text-align: right; }
+
+    #crosshair {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 24px;
+      height: 24px;
+      transform: translate(-50%, -50%);
+      --spread: 0px;
+    }
+    .ch-line, .ch-dot { position: absolute; background: #e8e7dd; box-shadow: 0 0 1px #0b0d0b; }
+    .ch-top, .ch-bot { width: 2px; height: 6px; left: 11px; }
+    .ch-top { top: 0; }
+    .ch-top { transform: translateY(calc(-1 * var(--spread))); }
+    .ch-bot { bottom: 0; transform: translateY(var(--spread)); }
+    .ch-left, .ch-right { width: 6px; height: 2px; top: 11px; }
+    .ch-left { left: 0; transform: translateX(calc(-1 * var(--spread))); }
+    .ch-right { right: 0; transform: translateX(var(--spread)); }
+    .ch-dot { width: 2px; height: 2px; left: 11px; top: 11px; background: var(--accent-hi); }
+    #hitmarker {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      display: none;
+      width: 25px;
+      height: 25px;
+      transform: translate(-50%, -50%) rotate(45deg);
+      border: 0 solid var(--danger);
+    }
+    #hitmarker::before, #hitmarker::after {
+      content: "";
+      position: absolute;
+      left: 11px;
+      top: 1px;
+      width: 2px;
+      height: 23px;
+      background: currentColor;
+    }
+    #hitmarker::after { transform: rotate(90deg); }
+    #damage-flash {
+      position: absolute;
+      inset: 0;
+      display: none;
+      background: radial-gradient(circle, transparent 44%, rgb(143 40 34 / .56) 100%);
+    }
+    #vitals {
+      position: absolute;
+      left: 18px;
+      bottom: 18px;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(72px, auto));
+      border: 1px solid rgb(240 234 220 / .3);
+      border-left: 3px solid var(--accent);
+      background: rgb(11 13 11 / .9);
+    }
+    .vital-box { padding: 7px 11px 8px; border-right: 1px solid var(--line); }
+    .vital-box:last-child { border-right: 0; }
+    .vital-title { color: var(--dim); font: 8px var(--font-mono); letter-spacing: .08em; }
+    .vital-val { margin-top: 1px; color: var(--paper); font: 700 24px var(--font-mono); line-height: 1; }
+    #ammo-wrap {
+      position: absolute;
+      right: 18px;
+      bottom: 18px;
+      min-width: 182px;
+      border: 1px solid rgb(240 234 220 / .3);
+      border-right: 3px solid var(--accent);
+      background: rgb(11 13 11 / .9);
+      padding: 8px 11px;
+      text-align: right;
+    }
+    #weapon-name { color: var(--accent-hi); font: 700 10px var(--font-mono); letter-spacing: .05em; }
+    #ammo { color: var(--paper); font: 700 27px var(--font-mono); line-height: 1; }
+    #ammo .reserve { color: var(--dim); font-size: 15px; }
+    .nade-row { margin-top: 4px; color: var(--muted); font: 9px var(--font-mono); }
+    #grenades { color: var(--paper); }
+    #sniper-scope {
+      position: absolute;
+      inset: 0;
+      display: none;
+      background:
+        linear-gradient(90deg, transparent calc(50% - 1px), rgb(240 234 220 / .72) 50%, transparent calc(50% + 1px)),
+        linear-gradient(transparent calc(50% - 1px), rgb(240 234 220 / .72) 50%, transparent calc(50% + 1px)),
+        radial-gradient(circle at center, transparent 0 29%, rgb(4 5 4 / .97) 29.4% 100%);
+    }
+
+    #scoreboard {
+      position: fixed;
+      left: 50%;
+      top: 50%;
+      z-index: 45;
+      display: none;
+      width: min(900px, 94vw);
+      max-height: 82dvh;
+      transform: translate(-50%, -50%);
+      overflow: auto;
+      border: 1px solid var(--line-strong);
+      border-left: 4px solid var(--accent);
+      background: rgb(18 21 18 / .98);
+      box-shadow: var(--shadow);
+      padding: 18px;
+      pointer-events: auto;
+    }
+    .score-head { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+    .score-head h2 { font: 28px var(--font-display); letter-spacing: .04em; }
+    #sb-room-info { color: var(--dim); font: 10px var(--font-mono); }
+    #scoreboard tr.me { background: rgb(201 130 43 / .13); }
+    #scoreboard tr.me td:first-child { border-left: 3px solid var(--accent); }
+
+    .overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 50;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+      background: rgb(5 7 5 / .82);
+      pointer-events: auto;
+    }
+    .dialog {
+      position: relative;
+      width: min(520px, 100%);
+      border: 1px solid var(--line-strong);
+      border-left: 4px solid var(--accent);
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      padding: clamp(18px, 3vw, 28px);
+      animation: dialog-in .16s ease-out;
+    }
+    .dialog.danger { border-left-color: var(--danger); }
+    .dialog-label { color: var(--accent-hi); font: 700 10px var(--font-mono); letter-spacing: .1em; }
+    .dialog.danger .dialog-label { color: #e0857d; }
+    .dialog h2 { margin-top: 7px; font: 32px/.98 var(--font-display); letter-spacing: .035em; }
+    .dialog p { margin-top: 9px; color: var(--muted); font-size: 12px; line-height: 1.55; }
+    #respawn-count { color: var(--accent-hi); font: 700 23px var(--font-mono); }
+    #killer-label { color: var(--paper); }
+    .dialog-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 16px; }
+    .dialog-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 16px; }
+    .dialog-actions button { min-height: 42px; }
+    .settings-stack { display: grid; gap: 13px; margin-top: 16px; }
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+    #bot-control { display: none; border-top: 1px solid var(--line); padding-top: 13px; }
+    .bot-pills { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; margin-top: 7px; }
+    .bot-pill {
+      min-height: 34px;
+      border: 1px solid var(--line-strong);
+      border-radius: 0;
+      background: var(--base);
+      color: var(--muted);
+      font: 700 10px var(--font-mono);
+    }
+    .bot-pill:hover, .bot-pill.active { border-color: var(--accent-hi); background: var(--accent); color: #17110a; }
+
+    @keyframes feed-in { from { opacity: 0; transform: translateX(10px); } }
+    @keyframes dialog-in { from { opacity: 0; transform: translateY(8px); } }
+    @keyframes menu-in { from { opacity: 0; transform: translateY(6px); } }
+    @media (prefers-reduced-motion: no-preference) {
+      .deploy-panel { animation: menu-in .24s ease-out both; }
+      .intel-panel { animation: menu-in .24s .04s ease-out both; }
+      .loading-line { animation: loading-sweep 1.2s linear infinite; }
+    }
+    @keyframes loading-sweep { to { background-position: -200% 0; } }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition-duration: .01ms !important; }
+    }
+    @media (prefers-contrast: more) {
+      :root { --line: #747a6a; --muted: #c8c6bc; --dim: #a4a69c; }
+    }
+
+    @media (max-width: 1040px) {
+      .menu-grid { grid-template-columns: minmax(0, 1.15fr) minmax(330px, .85fr); }
+      .deploy-bottom { grid-template-columns: 1fr; }
+      .key-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 800px) {
+      #menu { padding: 10px; }
+      .menu-frame { min-height: calc(100dvh - 20px); }
+      .command-bar { grid-template-columns: 1fr auto; }
+      .sync-readout { display: none; }
+      .menu-grid { grid-template-columns: 1fr; }
+      .deploy-panel, .intel-panel { overflow: visible; }
+      .intel-panel { min-height: 520px; }
+      .zone-list { grid-template-columns: repeat(3, 1fr); }
+      #radar-wrap { transform: scale(.78); transform-origin: top left; }
+      #match-strip { top: 10px; }
+      #net-stats { right: 10px; top: 10px; }
+      #killfeed { right: 10px; top: 50px; }
+      #vitals { left: 10px; bottom: 10px; }
+      #ammo-wrap { right: 10px; bottom: 10px; }
+    }
+    @media (max-width: 560px) {
+      .wordmark small { display: none; }
+      .wordmark strong { font-size: 22px; }
+      .deploy-title { font-size: 44px; }
+      .loadout-grid, .dialog-fields, .dialog-actions { grid-template-columns: 1fr; }
+      .field.full { grid-column: auto; }
+      .stat-grid { grid-template-columns: 1fr 1fr; }
+      .metric { padding-inline: 7px; }
+      .metric b { font-size: 14px; }
+      .zone-list { grid-template-columns: 1fr 1fr; }
+      .table-shell { min-height: 260px; }
+      #match-strip { display: none; }
+      #radar-wrap { transform: scale(.64); }
+      #net-stats { font-size: 8px; }
+      #vitals { grid-template-columns: repeat(3, 62px); }
+      .vital-box { padding-inline: 7px; }
+      .vital-val { font-size: 20px; }
+      #ammo-wrap { min-width: 145px; }
+      #scoreboard { padding: 10px; }
+      #scoreboard table { min-width: 680px; }
+    }
+  </style>
+</head>
+<body>
+  <main id="menu">
+    <div class="menu-frame">
+      <header class="command-bar">
+        <div class="wordmark">
+          <span class="voxel-mark" aria-hidden="true"></span>
+          <strong>PIXEL STRIKE</strong>
+          <small>体素战术死斗</small>
+        </div>
+        <div class="sync-readout"><b>60 Hz</b> SIM / <b>30 Hz</b> SNAP / <b>100</b> PLAYERS</div>
+        <div class="command-actions">
+          <button class="ghost-button" id="open-settings-btn" type="button">设置</button>
+        </div>
+      </header>
+
+      <div class="menu-grid">
+        <section class="deploy-panel" aria-labelledby="deploy-heading">
+          <header>
+            <div class="mode-label">FREE FOR ALL / VOXEL CITADEL</div>
+            <h1 class="deploy-title" id="deploy-heading">进入要塞<br>赢下每次交火</h1>
+            <p class="deploy-copy">即时复活、自由配装、百人同房。先看角度，再压枪，活到下一次换弹。</p>
+          </header>
+
+          <div class="metric-rail" aria-label="服务器规格">
+            <div class="metric"><b>60 Hz</b><span>权威物理</span></div>
+            <div class="metric"><b>256 × 256</b><span>地图尺寸</span></div>
+            <div class="metric"><b>174</b><span>安全出生点</span></div>
+          </div>
+
+          <div>
+            <div class="loadout-grid">
+              <div class="field full">
+                <label for="name-input">特战代号 / CALLSIGN</label>
+                <input class="control" id="name-input" maxlength="16" autocomplete="nickname" placeholder="输入代号，支持中文">
+              </div>
+              <div class="field">
+                <label for="primary-select">主武器 / PRIMARY</label>
+                <select class="control" id="primary-select">
+                  <option value="3">AK-47 经典突击步枪</option>
+                  <option value="4">M4A4 特战突击步枪</option>
+                  <option value="2">MP5-SD 微声冲锋枪</option>
+                  <option value="5">AWP 重型狙击步枪</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="secondary-select">副武器 / SECONDARY</label>
+                <select class="control" id="secondary-select">
+                  <option value="0">GLOCK-18 战术手枪</option>
+                  <option value="1">DESERT EAGLE 沙漠之鹰</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="loadout-brief" id="weapon-spec-box">
+              <div class="brief-head"><span>主武器数据</span><span id="weapon-spec-tag">突击步枪 / 经典火力</span></div>
+              <div class="stat-grid">
+                <div class="stat-cell"><span>伤害</span><b id="spec-dmg-val">33</b></div>
+                <div class="stat-cell"><span>射速</span><b id="spec-rpm-val">600 RPM</b></div>
+                <div class="stat-cell"><span>爆头倍率</span><b id="spec-head-val">3.7 ×</b></div>
+                <div class="stat-cell"><span>弹药</span><b id="spec-mag-val">30 / 90</b></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="deploy-bottom">
+            <div class="zone-brief">
+              <div class="zone-head"><b>VOXEL CITADEL</b><span>5 个交火区</span></div>
+              <div class="zone-list">
+                <span>北侧城堡</span>
+                <span>南侧古堡</span>
+                <span>中央石桥</span>
+                <span>西侧暗道</span>
+                <span>东侧工坊</span>
+              </div>
+            </div>
+            <button id="join-btn" type="button">进入战场</button>
+          </div>
+        </section>
+
+        <section class="intel-panel" aria-labelledby="leaderboard-heading">
+          <header class="section-head">
+            <div>
+              <h2 id="leaderboard-heading">真实玩家排行榜</h2>
+              <p>只统计产生过战绩的真人玩家</p>
+            </div>
+            <button id="lb-refresh-btn" type="button" aria-label="刷新排行榜">刷新</button>
+          </header>
+
+          <div class="table-shell">
+            <table>
+              <thead><tr><th>排名</th><th>玩家</th><th>击杀</th><th>阵亡</th><th>K/D</th></tr></thead>
+              <tbody id="leaderboard">
+                <tr><td colspan="5"><span class="loading-line">同步战绩中</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="controls-brief">
+            <h3>战术操控 / CONTROLS</h3>
+            <div class="key-grid">
+              <div class="key-row"><kbd>WASD</kbd><span>移动</span></div>
+              <div class="key-row"><kbd>鼠标</kbd><span>观察与瞄准</span></div>
+              <div class="key-row"><kbd>空格</kbd><span>跳跃</span></div>
+              <div class="key-row"><kbd>Ctrl</kbd><span>下蹲</span></div>
+              <div class="key-row"><kbd>左键</kbd><span>射击</span></div>
+              <div class="key-row"><kbd>右键</kbd><span>精确瞄准</span></div>
+              <div class="key-row"><kbd>R</kbd><span>换弹</span></div>
+              <div class="key-row"><kbd>G</kbd><span>投掷手雷</span></div>
+              <div class="key-row"><kbd>1 2 3</kbd><span>切换武器</span></div>
+              <div class="key-row"><kbd>Tab</kbd><span>实时战绩</span></div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <div id="hud" aria-label="战斗界面">
+    <div id="radar-wrap">
+      <canvas id="radar" width="256" height="256" aria-label="战术雷达"></canvas>
+      <div class="radar-meta"><span>SECTOR 256M</span><span>在线 <strong id="online-count">0</strong></span></div>
+    </div>
+
+    <div id="match-strip"><span>FREE FOR ALL</span><span id="shield-badge">出生保护</span></div>
+    <div id="net-stats" aria-live="polite">
+      <span>延迟 <strong id="latency-value">-- ms</strong></span>
+      <span>总带宽 <strong id="bandwidth-value">0.0 Mbps</strong></span>
+    </div>
+    <div id="killfeed" aria-live="polite"></div>
+    <div id="player-labels" aria-hidden="true"></div>
+    <div id="crosshair" aria-hidden="true">
+      <div class="ch-line ch-top"></div><div class="ch-line ch-bot"></div>
+      <div class="ch-line ch-left"></div><div class="ch-line ch-right"></div><div class="ch-dot"></div>
+    </div>
+    <div id="hitmarker" aria-hidden="true"></div>
+    <div id="damage-flash" aria-hidden="true"></div>
+
+    <div id="vitals">
+      <div class="vital-box"><div class="vital-title">HEALTH</div><div class="vital-val" id="hp">100</div></div>
+      <div class="vital-box"><div class="vital-title">ARMOR</div><div class="vital-val" id="armor">100</div></div>
+      <div class="vital-box"><div class="vital-title">RANK</div><div class="vital-val" id="rank-line">-</div></div>
+    </div>
+    <div id="ammo-wrap">
+      <div id="weapon-name">AK-47</div>
+      <div id="ammo">30 <span class="reserve">/ 90</span></div>
+      <div class="nade-row">GRENADE × <span id="grenades">1</span></div>
+    </div>
+    <div id="sniper-scope" aria-hidden="true"></div>
+  </div>
+
+  <section id="scoreboard" aria-label="实时战绩">
+    <div class="score-head">
+      <div><h2>实时战绩</h2><div id="sb-room-info"></div></div>
+      <div class="mode-label">按住 TAB 查看</div>
+    </div>
+    <div class="table-shell">
+      <table>
+        <thead><tr><th>排名</th><th>玩家</th><th>状态</th><th>武器</th><th>击杀</th><th>阵亡</th><th>K/D</th></tr></thead>
+        <tbody id="sb-body"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <div id="death-overlay" class="overlay" role="dialog" aria-modal="true" aria-labelledby="death-title">
+    <div class="dialog danger">
+      <div class="dialog-label">OPERATOR DOWN / 战术阵亡</div>
+      <h2 id="death-title">被 <span id="killer-label">未知目标</span> 击杀</h2>
+      <p><span id="respawn-count">3</span> 秒后重新部署。现在修改配装，复活时立即生效。</p>
+      <div class="dialog-fields">
+        <div class="field">
+          <label for="death-primary">主武器 / PRIMARY</label>
+          <select class="control" id="death-primary">
+            <option value="3">AK-47</option><option value="4">M4A4</option>
+            <option value="2">MP5-SD</option><option value="5">AWP</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="death-secondary">副武器 / SECONDARY</label>
+          <select class="control" id="death-secondary">
+            <option value="0">GLOCK-18</option><option value="1">DESERT EAGLE</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="pause-overlay" class="overlay" role="dialog" aria-modal="true" aria-labelledby="pause-title">
+    <div class="dialog">
+      <div class="dialog-label">SESSION PAUSED</div>
+      <h2 id="pause-title">战术暂停</h2>
+      <p>继续后会重新锁定鼠标，并立即返回当前交火位置。</p>
+      <div class="dialog-actions">
+        <button id="pause-resume-btn" class="secondary-button" type="button">继续战斗</button>
+        <button id="pause-exit-btn" class="danger-button" type="button">退出战场</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="settings-modal" class="overlay" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+    <div class="dialog">
+      <div class="dialog-label">CLIENT SETTINGS</div>
+      <h2 id="settings-title">控制与画质</h2>
+      <div class="settings-stack">
+        <div class="field">
+          <label for="sens-slider">鼠标灵敏度</label>
+          <input id="sens-slider" type="range" min="10" max="100" value="45">
+        </div>
+        <div class="field">
+          <label for="vol-slider">音效音量</label>
+          <input id="vol-slider" type="range" min="0" max="100" value="80">
+        </div>
+        <div class="field">
+          <label for="quality-select">渲染画质</label>
+          <select class="control" id="quality-select">
+            <option value="low">流畅 / 0.75 ×</option>
+            <option value="medium" selected>平衡 / 1.0 ×</option>
+            <option value="high">超清 / DPR 1.5</option>
+          </select>
+        </div>
+        <div id="bot-control">
+          <div class="field"><label>房主人机数量</label></div>
+          <div class="bot-pills">
+            <button class="bot-pill" data-bots="0" type="button">0</button>
+            <button class="bot-pill" data-bots="2" type="button">2</button>
+            <button class="bot-pill active" data-bots="6" type="button">6</button>
+            <button class="bot-pill" data-bots="10" type="button">10</button>
+            <button class="bot-pill" data-bots="12" type="button">12</button>
+          </div>
+        </div>
+      </div>
+      <div class="dialog-actions">
+        <button class="secondary-button" id="close-settings-btn" type="button">保存并返回</button>
+        <button class="danger-button" id="exit-btn" type="button">退出战场</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="disconnect-overlay" class="overlay" role="alertdialog" aria-modal="true" aria-labelledby="disconnect-message">
+    <div class="dialog danger">
+      <div class="dialog-label">NETWORK STATUS</div>
+      <h2 id="disconnect-message">连接中断</h2>
+      <p>正在重新连接并同步世界状态，请稍候。</p>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

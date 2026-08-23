@@ -1,0 +1,26 @@
+services:
+  server:
+    build:
+      context: .
+      dockerfile: server/Dockerfile.remote
+    container_name: pixelstrike-prod-server
+    restart: unless-stopped
+    mem_limit: 512m
+    environment:
+      PORT: 8080
+      DB_PATH: /data/stats.db
+      MAP_PATH: /app/map.json
+    volumes:
+      - ./data:/data
+
+  client:
+    build:
+      context: .
+      dockerfile: client/Dockerfile.remote
+    container_name: pixelstrike-prod-client
+    restart: unless-stopped
+    mem_limit: 128m
+    ports:
+      - "127.0.0.1:12888:80"
+    depends_on:
+      - server

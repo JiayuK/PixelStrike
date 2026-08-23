@@ -1,0 +1,605 @@
+package main
+
+import (
+	"log"
+	"math"
+	"math/rand/v2"
+	"time"
+)
+
+const (
+	KeyForward = 1 << iota
+	KeyBack
+	KeyLeft
+	KeyRight
+	KeyJump
+	KeyCrouch
+	KeyAim
+)
+
+type WeaponDef struct {
+	Id                                                                uint8
+	Name                                                              string
+	Dmg, HeadMult, Rpm, SpreadDeg, MoveSpreadDeg, SpeedMult, ArmorPen float64
+	Mag, Reserve, ReloadMs                                            int
+	Automatic                                                         bool
+}
+
+var Weapons = [7]WeaponDef{
+	{0, "Glock-18", 20, 3.0, 400, .55, 1.5, 1.0, .58, 20, 120, 1400, false},
+	{1, "Desert Eagle", 48, 2.3, 267, .35, 2.0, .98, .93, 7, 35, 1800, false},
+	{2, "MP5-SD", 25, 3.0, 800, .9, 2.1, .98, .63, 30, 120, 1800, true},
+	{3, "AK-47", 33, 4.0, 600, .5, 1.8, .92, .78, 30, 90, 2200, true},
+	{4, "M4A4", 31, 3.6, 666, .45, 1.5, .92, .70, 30, 90, 2100, true},
+	{5, "AWP", 108, 2.5, 41, .08, 3.5, .75, .98, 5, 30, 2800, false},
+	{6, "Knife", 34, 1, 150, 0, 0, 1.08, 1, 0, 0, 0, false},
+}
+
+const (
+	TickRate        = 60
+	TickDT          = 1.0 / TickRate
+	WalkSpeed       = 6.4
+	GroundAccel     = 44.0
+	StopAccel       = 60.0
+	AirAccel        = 9.5
+	CrouchSpeed     = .6
+	Gravity         = -22.0
+	JumpVel         = 7.4
+	MaxRewindTicks  = 8
+	MaxHP           = 100
+	SpawnProtectS   = 2 * time.Second
+	RespawnDelayS   = 3 * time.Second
+	EyeHeight       = 1.6
+	CrouchEyeH      = 1.12
+	StandingHeight  = 1.8
+	CrouchingHeight = 1.3
+)
+
+type PlayerState struct {
+	Id                                                             uint16
+	Name                                                           string
+	Pos, Vel                                                       Vec3
+	Yaw, Pitch                                                     float64
+	HP, Armor                                                      uint8
+	Alive, IsBot, IsAdmin, OnGround, Crouch, JumpLatched           bool
+	Primary, Secondary, ActiveSlot, Weapon                         uint8
+	Mags                                                           [2]int
+	Reserves                                                       [2]int
+	CmdKeys                                                        uint8
+	Reloading                                                      bool
+	ReloadEnd, NextFire, InvincibleUntil, RespawnAt, NextGrenadeAt time.Time
+	LandingUntil, AimStarted                                       time.Time
+	Grenades                                                       int
+	Kills, Deaths                                                  uint16
+	LastInputSeq, LastShotSeq                                      uint16
+	HasShot                                                        bool
+	LastShotAt                                                     time.Time
+	ShotCounter                                                    uint8
+	inputWindowStart                                               time.Time
+	inputCount                                                     int
+}
+
+func (p *PlayerState) ProtectedAt(now time.Time) bool {
+	return p.Alive && now.Before(p.InvincibleUntil)
+}
+func (p *PlayerState) Height() float64 {
+	if p.Crouch {
+		return CrouchingHeight
+	}
+	return StandingHeight
+}
+func (p *PlayerState) ActiveAmmo() (int, int) {
+	switch p.ActiveSlot {
+	case 1:
+		return p.Mags[0], p.Reserves[0]
+	case 2:
+		return p.Mags[1], p.Reserves[1]
+	}
+	return 0, 0
+}
+func (p *PlayerState) setActiveAmmo(mag, reserve int) {
+	if p.ActiveSlot == 1 {
+		p.Mags[0], p.Reserves[0] = mag, reserve
+	}
+	if p.ActiveSlot == 2 {
+		p.Mags[1], p.Reserves[1] = mag, reserve
+	}
+}
+func validLoadout(primary, secondary uint8) bool {
+	return primary >= 2 && primary <= 5 && secondary <= 1
+}
+func (p *PlayerState) ApplyLoadout(primary, secondary uint8) {
+	if !validLoadout(primary, secondary) {
+		primary, secondary = 3, 0
+	}
+	p.Primary, p.Secondary = primary, secondary
+	p.Mags = [2]int{Weapons[primary].Mag, Weapons[secondary].Mag}
+	p.Reserves = [2]int{Weapons[primary].Reserve, Weapons[secondary].Reserve}
+	p.ActiveSlot, p.Weapon, p.Grenades = 1, primary, 1
+	p.Reloading = false
+}
+func (p *PlayerState) SwitchSlot(slot uint8) bool {
+	var weapon uint8
+	switch slot {
+	case 1:
+		weapon = p.Primary
+	case 2:
+		weapon = p.Secondary
+	case 3:
+		weapon = 6
+	default:
+		return false
+	}
+	if p.ActiveSlot == slot {
+		return false
+	}
+	p.ActiveSlot, p.Weapon, p.Reloading, p.AimStarted = slot, weapon, false, time.Time{}
+	p.NextFire = time.Now().Add(220 * time.Millisecond)
+	return true
+}
+
+type poseSample struct {
+	Tick   uint32
+	Pos    Vec3
+	Crouch bool
+}
+
+type poseHistory struct {
+	samples [16]poseSample
+	next    int
+	count   int
+}
+
+func (r *Room) Step(now time.Time) {
+	r.StepBots(now)
+	r.StepGrenades(now)
+	for _, pl := range r.Players {
+		p := &pl.PlayerState
+		if !p.Alive {
+			if !p.RespawnAt.IsZero() && !now.Before(p.RespawnAt) {
+				r.Respawn(p, now)
+			}
+			continue
+		}
+		r.Move(p, now)
+		r.CheckSanity(p)
+	}
+	r.recordHistory()
+}
+
+func approach(cur, target, amount float64) float64 {
+	if cur < target {
+		return math.Min(target, cur+amount)
+	}
+	return math.Max(target, cur-amount)
+}
+
+func (r *Room) Move(p *PlayerState, now time.Time) {
+	wasGrounded := p.OnGround
+	k := p.CmdKeys
+	fwd, side := 0.0, 0.0
+	if k&KeyForward != 0 {
+		fwd++
+	}
+	if k&KeyBack != 0 {
+		fwd--
+	}
+	if k&KeyRight != 0 {
+		side++
+	}
+	if k&KeyLeft != 0 {
+		side--
+	}
+	moving := fwd != 0 || side != 0
+	if fwd != 0 && side != 0 {
+		fwd /= math.Sqrt2
+		side /= math.Sqrt2
+	}
+	if k&KeyCrouch != 0 {
+		p.Crouch = true
+	} else if !p.Crouch || r.World.CanOccupy(p.Pos, StandingHeight) {
+		p.Crouch = false
+	}
+	speed := WalkSpeed * Weapons[min(int(p.Weapon), len(Weapons)-1)].SpeedMult
+	if p.Crouch {
+		speed *= CrouchSpeed
+	}
+	sin, cos := math.Sin(p.Yaw), math.Cos(p.Yaw)
+	wishX, wishZ := (side*cos-fwd*sin)*speed, (-fwd*cos-side*sin)*speed
+	accel := GroundAccel * TickDT
+	if !p.OnGround {
+		accel = AirAccel * TickDT
+	}
+	if !moving && p.OnGround {
+		accel = StopAccel * TickDT
+	}
+	p.Vel.X = approach(p.Vel.X, wishX, accel)
+	p.Vel.Z = approach(p.Vel.Z, wishZ, accel)
+	jumpPressed := k&KeyJump != 0
+	if jumpPressed && !p.JumpLatched && p.OnGround {
+		p.Vel.Y = JumpVel
+		p.OnGround = false
+	}
+	p.JumpLatched = jumpPressed
+	p.Vel.Y += Gravity * TickDT
+	p.OnGround = r.World.MoveAABB(&p.Pos, &p.Vel, TickDT, p.Height(), p.OnGround)
+	if !wasGrounded && p.OnGround {
+		p.LandingUntil = now.Add(140 * time.Millisecond)
+	}
+}
+
+func (r *Room) CheckSanity(p *PlayerState) {
+	bad := math.IsNaN(p.Pos.X) || math.IsNaN(p.Pos.Y) || math.IsNaN(p.Pos.Z) ||
+		math.Abs(p.Pos.X) > r.World.Size[0]/2+5 || math.Abs(p.Pos.Z) > r.World.Size[1]/2+5 || p.Pos.Y < -10 ||
+		!r.World.CanOccupy(p.Pos, p.Height())
+	if bad {
+		log.Printf("player %d (%s): invalid position reset", p.Id, p.Name)
+		p.Pos = r.BestSpawn(p)
+		p.Vel = Vec3{}
+		p.OnGround, p.Crouch = true, false
+	}
+}
+
+func (r *Room) TryFire(p *PlayerState, yaw, pitch float64, mode uint8, seenTick uint32, shotSeq uint16, now time.Time) bool {
+	if !p.Alive || p.Reloading || now.Before(p.NextFire) || !finite(yaw) || !finite(pitch) {
+		return false
+	}
+	if p.HasShot && shotSeq == p.LastShotSeq {
+		return false
+	}
+	p.HasShot, p.LastShotSeq = true, shotSeq
+	weapon := min(int(p.Weapon), len(Weapons)-1)
+	def := Weapons[weapon]
+	mag, reserve := p.ActiveAmmo()
+	_ = reserve
+	if weapon < 6 && mag <= 0 {
+		return false
+	}
+	if weapon < 6 {
+		p.setActiveAmmo(mag-1, reserve)
+	}
+	gap := time.Duration(60 / def.Rpm * float64(time.Second))
+	if weapon == 6 && mode&1 != 0 {
+		gap = time.Second
+	}
+	p.NextFire = now.Add(gap)
+	if now.Sub(p.LastShotAt) > 420*time.Millisecond {
+		p.ShotCounter = 0
+	}
+	p.LastShotAt = now
+	p.ShotCounter++
+	if p.ProtectedAt(now) {
+		p.InvincibleUntil = time.Time{}
+	}
+
+	origin := Vec3{p.Pos.X, p.Pos.Y + EyeHeight, p.Pos.Z}
+	if p.Crouch {
+		origin.Y = p.Pos.Y + CrouchEyeH
+	}
+	dir := AimDir(yaw, pitch)
+	maxDist := 200.0
+	if weapon == 6 {
+		maxDist = 1.65
+	}
+	if weapon < 6 {
+		spread := def.SpreadDeg
+		if p.Vel.X*p.Vel.X+p.Vel.Z*p.Vel.Z > .25 {
+			spread = def.MoveSpreadDeg
+		}
+		if !p.OnGround {
+			spread = math.Max(spread, def.MoveSpreadDeg*2.2+1)
+		}
+		if p.Crouch {
+			spread *= .78
+		}
+		if now.Before(p.LandingUntil) {
+			spread = math.Max(spread, def.MoveSpreadDeg*1.35)
+		}
+		if weapon == 5 && (mode&0x80 == 0 || p.AimStarted.IsZero() || now.Sub(p.AimStarted) < 180*time.Millisecond) {
+			spread = math.Max(spread, 3.5)
+		}
+		dir = patternDir(dir, spread, int(p.ShotCounter), weapon)
+	}
+	_, worldDist := r.World.Raycast(origin, dir, maxDist)
+	if seenTick > r.tick {
+		seenTick = r.tick
+	}
+	if r.tick-seenTick > MaxRewindTicks {
+		seenTick = r.tick - MaxRewindTicks
+	}
+	var target *PlayerState
+	targetDist, hitY, hitHeight := maxDist, 0.0, StandingHeight
+	for _, other := range r.Players {
+		o := &other.PlayerState
+		if o == p || !o.Alive || o.ProtectedAt(now) {
+			continue
+		}
+		pose := r.poseAt(o.Id, seenTick, o.Pos, o.Crouch)
+		height := StandingHeight
+		if pose.Crouch {
+			height = CrouchingHeight
+		}
+		if d, ok := RayPlayerAABBHeight(origin, dir, pose.Pos, height, math.Min(worldDist, maxDist)); ok && d < targetDist {
+			target, targetDist, hitY, hitHeight = o, d, origin.Y+dir.Y*d-pose.Pos.Y, height
+		}
+	}
+	if target == nil {
+		return true
+	}
+	headshot := weapon < 6 && hitY >= hitHeight-.4
+	dmg := def.Dmg
+	if weapon == 6 {
+		if mode&1 != 0 {
+			dmg = 55
+		}
+		toAttacker := norm(Vec3{p.Pos.X - target.Pos.X, 0, p.Pos.Z - target.Pos.Z})
+		forward := Vec3{-math.Sin(target.Yaw), 0, -math.Cos(target.Yaw)}
+		if toAttacker.X*forward.X+toAttacker.Z*forward.Z < -.5 {
+			dmg *= 2
+		}
+	} else if headshot {
+		dmg *= def.HeadMult
+	} else if hitY <= .65 {
+		dmg *= .75
+	}
+	r.Damage(p, target, dmg, headshot, uint8(weapon), now)
+	return true
+}
+
+func (r *Room) Damage(attacker, victim *PlayerState, dmg float64, headshot bool, weapon uint8, now time.Time) {
+	if !victim.Alive || victim.ProtectedAt(now) {
+		return
+	}
+	actual := dmg
+	if victim.Armor > 0 && weapon < 6 {
+		actual = dmg * Weapons[weapon].ArmorPen
+		lost := uint8(math.Min(float64(victim.Armor), math.Ceil((dmg-actual)*.5)))
+		victim.Armor -= lost
+	}
+	d := uint8(math.Max(1, math.Min(actual, float64(victim.HP))))
+	victim.HP -= d
+	hs := uint8(0)
+	if headshot {
+		hs = 1
+	}
+	r.Emit(Event{Type: EvHit, Player: attacker.Id, Victim: victim.Id, Dmg: d, Headshot: hs})
+	if victim.HP > 0 {
+		return
+	}
+	r.Emit(Event{Type: EvKill, Killer: attacker.Id, Victim: victim.Id, Weapon: weapon, Headshot: hs})
+	attacker.Kills++
+	victim.Deaths++
+	if !attacker.IsBot {
+		r.Store.Accumulate(attacker.Name, 1, 0)
+	}
+	if !victim.IsBot {
+		r.Store.Accumulate(victim.Name, 0, 1)
+	}
+	victim.Alive, victim.Reloading = false, false
+	victim.RespawnAt = now.Add(RespawnDelayS)
+}
+
+func (r *Room) StartReload(p *PlayerState, now time.Time) bool {
+	if !p.Alive || p.Reloading || p.ActiveSlot > 2 {
+		return false
+	}
+	mag, reserve := p.ActiveAmmo()
+	def := Weapons[p.Weapon]
+	if mag >= def.Mag || reserve <= 0 {
+		return false
+	}
+	p.Reloading = true
+	p.ReloadEnd = now.Add(time.Duration(def.ReloadMs) * time.Millisecond)
+	p.NextFire = p.ReloadEnd
+	r.Emit(Event{Type: EvReloadStart, Player: p.Id, Ms: uint16(def.ReloadMs)})
+	return true
+}
+
+func (r *Room) FinishReloads(now time.Time) {
+	for _, pl := range r.Players {
+		p := &pl.PlayerState
+		if !p.Reloading || now.Before(p.ReloadEnd) {
+			continue
+		}
+		mag, reserve := p.ActiveAmmo()
+		need := Weapons[p.Weapon].Mag - mag
+		take := min(need, reserve)
+		p.setActiveAmmo(mag+take, reserve-take)
+		p.Reloading = false
+	}
+}
+
+func (r *Room) Respawn(p *PlayerState, now time.Time) {
+	p.Pos = r.BestSpawn(p)
+	p.Vel = Vec3{}
+	p.HP = MaxHP
+	p.Armor = 100
+	p.Alive = true
+	p.OnGround = true
+	p.ApplyLoadout(p.Primary, p.Secondary)
+	p.InvincibleUntil = now.Add(SpawnProtectS)
+	p.LandingUntil, p.AimStarted = time.Time{}, time.Time{}
+	p.RespawnAt = time.Time{}
+	r.Emit(Event{Type: EvRespawn, Player: p.Id, Origin: p.Pos})
+}
+
+func (r *Room) BestSpawn(p *PlayerState) Vec3 {
+	if len(r.World.Spawns) == 0 {
+		return Vec3{}
+	}
+	type scored struct {
+		pos   Vec3
+		score float64
+	}
+	best := [4]scored{{score: -1}, {score: -1}, {score: -1}, {score: -1}}
+	considered := 0
+	stride := max(1, (len(r.World.Spawns)+63)/64)
+	start := rand.IntN(stride)
+	for i := start; i < len(r.World.Spawns); i += stride {
+		s := r.World.Spawns[i]
+		pos := Vec3{s[0], s[1], s[2]}
+		score := 1e9
+		for _, other := range r.Players {
+			o := &other.PlayerState
+			if o == p || !o.Alive {
+				continue
+			}
+			d := math.Sqrt(dist2(pos, o.Pos))
+			if d < score {
+				score = d
+			}
+			if d < 24 {
+				dir := norm(Vec3{o.Pos.X - pos.X, o.Pos.Y + EyeHeight - pos.Y - EyeHeight, o.Pos.Z - pos.Z})
+				if hit, hd := r.World.Raycast(Vec3{pos.X, pos.Y + EyeHeight, pos.Z}, dir, d); !hit || hd >= d-.5 {
+					score -= 18
+				}
+			}
+		}
+		candidate := scored{pos, score}
+		for rank := range best {
+			if candidate.score > best[rank].score {
+				candidate, best[rank] = best[rank], candidate
+			}
+		}
+		considered++
+	}
+	n := min(4, considered)
+	return best[rand.IntN(n)].pos
+}
+
+type Grenade struct {
+	Id, ThrowerId uint16
+	Pos, Vel      Vec3
+	ExplodesAt    time.Time
+	Active        bool
+}
+
+func (r *Room) ThrowGrenade(p *PlayerState, yaw, pitch float64, now time.Time) {
+	if !p.Alive || p.Grenades <= 0 || now.Before(p.NextGrenadeAt) {
+		return
+	}
+	p.Grenades--
+	p.NextGrenadeAt = now.Add(2 * time.Second)
+	cp := math.Cos(pitch)
+	g := &Grenade{Id: r.nextNadeId, ThrowerId: p.Id, Pos: Vec3{p.Pos.X, p.Pos.Y + EyeHeight, p.Pos.Z}, Vel: Vec3{-math.Sin(yaw) * cp * 22, math.Sin(pitch)*22 + 3.2, -math.Cos(yaw) * cp * 22}, ExplodesAt: now.Add(1800 * time.Millisecond), Active: true}
+	r.nextNadeId++
+	r.Grenades = append(r.Grenades, g)
+	r.Emit(Event{Type: EvNadeThrow, Player: p.Id, Origin: g.Pos, Dir: g.Vel})
+}
+func (r *Room) StepGrenades(now time.Time) {
+	live := r.Grenades[:0]
+	for _, g := range r.Grenades {
+		if !g.Active {
+			continue
+		}
+		if !now.Before(g.ExplodesAt) {
+			g.Active = false
+			r.Emit(Event{Type: EvExplosion, Origin: g.Pos})
+			var thrower *PlayerState
+			for _, pl := range r.Players {
+				if pl.Id == g.ThrowerId {
+					thrower = &pl.PlayerState
+					break
+				}
+			}
+			if thrower != nil {
+				for _, pl := range r.Players {
+					v := &pl.PlayerState
+					if v == thrower || !v.Alive || v.ProtectedAt(now) {
+						continue
+					}
+					d := math.Sqrt(dist2(v.Pos, g.Pos))
+					if d > 7.5 {
+						continue
+					}
+					dir := norm(Vec3{v.Pos.X - g.Pos.X, v.Pos.Y + .9 - g.Pos.Y, v.Pos.Z - g.Pos.Z})
+					if hit, hd := r.World.Raycast(g.Pos, dir, d); hit && hd < d-.5 {
+						continue
+					}
+					r.Damage(thrower, v, 85*(1-d/7.5), false, 6, now)
+				}
+			}
+			continue
+		}
+		g.Vel.Y += Gravity * TickDT
+		g.Pos.X += g.Vel.X * TickDT
+		g.Pos.Y += g.Vel.Y * TickDT
+		g.Pos.Z += g.Vel.Z * TickDT
+		if g.Pos.Y < 0 {
+			g.Pos.Y = 0
+			g.Vel.Y = -g.Vel.Y * .45
+			g.Vel.X *= .75
+			g.Vel.Z *= .75
+		}
+		live = append(live, g)
+	}
+	r.Grenades = live
+}
+
+func (r *Room) recordHistory() {
+	if r.history == nil {
+		r.history = make(map[uint16]*poseHistory)
+	}
+	for _, p := range r.Players {
+		h := r.history[p.Id]
+		if h == nil {
+			h = &poseHistory{}
+			r.history[p.Id] = h
+		}
+		h.samples[h.next] = poseSample{r.tick, p.Pos, p.Crouch}
+		h.next = (h.next + 1) % len(h.samples)
+		if h.count < len(h.samples) {
+			h.count++
+		}
+	}
+}
+func (r *Room) poseAt(id uint16, tick uint32, fallback Vec3, crouch bool) poseSample {
+	h := r.history[id]
+	best := poseSample{tick, fallback, crouch}
+	if h == nil {
+		return best
+	}
+	start := (h.next - h.count + len(h.samples)) % len(h.samples)
+	for i := 0; i < h.count; i++ {
+		s := h.samples[(start+i)%len(h.samples)]
+		if s.Tick <= tick {
+			best = s
+		} else {
+			break
+		}
+	}
+	return best
+}
+func dist2(a, b Vec3) float64 { dx, dy, dz := a.X-b.X, a.Y-b.Y, a.Z-b.Z; return dx*dx + dy*dy + dz*dz }
+func (p *PlayerState) InputRateOK(now time.Time) bool {
+	if p.inputWindowStart.IsZero() || now.Sub(p.inputWindowStart) > 5*time.Second {
+		p.inputWindowStart = now
+		p.inputCount = 0
+	}
+	p.inputCount++
+	return p.inputCount <= 90*5
+}
+func AimDir(yaw, pitch float64) Vec3 {
+	cp := math.Cos(pitch)
+	return Vec3{-math.Sin(yaw) * cp, math.Sin(pitch), -math.Cos(yaw) * cp}
+}
+func patternDir(dir Vec3, deg float64, shot, weapon int) Vec3 {
+	if deg <= 0 {
+		return dir
+	}
+	rad := deg * math.Pi / 180
+	right := norm(cross(dir, Vec3{0, 1, 0}))
+	up := cross(right, dir)
+	a := math.Sin(float64(shot*17+weapon*31)) * rad * .72
+	b := math.Cos(float64(shot*11+weapon*7))*rad + float64(max(0, shot-1))*rad*.08
+	return norm(Vec3{dir.X + right.X*a + up.X*b, dir.Y + right.Y*a + up.Y*b, dir.Z + right.Z*a + up.Z*b})
+}
+func cross(a, b Vec3) Vec3 { return Vec3{a.Y*b.Z - a.Z*b.Y, a.Z*b.X - a.X*b.Z, a.X*b.Y - a.Y*b.X} }
+func norm(v Vec3) Vec3 {
+	l := math.Sqrt(v.X*v.X + v.Y*v.Y + v.Z*v.Z)
+	if l < 1e-9 {
+		return v
+	}
+	return Vec3{v.X / l, v.Y / l, v.Z / l}
+}
+func finite(v float64) bool { return !math.IsNaN(v) && !math.IsInf(v, 0) }

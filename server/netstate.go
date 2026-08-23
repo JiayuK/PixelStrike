@@ -1,0 +1,235 @@
+package main
+
+import "math"
+
+const maxSnapshotBytes = 2300 // ~69 KB/s at 30 Hz, before small event traffic.
+
+type quantState struct {
+	x, y, z                        int16
+	yaw, pitch                     int16 // half-degrees
+	vx, vz                         int8  // decimetres/second
+	hp, armor, state, weapon, shot uint8
+}
+
+func quantizeState(p *PlayerState, nowUnixNano int64) quantState {
+	state := uint8(0)
+	if p.Alive {
+		state |= 1
+	}
+	if p.Alive && nowUnixNano < p.InvincibleUntil.UnixNano() {
+		state |= 2
+	}
+	if p.Crouch {
+		state |= 4
+	}
+	if p.OnGround {
+		state |= 8
+	}
+	if p.CmdKeys&KeyAim != 0 {
+		state |= 16
+	}
+	return quantState{
+		x: q16(p.Pos.X * 100), y: q16(p.Pos.Y * 100), z: q16(p.Pos.Z * 100),
+		yaw: angleHalfDeg(p.Yaw), pitch: angleHalfDeg(p.Pitch),
+		vx: q8(p.Vel.X * 10), vz: q8(p.Vel.Z * 10),
+		hp: p.HP, armor: p.Armor, state: state, weapon: p.Weapon, shot: p.ShotCounter,
+	}
+}
+
+func q16(v float64) int16 { return int16(max(-32768, min(32767, int(math.Round(v))))) }
+func q8(v float64) int8   { return int8(max(-128, min(127, int(math.Round(v))))) }
+func angleHalfDeg(rad float64) int16 {
+	deg2 := int(math.Round(rad * 360 / math.Pi))
+	for deg2 > 360 {
+		deg2 -= 720
+	}
+	for deg2 < -360 {
+		deg2 += 720
+	}
+	return int16(deg2)
+}
+
+func (p *Player) BuildSnapshot(tick uint32, players []*Player, nowUnixNano int64) []byte {
+	if p.netCache == nil {
+		p.netCache = make(map[uint16]quantState)
+		p.netFullAt = make(map[uint16]uint32)
+	}
+	w := &Buf{b: make([]byte, 1, maxSnapshotBytes)}
+	w.b[0] = OpSnapshot
+	w.U32(tick)
+	w.U16(p.LastInputSeq)
+	w.U8(0)
+	countAt := len(w.b) - 1
+	count := 0
+
+	for tier := 0; tier < 3; tier++ {
+		for _, other := range players {
+			isSelf := other.Id == p.Id
+			dx := other.Pos.X - p.Pos.X
+			dz := other.Pos.Z - p.Pos.Z
+			distSq := dx*dx + dz*dz
+			inTier := false
+			switch tier {
+			case 0:
+				inTier = isSelf || distSq <= 48*48
+			case 1:
+				inTier = !isSelf && distSq > 48*48 && distSq <= 112*112
+			case 2:
+				inTier = !isSelf && distSq > 112*112 && distSq <= 180*180
+			}
+			if !inTier {
+				continue
+			}
+			if tier == 1 && tick%6 != 0 {
+				continue
+			}
+			moving := other.Vel.X*other.Vel.X+other.Vel.Z*other.Vel.Z > .0025
+			if tier == 2 && ((moving && tick%12 != 0) || (!moving && tick%60 != 0)) {
+				continue
+			}
+			if len(w.b) >= maxSnapshotBytes {
+				break
+			}
+
+			cur := quantizeState(&other.PlayerState, nowUnixNano)
+			prev, seen := p.netCache[other.Id]
+			full := !seen || tick-p.netFullAt[other.Id] >= 120
+			if !appendStateDelta(w, other.Id, prev, cur, full) {
+				continue
+			}
+			p.netCache[other.Id] = cur
+			if full {
+				p.netFullAt[other.Id] = tick
+			}
+			count++
+		}
+	}
+	w.b[countAt] = byte(count)
+	return w.Bytes()
+}
+
+func appendStateDelta(w *Buf, id uint16, prev, cur quantState, full bool) bool {
+	var flag uint16
+	dx := int(cur.x) - int(prev.x)
+	dy := int(cur.y) - int(prev.y)
+	dz := int(cur.z) - int(prev.z)
+	dyaw := wrapHalfDeg(int(cur.yaw) - int(prev.yaw))
+	dpitch := int(cur.pitch) - int(prev.pitch)
+	var deltaPos, deltaAngles bool
+	if !full {
+		deltaPos = inI8(dx) && inI8(dy) && inI8(dz)
+		deltaAngles = inI8(dyaw) && inI8(dpitch)
+		if cur.x != prev.x || cur.y != prev.y || cur.z != prev.z {
+			if deltaPos {
+				flag |= 1 << 0
+			} else {
+				flag |= 1 << 1
+			}
+		}
+		if cur.yaw != prev.yaw || cur.pitch != prev.pitch {
+			if deltaAngles {
+				flag |= 1 << 2
+			} else {
+				flag |= 1 << 3
+			}
+		}
+		if cur.vx != prev.vx || cur.vz != prev.vz {
+			flag |= 1 << 4
+		}
+		if cur.hp != prev.hp || cur.armor != prev.armor {
+			flag |= 1 << 5
+		}
+		if cur.state != prev.state {
+			flag |= 1 << 6
+		}
+		if cur.weapon != prev.weapon {
+			flag |= 1 << 7
+		}
+		if cur.shot != prev.shot {
+			flag |= 1 << 8
+		}
+	}
+	if full || flag == 0 && (cur.x != prev.x || cur.y != prev.y || cur.z != prev.z || cur.yaw != prev.yaw || cur.pitch != prev.pitch) {
+		flag = 1 << 15
+	}
+	if flag == 0 {
+		return false
+	}
+	start := len(w.b)
+	w.U16(id)
+	w.U16(flag)
+	if flag == 1<<15 {
+		writeFullState(w, cur)
+		if len(w.b) > maxSnapshotBytes {
+			w.b = w.b[:start]
+			return false
+		}
+		return true
+	}
+	if flag&(1<<0) != 0 {
+		w.I8(int8(dx))
+		w.I8(int8(dy))
+		w.I8(int8(dz))
+	}
+	if flag&(1<<1) != 0 {
+		w.I16(cur.x)
+		w.I16(cur.y)
+		w.I16(cur.z)
+	}
+	if flag&(1<<2) != 0 {
+		w.I8(int8(dyaw))
+		w.I8(int8(dpitch))
+	}
+	if flag&(1<<3) != 0 {
+		w.I16(cur.yaw)
+		w.I16(cur.pitch)
+	}
+	if flag&(1<<4) != 0 {
+		w.I8(cur.vx)
+		w.I8(cur.vz)
+	}
+	if flag&(1<<5) != 0 {
+		w.U8(cur.hp)
+		w.U8(cur.armor)
+	}
+	if flag&(1<<6) != 0 {
+		w.U8(cur.state)
+	}
+	if flag&(1<<7) != 0 {
+		w.U8(cur.weapon)
+	}
+	if flag&(1<<8) != 0 {
+		w.U8(cur.shot)
+	}
+	if len(w.b) > maxSnapshotBytes {
+		w.b = w.b[:start]
+		return false
+	}
+	return true
+}
+
+func writeFullState(w *Buf, s quantState) {
+	w.I16(s.x)
+	w.I16(s.y)
+	w.I16(s.z)
+	w.I16(s.yaw)
+	w.I16(s.pitch)
+	w.I8(s.vx)
+	w.I8(s.vz)
+	w.U8(s.hp)
+	w.U8(s.armor)
+	w.U8(s.state)
+	w.U8(s.weapon)
+	w.U8(s.shot)
+}
+
+func inI8(v int) bool { return v >= -128 && v <= 127 }
+func wrapHalfDeg(v int) int {
+	for v > 360 {
+		v -= 720
+	}
+	for v < -360 {
+		v += 720
+	}
+	return v
+}

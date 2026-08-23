@@ -1,0 +1,6 @@
+FROM scratch
+WORKDIR /app
+COPY --chmod=755 server/pixelstrike-linux-amd64 ./pixelstrike
+COPY map.json ./map.json
+EXPOSE 8080
+ENTRYPOINT ["/app/pixelstrike"]
