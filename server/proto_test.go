@@ -9,10 +9,43 @@ import (
 	"unicode/utf8"
 )
 
-func TestWelcomeV3(t *testing.T) {
+func TestWelcomeV4(t *testing.T) {
 	b := Welcome(42, 0x12345678)
 	if len(b) != 8 || b[0] != OpWelcome || b[1] != ProtocolVersion || binary.LittleEndian.Uint16(b[2:]) != 42 {
 		t.Fatalf("bad welcome: %v", b)
+	}
+}
+
+func TestQueuedInputKeepsLatest(t *testing.T) {
+	p := &Player{}
+	now := time.Now()
+	p.queueInput(1, KeyForward, .1, .2, now)
+	p.queueInput(2, KeyRight|KeyAim, .3, .4, now.Add(time.Millisecond))
+	p.applyQueuedInput()
+	if p.LastInputSeq != 2 || p.CmdKeys != KeyRight|KeyAim || p.Yaw != .3 || p.Pitch != .4 || !p.AimStarted.Equal(now.Add(time.Millisecond)) {
+		t.Fatalf("applied input = seq:%d keys:%d yaw:%v pitch:%v aim:%v", p.LastInputSeq, p.CmdKeys, p.Yaw, p.Pitch, p.AimStarted)
+	}
+}
+
+func TestSnapshotDropForcesKeyframe(t *testing.T) {
+	p := &Player{send: make(chan []byte, 1), latestSnapshot: make(chan []byte, 1), snapshotBuffers: make(chan []byte, 2)}
+	p.Send([]byte{OpSnapshot, 1})
+	p.Send([]byte{OpSnapshot, 2})
+	select {
+	case got := <-p.latestSnapshot:
+		t.Fatalf("kept undecodable delta snapshot %v", got)
+	default:
+	}
+	if !p.netReset.Load() || len(p.snapshotBuffers) != 2 {
+		t.Fatal("dropped snapshots did not reset the baseline and release buffers")
+	}
+	p.PlayerState = PlayerState{Id: 1, Alive: true, HP: 100}
+	state := quantizeState(&p.PlayerState, time.Now().UnixNano())
+	p.netCache = map[uint16]quantState{1: state}
+	p.netFullAt = map[uint16]uint32{1: 1}
+	snapshot := p.BuildSnapshot(2, []*Player{p}, []quantState{state})
+	if len(snapshot) < 12 || binary.LittleEndian.Uint16(snapshot[10:]) != 0x8000 {
+		t.Fatalf("snapshot after drop is not a keyframe: %v", snapshot)
 	}
 }
 
@@ -252,6 +285,17 @@ func TestMapSupportsHundredPlayerRoom(t *testing.T) {
 				t.Fatalf("spawn %d intersects map: %v", i, spawn)
 			}
 		}
+	}
+}
+
+func TestBestSpawnNeverReturnsUnscoredOrigin(t *testing.T) {
+	w := &World{Spawns: [][3]float64{{10, 0, 10}, {20, 0, 10}, {10, 0, 20}, {20, 0, 20}}}
+	r := &Room{World: w}
+	for id, spawn := range w.Spawns {
+		r.Players = append(r.Players, &Player{PlayerState: PlayerState{Id: uint16(id + 1), Alive: true, Pos: Vec3{spawn[0], spawn[1], spawn[2]}}})
+	}
+	if got := r.BestSpawn(&PlayerState{}); got == (Vec3{}) {
+		t.Fatal("crowded spawn selection returned unscored origin")
 	}
 }
 

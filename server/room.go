@@ -93,6 +93,9 @@ func (r *Room) Run() {
 			r.mu.Unlock()
 			return
 		}
+		for _, p := range r.Players {
+			p.applyQueuedInput()
+		}
 		r.FinishReloads(now)
 		r.Step(now)
 		var evts []Event

@@ -439,7 +439,7 @@ func (r *Room) BestSpawn(p *PlayerState) Vec3 {
 		pos   Vec3
 		score float64
 	}
-	best := [4]scored{{score: -1}, {score: -1}, {score: -1}, {score: -1}}
+	best := [4]scored{{score: -math.MaxFloat64}, {score: -math.MaxFloat64}, {score: -math.MaxFloat64}, {score: -math.MaxFloat64}}
 	considered := 0
 	stride := max(1, (len(r.World.Spawns)+63)/64)
 	start := rand.IntN(stride)

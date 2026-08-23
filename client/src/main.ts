@@ -926,13 +926,15 @@ function frame(t: number) {
   displayedCrosshair += (targetCrosshair - displayedCrosshair) * (1 - Math.exp(-dt * crosshairResponse));
   hud.setCrosshair(displayedCrosshair);
 
-  remotes.update(t);
-  particles.update(dt, t, world);
-  world?.animate(t);
-  renderer.render(scene, camera);
-  if (t - lastLabels >= 1000 / 30) {
-    lastLabels = t;
-    remotes.updateLabels(camera, world);
+  if (joined) {
+    remotes.update(t);
+    particles.update(dt, t, world);
+    world?.animate(t);
+    renderer.render(scene, camera);
+    if (t - lastLabels >= 1000 / 30) {
+      lastLabels = t;
+      remotes.updateLabels(camera, world);
+    }
   }
 }
 requestAnimationFrame(frame);

@@ -66,7 +66,11 @@ func (p *Player) BuildSnapshot(tick uint32, players []*Player, states []quantSta
 		p.netCache = make(map[uint16]quantState)
 		p.netFullAt = make(map[uint16]uint32)
 	}
-	w := &Buf{b: make([]byte, 1, min(maxSnapshotBytes, 8+len(players)*21))}
+	if p.netReset.Swap(false) {
+		clear(p.netCache)
+		clear(p.netFullAt)
+	}
+	w := &Buf{b: p.snapshotBuffer(min(maxSnapshotBytes, 8+len(players)*21))}
 	w.b[0] = OpSnapshot
 	w.U32(tick)
 	w.U16(p.LastInputSeq)
@@ -112,6 +116,27 @@ func (p *Player) BuildSnapshot(tick uint32, players []*Player, states []quantSta
 	}
 	w.b[countAt] = byte(count)
 	return w.Bytes()
+}
+
+func (p *Player) snapshotBuffer(size int) []byte {
+	if p.snapshotBuffers != nil {
+		select {
+		case buffer := <-p.snapshotBuffers:
+			return buffer[:1]
+		default:
+		}
+	}
+	return make([]byte, 1, size)
+}
+
+func (p *Player) releaseSnapshot(buffer []byte) {
+	if p.snapshotBuffers == nil {
+		return
+	}
+	select {
+	case p.snapshotBuffers <- buffer[:0]:
+	default:
+	}
 }
 
 func appendStateDelta(w *Buf, id uint16, prev, cur quantState, full bool) bool {

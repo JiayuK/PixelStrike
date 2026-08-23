@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"log"
@@ -10,15 +11,17 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gorilla/websocket"
 )
 
 const (
-	writeChanSize = 16
-	maxMsgSize    = 4096
-	readDeadlineS = 30
+	writeChanSize      = 16
+	writeDeadlineEvery = 30
+	maxMsgSize         = 4096
+	readDeadlineS      = 30
 )
 
 var upgrader = websocket.Upgrader{ReadBufferSize: 2048, WriteBufferSize: 2048, CheckOrigin: sameOrigin}
@@ -101,7 +104,10 @@ type Player struct {
 	PlayerState
 	ws                    *websocket.Conn
 	send                  chan []byte
+	latestSnapshot        chan []byte
+	snapshotBuffers       chan []byte
 	sendMu                sync.RWMutex
+	inputMu               sync.Mutex
 	closeOnce             sync.Once
 	Room                  *Room
 	Hub                   *Hub
@@ -112,6 +118,16 @@ type Player struct {
 	lastSelf              compactSelfState
 	hasLastSelf           bool
 	rosterRequested       bool
+	queuedInput           playerInput
+	hasQueuedInput        bool
+	netReset              atomic.Bool
+}
+
+type playerInput struct {
+	seq        uint16
+	keys       uint8
+	yaw, pitch float64
+	at         time.Time
 }
 
 func ServeWS(hub *Hub, w http.ResponseWriter, r *http.Request, allowedOrigin string, ips IPResolver) {
@@ -135,7 +151,10 @@ func ServeWS(hub *Hub, w http.ResponseWriter, r *http.Request, allowedOrigin str
 	if err != nil {
 		return
 	}
-	p := &Player{ws: conn, send: make(chan []byte, writeChanSize), Hub: hub, IP: ip}
+	p := &Player{
+		ws: conn, send: make(chan []byte, writeChanSize), latestSnapshot: make(chan []byte, 1), snapshotBuffers: make(chan []byte, 2),
+		Hub: hub, IP: ip,
+	}
 	p.ApplyLoadout(3, 0)
 	p.HP = MaxHP
 	p.Armor = 100
@@ -148,11 +167,18 @@ func (p *Player) readPump(hub *Hub) {
 	defer hub.Leave(p)
 	p.ws.SetReadLimit(maxMsgSize)
 	p.ws.SetReadDeadline(time.Now().Add(readDeadlineS * time.Second))
+	var readBuffer bytes.Buffer
+	readBuffer.Grow(maxMsgSize)
 	for {
-		mt, data, err := p.ws.ReadMessage()
+		mt, reader, err := p.ws.NextReader()
 		if err != nil {
 			return
 		}
+		readBuffer.Reset()
+		if _, err := readBuffer.ReadFrom(reader); err != nil {
+			return
+		}
+		data := readBuffer.Bytes()
 		if mt != websocket.BinaryMessage || len(data) < 1 {
 			continue
 		}
@@ -212,19 +238,7 @@ func (p *Player) readPump(hub *Hub) {
 			}
 			pitch = math.Max(-1.55, math.Min(1.55, pitch))
 			yaw = math.Remainder(yaw, 2*math.Pi)
-			if room := p.Room; room != nil {
-				room.mu.Lock()
-				if keys&KeyAim != 0 && (p.CmdKeys&KeyAim == 0 || p.AimStarted.IsZero()) {
-					p.AimStarted = now
-				} else if keys&KeyAim == 0 {
-					p.AimStarted = time.Time{}
-				}
-				p.CmdKeys = keys
-				p.Yaw = yaw
-				p.Pitch = pitch
-				p.LastInputSeq = seq
-				room.mu.Unlock()
-			}
+			p.queueInput(seq, keys, yaw, pitch, now)
 		case OpFire:
 			if !p.joined || len(payload) < 15 {
 				continue
@@ -295,12 +309,66 @@ func (p *Player) readPump(hub *Hub) {
 	}
 }
 
+func (p *Player) queueInput(seq uint16, keys uint8, yaw, pitch float64, at time.Time) {
+	p.inputMu.Lock()
+	p.queuedInput = playerInput{seq: seq, keys: keys, yaw: yaw, pitch: pitch, at: at}
+	p.hasQueuedInput = true
+	p.inputMu.Unlock()
+}
+
+func (p *Player) applyQueuedInput() {
+	p.inputMu.Lock()
+	if !p.hasQueuedInput {
+		p.inputMu.Unlock()
+		return
+	}
+	input := p.queuedInput
+	p.hasQueuedInput = false
+	p.inputMu.Unlock()
+	if input.keys&KeyAim != 0 && (p.CmdKeys&KeyAim == 0 || p.AimStarted.IsZero()) {
+		p.AimStarted = input.at
+	} else if input.keys&KeyAim == 0 {
+		p.AimStarted = time.Time{}
+	}
+	p.CmdKeys, p.Yaw, p.Pitch, p.LastInputSeq = input.keys, input.yaw, input.pitch, input.seq
+}
+
 func (p *Player) Send(msg []byte) {
+	isSnapshot := len(msg) > 0 && msg[0] == OpSnapshot
 	if p.IsBot {
+		if isSnapshot {
+			p.releaseSnapshot(msg)
+		}
 		return
 	}
 	p.sendMu.RLock()
 	if p.closed || p.send == nil {
+		p.sendMu.RUnlock()
+		if isSnapshot {
+			p.releaseSnapshot(msg)
+		}
+		return
+	}
+	if isSnapshot {
+		select {
+		case p.latestSnapshot <- msg:
+		default:
+			select {
+			case stale := <-p.latestSnapshot:
+				p.releaseSnapshot(stale)
+				p.releaseSnapshot(msg)
+				p.netReset.Store(true)
+				p.sendMu.RUnlock()
+				return
+			default:
+			}
+			select {
+			case p.latestSnapshot <- msg:
+			default:
+				p.releaseSnapshot(msg)
+				p.netReset.Store(true)
+			}
+		}
 		p.sendMu.RUnlock()
 		return
 	}
@@ -315,9 +383,36 @@ func (p *Player) Send(msg []byte) {
 }
 func (p *Player) writePump() {
 	defer p.ws.Close()
-	for msg := range p.send {
-		p.ws.SetWriteDeadline(time.Now().Add(5 * time.Second))
-		if err := p.ws.WriteMessage(websocket.BinaryMessage, msg); err != nil {
+	writes := 0
+	for {
+		var msg []byte
+		var ok, isSnapshot bool
+		select {
+		case msg, ok = <-p.send:
+		default:
+			select {
+			case msg, ok = <-p.send:
+			case msg = <-p.latestSnapshot:
+				ok, isSnapshot = true, true
+			}
+		}
+		if !ok {
+			select {
+			case msg = <-p.latestSnapshot:
+				p.releaseSnapshot(msg)
+			default:
+			}
+			return
+		}
+		if writes%writeDeadlineEvery == 0 {
+			p.ws.SetWriteDeadline(time.Now().Add(5 * time.Second))
+		}
+		writes++
+		err := p.ws.WriteMessage(websocket.BinaryMessage, msg)
+		if isSnapshot {
+			p.releaseSnapshot(msg)
+		}
+		if err != nil {
 			return
 		}
 		outboundBytes.Add(int64(len(msg)))

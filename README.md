@@ -158,7 +158,7 @@ Compose 默认强制后台 Cookie 使用 HTTPS，并将 `TRUSTED_PROXY_CIDRS` �
 
 Compose 已限制服务端 512 MB、静态前端 128 MB，总上限 640 MB。
 
-## 协议 v2 摘要
+## 协议 v4 摘要
 
 所有多字节字段均为 Little-Endian。
 
