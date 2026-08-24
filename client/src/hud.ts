@@ -72,6 +72,7 @@ const WEAPON_SVGS: Record<number, string> = {
 export class Hud {
   root = el('hud');
   sensitivity = 0.00216;
+  adsSensitivity = 0.85;
   volume = 0.8;
   hipFov = 75;
   bobScale = 0.55;
@@ -320,24 +321,28 @@ export class Hud {
 
   private setupSettings() {
     const sens = el('sens-slider') as HTMLInputElement;
+    const adsSens = el('ads-sens-slider') as HTMLInputElement;
     const vol = el('vol-slider') as HTMLInputElement;
     const quality = el('quality-select') as HTMLSelectElement;
     const fov = el('fov-slider') as HTMLInputElement;
     const bob = el('bob-slider') as HTMLInputElement;
 
     const savedSens = localStorage.getItem('ps_sens');
+    const savedAdsSens = localStorage.getItem('ps_ads_sens');
     const savedVol = localStorage.getItem('ps_vol');
     const savedQ = localStorage.getItem('ps_quality') as typeof this.quality | null;
     const savedFov = localStorage.getItem('ps_hip_fov');
     const savedBob = localStorage.getItem('ps_gun_bob');
 
     if (savedSens && sens) sens.value = savedSens;
+    if (savedAdsSens && adsSens) adsSens.value = savedAdsSens;
     if (savedVol && vol) vol.value = savedVol;
     if (savedQ && quality) quality.value = savedQ;
     if (savedFov && fov) fov.value = savedFov;
     if (savedBob && bob) bob.value = savedBob;
 
     this.sensitivity = sens ? (+sens.value / 50) * 0.0024 : 0.00216;
+    this.adsSensitivity = adsSens ? +adsSens.value / 100 : 0.85;
     this.volume = vol ? +vol.value / 100 : 0.8;
     this.quality = quality ? (quality.value as typeof this.quality) : 'medium';
     this.hipFov = fov ? +fov.value : 75;
@@ -346,6 +351,11 @@ export class Hud {
     sens?.addEventListener('input', () => {
       this.sensitivity = (+sens.value / 50) * 0.0024;
       localStorage.setItem('ps_sens', sens.value);
+    });
+
+    adsSens?.addEventListener('input', () => {
+      this.adsSensitivity = +adsSens.value / 100;
+      localStorage.setItem('ps_ads_sens', adsSens.value);
     });
 
     vol?.addEventListener('input', () => {

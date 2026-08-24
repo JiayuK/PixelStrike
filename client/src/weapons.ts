@@ -27,6 +27,8 @@ interface SoundCue {
 }
 
 const RELOAD_PITCH: Record<number, number> = { 0: 1.12, 1: 0.82, 2: 1.18, 3: 0.92, 4: 1, 5: 0.72, 7: 1.08, 8: 1.05, 9: 0.95, 10: 0.9, 11: 0.7, 12: 0.85 };
+const FIRE_KICK = [0.26, 0.62, 0.18, 0.46, 0.37, 0.82, 0, 0.16, 0.31, 0.4, 0.34, 0.66, 0.76] as const;
+const RECOIL_RECOVERY = [18, 11, 22, 12, 15, 8, 18, 20, 17, 14, 16, 10, 11] as const;
 function createMuzzleFlashTexture(): THREE.Texture {
   const canvas = new OffscreenCanvas(64, 64);
   const ctx = canvas.getContext('2d')!;
@@ -311,8 +313,8 @@ export class Weapons {
     }
     if (this.weaponId === 6) return;
     this.ammoLocal = Math.max(0, this.ammoLocal - 1);
-    const kick = isSniper(this.weaponId) ? 0.55 : this.weaponId === 1 || this.weaponId === 12 ? 0.5 : 0.38;
-    this.recoil = Math.min(1.05, this.recoil + kick);
+    const kick = FIRE_KICK[this.weaponId] ?? 0.38;
+    this.recoil = Math.min(1.2, this.recoil + kick);
     const flashScale = isSniper(this.weaponId) ? 1.35 : this.weaponId === 12 ? 1.18 : this.weaponId === 2 || this.weaponId === 7 ? 0.58 : isPistol(this.weaponId) ? 0.76 : 0.94;
     this.muzzleFlash.visible = true;
     this.muzzleFlash.rotation.z = Math.random() * Math.PI;
@@ -391,7 +393,7 @@ export class Weapons {
     this.curBobX += (targetBobX - this.curBobX) * Math.min(1, dt * 16);
     this.curBobY += (targetBobY - this.curBobY) * Math.min(1, dt * 16);
 
-    this.recoil *= Math.exp(-dt * 14);
+    this.recoil *= Math.exp(-dt * (RECOIL_RECOVERY[this.weaponId] ?? 14));
 
     // Keep reload motion inside the viewmodel-safe area; animate parts, not the whole gun across the camera.
     const rlTilt = reloading ? Math.sin(Math.PI * rlProgress) : 0;

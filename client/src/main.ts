@@ -93,6 +93,7 @@ let userPrimaryWeaponSkin = 3;
 let userSecondaryWeaponSkin = 3;
 const PRIMARY_IDS = [3, 4, 2, 5, 8, 9, 10, 11, 12];
 const SECONDARY_IDS = [0, 1, 7];
+const CROSSHAIR_RECOVERY = [15, 8, 18, 11, 14, 7, 14, 17, 15, 16, 15, 9, 10] as const;
 
 function resolveLoadout(p: number, s: number): { primary: number; secondary: number } {
   const actualPrimary = p === -1 ? PRIMARY_IDS[Math.floor(Math.random() * PRIMARY_IDS.length)] : p;
@@ -391,12 +392,12 @@ window.addEventListener('mousemove', (e) => {
   if (e.buttons & 2) e.preventDefault();
   if (performance.now() - pointerLockedAt < 120) return; // Suppress initial pointerlock re-center jump
 
-  // Discard spurious browser pointer lock jump spikes
-  if (Math.abs(e.movementX) > 250 || Math.abs(e.movementY) > 250) return;
+  // Pointer-lock deltas are raw device counts; preserve fast flicks while rejecting impossible recenter spikes.
+  if (Math.abs(e.movementX) > 1200 || Math.abs(e.movementY) > 1200) return;
 
-  const mx = Math.max(-80, Math.min(80, e.movementX));
-  const my = Math.max(-80, Math.min(80, e.movementY));
-  const adsScale = aiming ? Math.tan(camera.fov * Math.PI / 360) / Math.tan(hud.hipFov * Math.PI / 360) : 1;
+  const mx = Math.max(-512, Math.min(512, e.movementX));
+  const my = Math.max(-512, Math.min(512, e.movementY));
+  const adsScale = aiming ? Math.tan(camera.fov * Math.PI / 360) / Math.tan(hud.hipFov * Math.PI / 360) * hud.adsSensitivity : 1;
   const sens = hud.sensitivity * adsScale;
   local.yaw -= mx * sens;
   local.pitch = Math.max(-1.45, Math.min(1.45, local.pitch - my * sens));
@@ -1009,7 +1010,7 @@ function frame(t: number) {
   hud.setDeathCountdown(joined && !alive && respawnAt ? Math.max(0, Math.ceil((respawnAt - t) / 1000)) : -1);
   const spread = joined && alive && activeSlot !== 4 && weapons.weaponId !== 6 ? localSpread(t) : 0;
   const targetCrosshair = Math.tan(spread * Math.PI / 180) * crosshairScale;
-  const crosshairResponse = targetCrosshair > displayedCrosshair ? 18 : 10;
+  const crosshairResponse = targetCrosshair > displayedCrosshair ? 24 : CROSSHAIR_RECOVERY[weapons.weaponId] ?? 12;
   displayedCrosshair += (targetCrosshair - displayedCrosshair) * (1 - Math.exp(-dt * crosshairResponse));
   hud.setCrosshair(displayedCrosshair);
 
