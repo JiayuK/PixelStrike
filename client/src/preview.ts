@@ -43,14 +43,16 @@ export class CharacterPreview {
     this.camera.lookAt(0, 0.85, 0);
     this.createRenderer();
 
-    const hemi = new THREE.HemisphereLight(0xfff6ea, 0x3a404d, 1.1);
-    const key = new THREE.DirectionalLight(0xfff0d6, 1.8);
-    key.position.set(3, 4, 3);
-    const fill = new THREE.DirectionalLight(0x90c0f0, 0.8);
-    fill.position.set(-3, 2, -1);
-    const rim = new THREE.DirectionalLight(0xffd080, 0.9);
+    const hemi = new THREE.HemisphereLight(0xfff6ea, 0x5a6270, 1.4);
+    const key = new THREE.DirectionalLight(0xfff5e8, 2.2);
+    key.position.set(2.5, 3.5, 3.5);
+    const fill = new THREE.DirectionalLight(0xa0c8f8, 1.2);
+    fill.position.set(-3, 2, 1.5);
+    const frontFill = new THREE.DirectionalLight(0xfffaee, 1.4);
+    frontFill.position.set(0, 1.0, 3.2);
+    const rim = new THREE.DirectionalLight(0xffd080, 1.2);
     rim.position.set(0, 3, -3);
-    this.scene.add(hemi, key, fill, rim);
+    this.scene.add(hemi, key, fill, frontFill, rim);
 
     this.buildCharacterMesh();
     this.charGroup.add(this.weaponGroup);
@@ -163,16 +165,16 @@ export class CharacterPreview {
     const weapon = assembleViewWeapon(this.activeWeapon, null, null);
     mergeMeshesByMaterial(weapon.root);
 
-    weapon.root.scale.setScalar(0.95);
+    weapon.root.scale.setScalar(0.88);
     if (this.activeWeapon === 6) { // Knife
-      weapon.root.position.set(0.24, 0.88, 0.16);
-      weapon.root.rotation.set(-0.6, 0.2, 0.15);
+      weapon.root.position.set(0.22, 0.72, 0.18);
+      weapon.root.rotation.set(0.35, 0.25, 0.15);
     } else if (this.activeWeapon === 0 || this.activeWeapon === 1 || this.activeWeapon === 7) { // Pistol
-      weapon.root.position.set(0.16, 0.92, 0.20);
-      weapon.root.rotation.set(0.1, -0.2, 0.0);
+      weapon.root.position.set(0.12, 0.76, 0.24);
+      weapon.root.rotation.set(-0.05, -0.20, 0.05);
     } else { // Rifle / Sniper / Shotgun / SMG
-      weapon.root.position.set(0.16, 0.92, 0.18);
-      weapon.root.rotation.set(0.15, -0.25, 0.05);
+      weapon.root.position.set(0.16, 0.74, 0.24);
+      weapon.root.rotation.set(-0.20, -0.42, 0.10);
     }
     this.weaponGroup.add(weapon.root);
   }
@@ -243,16 +245,16 @@ export class CharacterPreview {
     this.bodyMesh.position.y = 0.94 * STANDING_VISUAL_SCALE + STANDING_VISUAL_OFFSET + breath * 0.3;
 
     if (isKnife) {
-      this.armRMesh.rotation.set(0.32 + breath, 0.18, -0.08);
-      this.armLMesh.rotation.set(-0.08 + breath, 0, 0.08);
+      this.armRMesh.rotation.set(0.42 + breath, 0.12, -0.06);
+      this.armLMesh.rotation.set(-0.06 + breath, 0, 0.06);
     } else if (isPistol) {
-      this.armRMesh.rotation.set(0.46 + breath, -0.22, 0.12);
-      this.armLMesh.rotation.set(0.50 + breath, 0.26, -0.14);
+      this.armRMesh.rotation.set(0.58 + breath, -0.18, 0.08);
+      this.armLMesh.rotation.set(0.62 + breath, 0.28, -0.12);
     } else {
-      this.armRMesh.rotation.set(0.52 + breath, -0.30, 0.14);
-      this.armLMesh.rotation.set(0.64 + breath, 0.36, -0.18);
+      this.armRMesh.rotation.set(0.68 + breath, -0.24, 0.12);
+      this.armLMesh.rotation.set(0.78 + breath, 0.42, -0.22);
     }
-
+    this.weaponGroup.position.y = breath * 0.3;
     this.renderer?.render(this.scene, this.camera);
   };
   setVisible(visible: boolean) {

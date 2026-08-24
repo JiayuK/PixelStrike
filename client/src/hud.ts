@@ -621,7 +621,8 @@ export class Hud {
     const row = document.createElement('div');
     row.className = 'kill-row' + (mine ? ' mine' : '');
     const badge = WEAPON_BADGES[weapon] ?? 'HE';
-    row.innerHTML = `<span class="killer">${esc(killer)}</span><span class="action">使用</span><span class="weapon">${esc(badge)}</span>${head ? '<span class="head-badge">爆头</span>' : ''}<span class="action">击杀</span><span class="victim">${esc(victim)}</span>`;
+    const formatKillName = (n: string) => n.startsWith('[BOT]') ? esc(n) : `<span class="human-tag">[真人]</span>${esc(n)}`;
+    row.innerHTML = `<span class="killer">${formatKillName(killer)}</span><span class="action">使用</span><span class="weapon">${esc(badge)}</span>${head ? '<span class="head-badge">爆头</span>' : ''}<span class="action">击杀</span><span class="victim">${formatKillName(victim)}</span>`;
     this.killfeed.prepend(row);
     while (this.killfeed.children.length > 6) {
       this.killfeed.lastElementChild?.remove();
@@ -677,10 +678,14 @@ export class Hud {
       const alive = !!(s?.state && s.state & 1);
       const weapon = WEAPON_BADGES[s?.weapon ?? 3] ?? 'AK-47';
       const kd = p.deaths ? (p.kills / p.deaths).toFixed(2) : p.kills.toFixed(1);
+      const isBot = p.name.startsWith('[BOT]') || p.name.startsWith('bot-');
+      const nameHtml = isBot
+        ? `<span class="bot-badge">[AI]</span><span>${esc(p.name.replace(/^\[BOT\]\s*/, ''))}</span>`
+        : `<span class="human-badge">[真人]</span><b>${esc(p.name)}</b>`;
       return `
         <tr class="${p.id === myId ? 'me' : ''}">
           <td><span class="rank-badge ${i === 0 ? 'rank-gold' : i === 1 ? 'rank-silver' : i === 2 ? 'rank-bronze' : ''}">${i + 1}</span></td>
-          <td><b>${esc(p.name)}</b>${p.id === myId ? ' (你)' : ''}</td>
+          <td>${nameHtml}${p.id === myId ? ' (你)' : ''}</td>
           <td>${alive ? '<span style="color:#10b981;font-weight:700;">存活</span>' : '<span style="color:#64748b;">阵亡</span>'}</td>
           <td>${esc(weapon)}</td>
           <td style="color:#10b981;font-weight:800;">${p.kills}</td>
@@ -776,7 +781,7 @@ export class Hud {
       lbEl.innerHTML = rows.map((r, i) => `
         <tr>
           <td><span class="rank-badge ${i === 0 ? 'rank-gold' : i === 1 ? 'rank-silver' : i === 2 ? 'rank-bronze' : ''}">${i + 1}</span></td>
-          <td><b>${esc(r.name)}</b></td>
+          <td><span class="human-badge">[真人]</span><b>${esc(r.name)}</b></td>
           <td style="color:#10b981;font-weight:800;">${r.kills}</td>
           <td style="color:#f43f5e;">${r.deaths}</td>
           <td style="color:#f59e0b;font-weight:800;">${r.kd.toFixed(2)}</td>

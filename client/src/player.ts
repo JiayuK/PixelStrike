@@ -143,7 +143,7 @@ export function createPlayerHeadGeometry() {
       [0.25, 0.50, 0.50, 1.00], // +Y (Top helmet)
       [0.50, 0.75, 0.50, 1.00], // -Y (Bottom neck)
       [0.75, 1.00, 0.00, 0.50], // +Z (Back helmet)
-      [0.25, 0.50, 0.00, 0.50], // -Z (Front face with Steve eyes & mask)
+      [0.25, 0.50, 0.00, 0.50], // -Z (Front face)
     ];
     for (let f = 0; f < 6; f++) {
       const [u0, u1, v0, v1] = faceUVs[f];
@@ -157,13 +157,13 @@ export function createPlayerHeadGeometry() {
     geo.translate(0, 0.18, 0); // Pivot at neck
 
     // FAST Helmet Brim, NVG Shroud & Comms Headset Earcups
-    const brim = solidUV(new THREE.BoxGeometry(0.38, 0.05, 0.12));
+    const brim = solidUV(new THREE.BoxGeometry(0.38, 0.05, 0.12), 0.18, 0.88);
     brim.translate(0, 0.34, -0.15);
-    const nvg = solidUV(new THREE.BoxGeometry(0.08, 0.08, 0.04));
+    const nvg = solidUV(new THREE.BoxGeometry(0.08, 0.08, 0.04), 0.06, 0.88);
     nvg.translate(0, 0.27, -0.19);
-    const earcupR = solidUV(new THREE.BoxGeometry(0.05, 0.12, 0.12));
+    const earcupR = solidUV(new THREE.BoxGeometry(0.05, 0.12, 0.12), 0.06, 0.62);
     earcupR.translate(0.19, 0.18, 0);
-    const earcupL = solidUV(new THREE.BoxGeometry(0.05, 0.12, 0.12));
+    const earcupL = solidUV(new THREE.BoxGeometry(0.05, 0.12, 0.12), 0.06, 0.62);
     earcupL.translate(-0.19, 0.18, 0);
 
     const parts = [geo, brim, nvg, earcupR, earcupL];
@@ -176,12 +176,12 @@ export function createPlayerTorsoGeometry() {
     const geo = new THREE.BoxGeometry(0.44, 0.60, 0.24);
     const uvs = geo.attributes.uv;
     const faceUVs = [
-      [0.00, 0.25, 0.00, 1.00], // +X
-      [0.75, 1.00, 0.00, 1.00], // -X
-      [0.25, 0.75, 0.75, 1.00], // +Y
-      [0.25, 0.75, 0.00, 0.25], // -Y
-      [0.25, 0.75, 0.00, 1.00], // +Z
-      [0.25, 0.75, 0.00, 1.00], // -Z
+      [0.00, 0.1875, 0.00, 0.75], // +X (Right flank)
+      [0.50, 0.6875, 0.00, 0.75], // -X (Left flank)
+      [0.1875, 0.50, 0.75, 1.00], // +Y (Shoulders top)
+      [0.6875, 1.00, 0.75, 1.00], // -Y (Waist bottom)
+      [0.6875, 1.00, 0.00, 0.75], // +Z (Back plate)
+      [0.1875, 0.50, 0.00, 0.75], // -Z (Front chest)
     ];
     for (let f = 0; f < 6; f++) {
       const [u0, u1, v0, v1] = faceUVs[f];
@@ -194,19 +194,19 @@ export function createPlayerTorsoGeometry() {
     uvs.needsUpdate = true;
 
     // Tactical Plate Carrier, Mag Pouches, Shoulder Straps & Radio Unit
-    const vest = solidUV(new THREE.BoxGeometry(0.48, 0.38, 0.29));
+    const vest = solidUV(new THREE.BoxGeometry(0.48, 0.38, 0.29), 0.03, 0.88);
     vest.translate(0, 0.03, 0);
-    const strapR = solidUV(new THREE.BoxGeometry(0.08, 0.12, 0.30));
+    const strapR = solidUV(new THREE.BoxGeometry(0.08, 0.12, 0.30), 0.09, 0.88);
     strapR.translate(0.16, 0.24, 0);
-    const strapL = solidUV(new THREE.BoxGeometry(0.08, 0.12, 0.30));
+    const strapL = solidUV(new THREE.BoxGeometry(0.08, 0.12, 0.30), 0.09, 0.88);
     strapL.translate(-0.16, 0.24, 0);
-    const magPouches = solidUV(new THREE.BoxGeometry(0.32, 0.16, 0.06));
+    const magPouches = solidUV(new THREE.BoxGeometry(0.32, 0.16, 0.06), 0.15, 0.88);
     magPouches.translate(0, -0.04, -0.16);
-    const belt = solidUV(new THREE.BoxGeometry(0.46, 0.08, 0.27));
+    const belt = solidUV(new THREE.BoxGeometry(0.46, 0.08, 0.27), 0.03, 0.78);
     belt.translate(0, -0.26, 0);
-    const radio = solidUV(new THREE.BoxGeometry(0.08, 0.14, 0.08));
+    const radio = solidUV(new THREE.BoxGeometry(0.08, 0.14, 0.08), 0.09, 0.78);
     radio.translate(-0.24, 0.06, 0);
-    const antenna = solidUV(new THREE.BoxGeometry(0.015, 0.24, 0.015));
+    const antenna = solidUV(new THREE.BoxGeometry(0.015, 0.24, 0.015), 0.15, 0.78);
     antenna.translate(-0.24, 0.22, 0);
 
     const parts = [geo, vest, strapR, strapL, magPouches, belt, radio, antenna];
@@ -218,45 +218,62 @@ export function createPlayerTorsoGeometry() {
 export function createPlayerArmGeometry() {
     const geo = new THREE.BoxGeometry(0.16, 0.60, 0.16);
     const uvs = geo.attributes.uv;
+    const faceUVs = [
+      [0.00, 0.25, 0.00, 0.75], // +X (Outside right / inside left)
+      [0.50, 0.75, 0.00, 0.75], // -X (Inside right / outside left)
+      [0.25, 0.50, 0.75, 1.00], // +Y (Top shoulder)
+      [0.50, 0.75, 0.75, 1.00], // -Y (Bottom palm)
+      [0.75, 1.00, 0.00, 0.75], // +Z (Back)
+      [0.25, 0.50, 0.00, 0.75], // -Z (Front)
+    ];
     for (let f = 0; f < 6; f++) {
+      const [u0, u1, v0, v1] = faceUVs[f];
       const base = f * 4;
-      uvs.setXY(base + 0, 0, 1);
-      uvs.setXY(base + 1, 1, 1);
-      uvs.setXY(base + 2, 0, 0);
-      uvs.setXY(base + 3, 1, 0);
+      uvs.setXY(base + 0, u0, v1);
+      uvs.setXY(base + 1, u1, v1);
+      uvs.setXY(base + 2, u0, v0);
+      uvs.setXY(base + 3, u1, v0);
     }
     uvs.needsUpdate = true;
-    const shoulderPad = solidUV(new THREE.BoxGeometry(0.18, 0.14, 0.18));
+    const shoulderPad = solidUV(new THREE.BoxGeometry(0.18, 0.14, 0.18), 0.06, 0.88);
     shoulderPad.translate(0, 0.16, 0);
-    const elbowPad = solidUV(new THREE.BoxGeometry(0.18, 0.12, 0.18));
+    const elbowPad = solidUV(new THREE.BoxGeometry(0.18, 0.12, 0.18), 0.18, 0.88);
     elbowPad.translate(0, -0.02, 0);
 
     const parts = [geo, shoulderPad, elbowPad];
     const merged = mergeGeometries(parts)!;
     for (const p of parts) p.dispose();
-    merged.translate(0, -0.30, 0); // Pivot at right shoulder
+    merged.translate(0, -0.30, 0); // Pivot at shoulder
     return merged;
 }
-
 
 export function createPlayerLegGeometry(right: boolean) {
     const geo = new THREE.BoxGeometry(0.18, 0.60, 0.18);
     const uvs = geo.attributes.uv;
+    const faceUVs = [
+      [0.00, 0.25, 0.00, 0.75], // +X
+      [0.50, 0.75, 0.00, 0.75], // -X
+      [0.25, 0.50, 0.75, 1.00], // +Y (Top hip)
+      [0.50, 0.75, 0.75, 1.00], // -Y (Bottom sole)
+      [0.75, 1.00, 0.00, 0.75], // +Z (Back)
+      [0.25, 0.50, 0.00, 0.75], // -Z (Front)
+    ];
     for (let f = 0; f < 6; f++) {
+      const [u0, u1, v0, v1] = faceUVs[f];
       const base = f * 4;
-      uvs.setXY(base + 0, 0, 1);
-      uvs.setXY(base + 1, 1, 1);
-      uvs.setXY(base + 2, 0, 0);
-      uvs.setXY(base + 3, 1, 0);
+      uvs.setXY(base + 0, u0, v1);
+      uvs.setXY(base + 1, u1, v1);
+      uvs.setXY(base + 2, u0, v0);
+      uvs.setXY(base + 3, u1, v0);
     }
     uvs.needsUpdate = true;
-    const kneePad = solidUV(new THREE.BoxGeometry(0.20, 0.14, 0.20));
+    const kneePad = solidUV(new THREE.BoxGeometry(0.20, 0.14, 0.20), 0.06, 0.88);
     kneePad.translate(0, -0.02, 0);
-    const bootToe = solidUV(new THREE.BoxGeometry(0.19, 0.12, 0.08));
+    const bootToe = solidUV(new THREE.BoxGeometry(0.19, 0.12, 0.08), 0.18, 0.88);
     bootToe.translate(0, -0.24, -0.07);
     const parts = [geo, kneePad, bootToe];
     if (right) {
-      const holster = solidUV(new THREE.BoxGeometry(0.06, 0.16, 0.12));
+      const holster = solidUV(new THREE.BoxGeometry(0.06, 0.16, 0.12), 0.06, 0.78);
       holster.translate(0.10, 0.10, 0);
       parts.push(holster);
     }
@@ -551,7 +568,10 @@ export class RemotePlayers {
       if (label.id !== id || label.lastName !== name) {
         label.id = id;
         label.lastName = name;
-        label.name.textContent = name;
+        const isBot = name.startsWith('[BOT]') || name.startsWith('bot-');
+        label.name.innerHTML = isBot
+          ? `<span class="bot-badge">[AI]</span>${name.replace(/^\[BOT\]\s*/, '')}`
+          : `<span class="human-badge">[真人]</span>${name}`;
       }
       if (label.lastHP !== hp) {
         label.lastHP = hp;

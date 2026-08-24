@@ -39,35 +39,219 @@ export interface Mats {
   rail: THREE.MeshLambertMaterial;
 }
 
+const texCache = new Map<string, THREE.Texture>();
+
+function getTex(key: string, create: () => OffscreenCanvas): THREE.Texture {
+  const cached = texCache.get(key);
+  if (cached) return cached;
+  const canvas = create();
+  const tex = new THREE.CanvasTexture(canvas as unknown as HTMLCanvasElement);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  texCache.set(key, tex);
+  return tex;
+}
+
+function makeBrushedMetal(baseColor: string, grainColor: string, edgeColor: string): OffscreenCanvas {
+  const c = new OffscreenCanvas(128, 128);
+  const ctx = c.getContext('2d')!;
+  ctx.fillStyle = baseColor;
+  ctx.fillRect(0, 0, 128, 128);
+  ctx.fillStyle = grainColor;
+  for (let y = 0; y < 128; y++) {
+    const len = 12 + (Math.sin(y * 11.7) * 0.5 + 0.5) * 44;
+    for (let x = 0; x < 128; x += Math.floor(len + 4)) {
+      if ((x + y * 5) % 2 === 0) {
+        ctx.fillRect(x, y, len, 1);
+      }
+    }
+  }
+  // Bright top & left edge bevel highlight
+  ctx.fillStyle = edgeColor;
+  ctx.fillRect(0, 0, 128, 2);
+  ctx.fillRect(0, 0, 2, 128);
+  // Subtle shadow on bottom & right
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.20)';
+  ctx.fillRect(0, 126, 128, 2);
+  ctx.fillRect(126, 0, 2, 128);
+  return c;
+}
+
+function makeWoodGrain(baseColor: string, darkColor: string, highlightColor: string): OffscreenCanvas {
+  const c = new OffscreenCanvas(128, 128);
+  const ctx = c.getContext('2d')!;
+  ctx.fillStyle = baseColor;
+  ctx.fillRect(0, 0, 128, 128);
+  ctx.fillStyle = darkColor;
+  for (let x = 0; x < 128; x++) {
+    const freq = Math.sin(x * 0.12) * 5 + Math.sin(x * 0.04) * 10;
+    for (let y = 0; y < 128; y++) {
+      const wave = Math.sin(y * 0.08 + freq) * 3;
+      if ((Math.floor(x + wave) % 6) === 0 || (Math.floor(x + wave * 0.6) % 11) === 0) {
+        ctx.fillRect(x, y, 1, 1);
+      }
+    }
+  }
+  ctx.fillStyle = highlightColor;
+  for (let y = 0; y < 128; y += 14) {
+    ctx.fillRect(0, y, 128, 2);
+  }
+  // Top edge gloss highlight
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+  ctx.fillRect(0, 0, 128, 2);
+  return c;
+}
+
+function makeTacticalGrip(): OffscreenCanvas {
+  const c = new OffscreenCanvas(64, 64);
+  const ctx = c.getContext('2d')!;
+  ctx.fillStyle = '#3a404c';
+  ctx.fillRect(0, 0, 64, 64);
+  ctx.fillStyle = '#5c6678';
+  for (let y = 0; y < 64; y += 4) {
+    for (let x = 0; x < 64; x += 4) {
+      const offset = (y / 4) % 2 === 0 ? 0 : 2;
+      ctx.fillRect(x + offset, y, 2, 2);
+    }
+  }
+  ctx.fillStyle = '#22262d';
+  for (let y = 0; y < 64; y += 4) {
+    for (let x = 0; x < 64; x += 4) {
+      const offset = (y / 4) % 2 === 0 ? 2 : 0;
+      ctx.fillRect(x + offset, y, 2, 2);
+    }
+  }
+  ctx.fillStyle = '#7a889e';
+  ctx.fillRect(0, 0, 64, 1);
+  return c;
+}
+
+function makeCamoTexture(c1: string, c2: string, c3: string, c4: string): OffscreenCanvas {
+  const c = new OffscreenCanvas(128, 128);
+  const ctx = c.getContext('2d')!;
+  ctx.fillStyle = c1;
+  ctx.fillRect(0, 0, 128, 128);
+  const blotches = [
+    { col: c2, pts: [[10, 20], [40, 15], [50, 45], [20, 50], [80, 80], [110, 70], [120, 100], [90, 115]] },
+    { col: c3, pts: [[60, 10], [95, 25], [85, 55], [45, 35], [10, 90], [35, 120], [60, 105]] },
+    { col: c4, pts: [[30, 70], [55, 65], [65, 85], [35, 95], [90, 30], [115, 40], [105, 60]] },
+  ];
+  for (const b of blotches) {
+    ctx.fillStyle = b.col;
+    for (let i = 0; i < b.pts.length; i += 2) {
+      const [x, y] = b.pts[i];
+      ctx.beginPath();
+      ctx.ellipse(x, y, 18, 14, (x + y) * 0.1, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
+  ctx.fillRect(0, 0, 128, 2);
+  return c;
+}
+
+function makeFabric(baseColor: string, gridColor: string): OffscreenCanvas {
+  const c = new OffscreenCanvas(64, 64);
+  const ctx = c.getContext('2d')!;
+  ctx.fillStyle = baseColor;
+  ctx.fillRect(0, 0, 64, 64);
+  ctx.fillStyle = gridColor;
+  for (let i = 0; i < 64; i += 5) {
+    ctx.fillRect(i, 0, 1, 64);
+    ctx.fillRect(0, i, 64, 1);
+  }
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.14)';
+  ctx.fillRect(0, 0, 64, 1);
+  return c;
+}
+
+function makeCarbonFiber(): OffscreenCanvas {
+  const c = new OffscreenCanvas(64, 64);
+  const ctx = c.getContext('2d')!;
+  ctx.fillStyle = '#22262e';
+  ctx.fillRect(0, 0, 64, 64);
+  ctx.fillStyle = '#424a58';
+  for (let y = 0; y < 64; y += 8) {
+    for (let x = 0; x < 64; x += 8) {
+      ctx.fillRect(x, y, 4, 4);
+      ctx.fillRect(x + 4, y + 4, 4, 4);
+    }
+  }
+  ctx.fillStyle = '#5e6a7e';
+  ctx.fillRect(0, 0, 64, 1);
+  return c;
+}
+function makeScopeGlass(): OffscreenCanvas {
+  const c = new OffscreenCanvas(128, 128);
+  const ctx = c.getContext('2d')!;
+  const grad = ctx.createRadialGradient(64, 64, 10, 64, 64, 64);
+  grad.addColorStop(0, '#103848');
+  grad.addColorStop(0.7, '#081c28');
+  grad.addColorStop(1, '#030a10');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 128, 128);
+  ctx.fillStyle = 'rgba(64, 224, 208, 0.25)';
+  ctx.beginPath();
+  ctx.arc(45, 45, 24, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+  ctx.fillRect(63, 63, 2, 2);
+  return c;
+}
+
 export function mats(): Mats {
+  const texDark = getTex('dark', () => makeBrushedMetal('#424a56', 'rgba(255, 255, 255, 0.15)', '#8c9cb0'));
+  const texGun = getTex('gun', () => makeBrushedMetal('#586476', 'rgba(255, 255, 255, 0.20)', '#b0c2d8'));
+  const texGunSteel = getTex('gunSteel', () => makeBrushedMetal('#7c8ca2', 'rgba(255, 255, 255, 0.28)', '#d8e4f4'));
+  const texSilver = getTex('silver', () => makeBrushedMetal('#b8c5d6', 'rgba(255, 255, 255, 0.38)', '#f0f5fc'));
+  const texChrome = getTex('chrome', () => makeBrushedMetal('#e4ecf6', 'rgba(255, 255, 255, 0.50)', '#ffffff'));
+  const texWood = getTex('wood', () => makeWoodGrain('#b86835', '#6c3514', 'rgba(255, 255, 255, 0.22)'));
+  const texWoodDark = getTex('woodDark', () => makeWoodGrain('#8c4820', '#4e200a', 'rgba(255, 255, 255, 0.18)'));
+  const texCamo = getTex('camo', () => makeCamoTexture('#668852', '#4a683a', '#b09c72', '#2f4425'));
+  const texCamoDark = getTex('camoDark', () => makeCamoTexture('#4a683a', '#334828', '#8a7852', '#1f2e18'));
+  const texGrip = getTex('grip', makeTacticalGrip);
+  const texBlue = getTex('blue', () => makeBrushedMetal('#486888', 'rgba(255, 255, 255, 0.22)', '#8cb0d8'));
+  const texBrass = getTex('brass', () => makeBrushedMetal('#f2cb48', 'rgba(255, 255, 255, 0.45)', '#fff4a8'));
+  const texCopper = getTex('copper', () => makeBrushedMetal('#d88a4e', 'rgba(255, 255, 255, 0.38)', '#f8b884'));
+  const texTan = getTex('tan', () => makeBrushedMetal('#c2aa84', 'rgba(255, 255, 255, 0.22)', '#e8d4b8'));
+  const texTanDark = getTex('tanDark', () => makeBrushedMetal('#98805e', 'rgba(255, 255, 255, 0.18)', '#c4aa86'));
+  const texGlove = getTex('glove', () => makeFabric('#363c46', '#525c6c'));
+  const texGloveKnuckle = getTex('gloveKnuckle', makeCarbonFiber);
+  const texGloveStrap = getTex('gloveStrap', () => makeFabric('#4a5c46', '#6c8466'));
+  const texScopeBody = getTex('scopeBody', () => makeBrushedMetal('#3c4450', 'rgba(255, 255, 255, 0.16)', '#76869a'));
+  const texRail = getTex('rail', () => makeBrushedMetal('#38404c', 'rgba(255, 255, 255, 0.15)', '#748296'));
+  const texGlass = getTex('glass', makeScopeGlass);
+  const texSleeve = getTex('sleeve', () => makeFabric('#3c626a', '#5c8e99'));
+
   return {
-    dark: new THREE.MeshLambertMaterial({ color: 0x161719 }),
-    gun: new THREE.MeshLambertMaterial({ color: 0x2e323a }),
-    gunSteel: new THREE.MeshLambertMaterial({ color: 0x424854 }),
-    silver: new THREE.MeshLambertMaterial({ color: 0x9299a4 }),
-    chrome: new THREE.MeshLambertMaterial({ color: 0xd8dde4 }),
-    wood: new THREE.MeshLambertMaterial({ color: 0x6e3b1c }),
-    woodDark: new THREE.MeshLambertMaterial({ color: 0x46220e }),
-    camo: new THREE.MeshLambertMaterial({ color: 0x3d4e39 }),
-    camoDark: new THREE.MeshLambertMaterial({ color: 0x263323 }),
-    grip: new THREE.MeshLambertMaterial({ color: 0x111214 }),
-    blue: new THREE.MeshLambertMaterial({ color: 0x223242 }),
-    brass: new THREE.MeshLambertMaterial({ color: 0xd6b245 }),
-    copper: new THREE.MeshLambertMaterial({ color: 0xb87333 }),
+    dark: new THREE.MeshLambertMaterial({ color: 0xffffff, map: texDark }),
+    gun: new THREE.MeshLambertMaterial({ color: 0xffffff, map: texGun }),
+    gunSteel: new THREE.MeshLambertMaterial({ color: 0xffffff, map: texGunSteel }),
+    silver: new THREE.MeshLambertMaterial({ color: 0xffffff, map: texSilver }),
+    chrome: new THREE.MeshLambertMaterial({ color: 0xffffff, map: texChrome }),
+    wood: new THREE.MeshLambertMaterial({ color: 0xffffff, map: texWood }),
+    woodDark: new THREE.MeshLambertMaterial({ color: 0xffffff, map: texWoodDark }),
+    camo: new THREE.MeshLambertMaterial({ color: 0xffffff, map: texCamo }),
+    camoDark: new THREE.MeshLambertMaterial({ color: 0xffffff, map: texCamoDark }),
+    grip: new THREE.MeshLambertMaterial({ color: 0xffffff, map: texGrip }),
+    blue: new THREE.MeshLambertMaterial({ color: 0xffffff, map: texBlue }),
+    brass: new THREE.MeshLambertMaterial({ color: 0xffffff, map: texBrass }),
+    copper: new THREE.MeshLambertMaterial({ color: 0xffffff, map: texCopper }),
     tritium: new THREE.MeshBasicMaterial({ color: 0x39ff14 }),
     tritiumRed: new THREE.MeshBasicMaterial({ color: 0xff3b30 }),
     red: new THREE.MeshLambertMaterial({ color: 0xba2418 }),
     white: new THREE.MeshBasicMaterial({ color: 0xf6f4ec }),
-    glass: new THREE.MeshLambertMaterial({ color: 0x193246, transparent: true, opacity: 0.78 }),
+    glass: new THREE.MeshLambertMaterial({ color: 0xffffff, map: texGlass, transparent: true, opacity: 0.85 }),
     skin: new THREE.MeshLambertMaterial({ color: 0xd69d74 }),
-    sleeve: new THREE.MeshLambertMaterial({ color: 0x213a40 }),
-    tan: new THREE.MeshLambertMaterial({ color: 0x8e7b5e }),
-    tanDark: new THREE.MeshLambertMaterial({ color: 0x5c4d36 }),
-    glove: new THREE.MeshLambertMaterial({ color: 0x1b1d21 }),
-    gloveKnuckle: new THREE.MeshLambertMaterial({ color: 0x0f1012 }),
-    gloveStrap: new THREE.MeshLambertMaterial({ color: 0x2a3328 }),
-    scopeBody: new THREE.MeshLambertMaterial({ color: 0x1a1c1e }),
-    rail: new THREE.MeshLambertMaterial({ color: 0x141517 }),
+    sleeve: new THREE.MeshLambertMaterial({ color: 0xffffff, map: texSleeve }),
+    tan: new THREE.MeshLambertMaterial({ color: 0xffffff, map: texTan }),
+    tanDark: new THREE.MeshLambertMaterial({ color: 0xffffff, map: texTanDark }),
+    glove: new THREE.MeshLambertMaterial({ color: 0xffffff, map: texGlove }),
+    gloveKnuckle: new THREE.MeshLambertMaterial({ color: 0xffffff, map: texGloveKnuckle }),
+    gloveStrap: new THREE.MeshLambertMaterial({ color: 0xffffff, map: texGloveStrap }),
+    scopeBody: new THREE.MeshLambertMaterial({ color: 0xffffff, map: texScopeBody }),
+    rail: new THREE.MeshLambertMaterial({ color: 0xffffff, map: texRail }),
   };
 }
 
