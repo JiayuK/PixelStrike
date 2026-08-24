@@ -502,7 +502,7 @@ hud.onPauseClick(() => {
   if (joined && !hud.isSettingsOpen()) void captureGame();
 });
 
-hud.onJoin = (name, primary, secondary) => {
+hud.onJoin = (name, primary, secondary, skin) => {
   myName = name;
   killStreak = 0;
   userPrimaryChoice = primary;
@@ -521,7 +521,7 @@ hud.onJoin = (name, primary, secondary) => {
   weapons.group.visible = true;
   refreshWeaponHud();
   guardMatchHistory();
-  net.connect(wsUrl, name, primaryWeapon, secondaryWeapon);
+  net.connect(wsUrl, name, primaryWeapon, secondaryWeapon, skin);
   void captureGame(); // Fullscreen and pointer lock
   audio.init();
 };

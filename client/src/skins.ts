@@ -17,8 +17,15 @@ export const SKIN_NAMES = [
   '十字军圣骑士 / Crusader Knight',
   '丛林幽灵突击 / Jungle Commando',
 ];
+export const SKIN_COUNT = SKIN_NAMES.length;
+export type SkinPart = keyof SkinTextures;
 
 const skinCache = new Map<number, SkinTextures>();
+const atlasCache = new Map<SkinPart, THREE.Texture>();
+
+export function normalizeSkin(id: number) {
+  return ((id % SKIN_COUNT) + SKIN_COUNT) % SKIN_COUNT;
+}
 
 function canvasTex(canvas: OffscreenCanvas): THREE.Texture {
   const tex = new THREE.CanvasTexture(canvas as unknown as HTMLCanvasElement);
@@ -29,7 +36,7 @@ function canvasTex(canvas: OffscreenCanvas): THREE.Texture {
 }
 
 export function getMCSkin(skinId: number): SkinTextures {
-  const id = ((skinId % SKIN_NAMES.length) + SKIN_NAMES.length) % SKIN_NAMES.length;
+  const id = normalizeSkin(skinId);
   const cached = skinCache.get(id);
   if (cached) return cached;
 
@@ -37,6 +44,29 @@ export function getMCSkin(skinId: number): SkinTextures {
   skinCache.set(id, textures);
   return textures;
 }
+export function getMCSkinAtlas(part: SkinPart): THREE.Texture {
+  const cached = atlasCache.get(part);
+  if (cached) return cached;
+
+  const first = getMCSkin(0)[part].image as OffscreenCanvas;
+  const stride = first.width + 2;
+  const canvas = new OffscreenCanvas(stride * SKIN_COUNT, first.height);
+  const ctx = canvas.getContext('2d')!;
+  for (let id = 0; id < SKIN_COUNT; id++) {
+    const image = getMCSkin(id)[part].image as OffscreenCanvas;
+    const x = id * stride;
+    ctx.drawImage(image, x + 1, 0);
+    ctx.drawImage(image, 0, 0, 1, image.height, x, 0, 1, image.height);
+    ctx.drawImage(image, image.width - 1, 0, 1, image.height, x + image.width + 1, 0, 1, image.height);
+  }
+  const texture = canvasTex(canvas);
+  texture.minFilter = THREE.NearestFilter;
+  texture.generateMipmaps = false;
+  texture.userData.skinAtlas = { tileWidth: first.width, atlasWidth: canvas.width, stride };
+  atlasCache.set(part, texture);
+  return texture;
+}
+
 
 function generateMCSkin(id: number): SkinTextures {
   // ---- 1. Head Texture (64x32) ----

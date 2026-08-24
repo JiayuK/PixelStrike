@@ -9,10 +9,25 @@ import (
 	"unicode/utf8"
 )
 
-func TestWelcomeV4(t *testing.T) {
+func TestWelcomeV5(t *testing.T) {
 	b := Welcome(42, 0x12345678)
 	if len(b) != 8 || b[0] != OpWelcome || b[1] != ProtocolVersion || binary.LittleEndian.Uint16(b[2:]) != 42 {
 		t.Fatalf("bad welcome: %v", b)
+	}
+}
+func TestSnapshotCarriesSkin(t *testing.T) {
+	p := &Player{PlayerState: PlayerState{Id: 1, Alive: true, Skin: 7}}
+	state := quantizeState(&p.PlayerState, 0)
+	full := p.BuildSnapshot(0, []*Player{p}, []quantState{state})
+	if len(full) != 30 || full[7] != 1 || binary.LittleEndian.Uint16(full[10:]) != 0x8000 || full[29] != 7 {
+		t.Fatalf("full skin snapshot = %v", full)
+	}
+
+	p.Skin = 3
+	state = quantizeState(&p.PlayerState, 0)
+	delta := p.BuildSnapshot(1, []*Player{p}, []quantState{state})
+	if len(delta) != 13 || binary.LittleEndian.Uint16(delta[10:]) != 1<<9 || delta[12] != 3 {
+		t.Fatalf("delta skin snapshot = %v", delta)
 	}
 }
 

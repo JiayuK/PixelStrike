@@ -191,7 +191,7 @@ func (p *Player) readPump(hub *Hub) {
 		}
 		switch op {
 		case OpJoin:
-			if p.joined || len(payload) < 4 {
+			if p.joined || len(payload) < 5 {
 				return
 			}
 			if hub.Store.IsIPBanned(p.IP) {
@@ -205,22 +205,25 @@ func (p *Player) readPump(hub *Hub) {
 				return
 			}
 			n := int(payload[1])
-			if n > len(payload)-4 {
+			if n > len(payload)-5 {
 				continue
 			}
 			name := sanitizeName(string(payload[2 : 2+n]))
-			primary, secondary := payload[2+n], payload[3+n]
+			primary, secondary, skin := payload[2+n], payload[3+n], payload[4+n]
 			if !validLoadout(primary, secondary) {
 				primary, secondary = 3, 0
 			}
-			if len(payload) > 4+n {
-				p.Fingerprint = sanitizeFingerprint(string(payload[4+n:]))
+			if skin >= SkinCount {
+				skin = 0
+			}
+			if len(payload) > 5+n {
+				p.Fingerprint = sanitizeFingerprint(string(payload[5+n:]))
 			}
 			if name == "" {
 				name = "player"
 			}
 			resolved := hub.Store.GetOrCreatePlayer(p.IP, p.Fingerprint, name)
-			if !hub.JoinIfAllowed(p, resolved, primary, secondary) {
+			if !hub.JoinIfAllowed(p, resolved, primary, secondary, skin) {
 				p.Send(Reject("访问已被封禁"))
 				time.Sleep(20 * time.Millisecond)
 				return

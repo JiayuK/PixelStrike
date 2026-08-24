@@ -79,7 +79,7 @@ export class Hud {
   private loadoutPrimary = -1;
   private loadoutSecondary = -1;
   characterPreview: CharacterPreview | null = null;
-  onJoin: ((name: string, primary: number, secondary: number) => void) | null = null;
+  onJoin: ((name: string, primary: number, secondary: number, skin: number) => void) | null = null;
   onVolumeChange: ((v: number) => void) | null = null;
   onFovChange: ((fov: number) => void) | null = null;
   onQualityChange: ((q: 'low' | 'medium' | 'high') => void) | null = null;
@@ -263,7 +263,7 @@ export class Hud {
               this.characterPreview?.setVisible(false);
               this.root.style.display = 'block';
               deploying = false;
-              this.onJoin?.(n, this.loadoutPrimary, this.loadoutSecondary);
+              this.onJoin?.(n, this.loadoutPrimary, this.loadoutSecondary, this.characterPreview?.getSkin() ?? 0);
             }, 140);
           }
         }, 32);
@@ -271,7 +271,7 @@ export class Hud {
         this.menu.style.display = 'none';
         this.characterPreview?.setVisible(false);
         this.root.style.display = 'block';
-        this.onJoin?.(n, this.loadoutPrimary, this.loadoutSecondary);
+        this.onJoin?.(n, this.loadoutPrimary, this.loadoutSecondary, this.characterPreview?.getSkin() ?? 0);
       }
     };
 

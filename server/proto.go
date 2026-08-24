@@ -6,7 +6,8 @@ import (
 	"unicode/utf8"
 )
 
-const ProtocolVersion = 4
+const ProtocolVersion = 5
+const SkinCount uint8 = 8
 
 const (
 	OpJoin          = 0x01
