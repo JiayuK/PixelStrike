@@ -63,8 +63,21 @@ export class Weapons {
   private boltCycleUntil = 0;
   private shells: Shell[] = [];
   private shellPool: THREE.Mesh[] = [];
-  private shellGeo = new THREE.BoxGeometry(0.02, 0.02, 0.05);
-  private brassMat = new THREE.MeshLambertMaterial({ color: 0xd4af37 });
+  private shellGeo = (() => {
+    const caseTube = new THREE.CylinderGeometry(0.012, 0.012, 0.045, 8);
+    caseTube.rotateX(Math.PI / 2);
+    const rim = new THREE.CylinderGeometry(0.014, 0.014, 0.008, 8);
+    rim.rotateX(Math.PI / 2);
+    rim.translate(0, 0, 0.024);
+    const primer = new THREE.CylinderGeometry(0.006, 0.006, 0.002, 8);
+    primer.rotateX(Math.PI / 2);
+    primer.translate(0, 0, 0.028);
+    const parts = [caseTube, rim, primer];
+    const merged = mergeGeometries(parts)!;
+    for (const p of parts) p.dispose();
+    return merged;
+  })();
+  private brassMat = new THREE.MeshLambertMaterial({ color: 0xdfb445 });
   private shellOffset = new THREE.Vector3(0.1, -0.05, -0.2);
   private shellSide = new THREE.Vector3();
   private activeTracers: Tracer[] = [];
@@ -104,19 +117,21 @@ export class Weapons {
     const flashMat = new THREE.MeshBasicMaterial({
       color: 0xffea78,
       transparent: true,
-      opacity: 0.95,
+      opacity: 0.96,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
       side: THREE.DoubleSide,
     });
-    const flashA = new THREE.Mesh(new THREE.PlaneGeometry(0.28, 0.28), flashMat);
-    const flashB = new THREE.Mesh(new THREE.PlaneGeometry(0.28, 0.28), flashMat.clone());
+    const flashA = new THREE.Mesh(new THREE.PlaneGeometry(0.32, 0.32), flashMat);
+    const flashB = new THREE.Mesh(new THREE.PlaneGeometry(0.32, 0.32), flashMat.clone());
     flashB.rotation.y = Math.PI / 2;
+    const flashC = new THREE.Mesh(new THREE.PlaneGeometry(0.24, 0.24), flashMat.clone());
+    flashC.rotation.z = Math.PI / 4;
     const flashCore = new THREE.Mesh(
-      new THREE.PlaneGeometry(0.12, 0.12),
-      new THREE.MeshBasicMaterial({ color: 0xfff6c8, transparent: true, opacity: 1, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }),
+      new THREE.SphereGeometry(0.06, 8, 6),
+      new THREE.MeshBasicMaterial({ color: 0xfffff0, transparent: true, opacity: 1, depthWrite: false, blending: THREE.AdditiveBlending }),
     );
-    this.muzzleFlash.add(flashA, flashB, flashCore);
+    this.muzzleFlash.add(flashA, flashB, flashC, flashCore);
     this.muzzleFlash.visible = false;
     this.group.add(this.muzzleFlash);
     this.group.add(this.muzzleLight);
@@ -169,6 +184,8 @@ export class Weapons {
     if (this.magazineMesh) mergeMeshesByMaterial(this.magazineMesh);
     if (this.boltMesh) mergeMeshesByMaterial(this.boltMesh);
     mergeMeshesByMaterial(assembled.root, [this.magazineMesh, this.boltMesh]);
+    mergeMeshesByMaterial(this.handLGroup);
+    mergeMeshesByMaterial(this.handRGroup);
     markViewLayer(assembled.root);
     markViewLayer(this.handLGroup);
     markViewLayer(this.handRGroup);
@@ -521,7 +538,7 @@ export class Weapons {
   }
 }
 
-function mergeMeshesByMaterial(root: THREE.Object3D, excludedRoots: (THREE.Object3D | null)[] = []) {
+export function mergeMeshesByMaterial(root: THREE.Object3D, excludedRoots: (THREE.Object3D | null)[] = []) {
   const excluded = new Set<THREE.Object3D>();
   for (const excludedRoot of excludedRoots) excludedRoot?.traverse((obj) => excluded.add(obj));
   root.updateWorldMatrix(true, true);
@@ -552,7 +569,7 @@ function mergeMeshesByMaterial(root: THREE.Object3D, excludedRoots: (THREE.Objec
   }
 }
 
-function disposeObject(root: THREE.Object3D) {
+export function disposeObject(root: THREE.Object3D) {
   root.traverse((obj) => {
     if (!(obj instanceof THREE.Mesh)) return;
     obj.geometry.dispose();

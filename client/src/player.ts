@@ -118,56 +118,77 @@ interface WorldOccluder {
 const MAX_LABELS = 24;
 
 function createSteveHeadTexture(): THREE.Texture {
-  const canvas = new OffscreenCanvas(32, 16);
+  const canvas = new OffscreenCanvas(64, 32);
   const ctx = canvas.getContext('2d')!;
 
-  const H = '#482b18'; // Dark Brown Hair
-  const H2 = '#381e0f';
   const S = '#d9a377'; // Skin Tone
   const N = '#be7e50'; // Nose
   const W = '#ffffff'; // White Eye Sclera
   const P = '#2c3577'; // Blue/Purple Pupil
-  const B = '#582f1b'; // Beard/Mouth
-  const B2 = '#42200f';
+  const B = '#582f1b'; // Beard / Mouth
+  const M = '#1e242a'; // Tactical Balaclava / Helmet Cover
+  const M2 = '#14181c';
 
-  // Fill base hair
-  ctx.fillStyle = H;
-  ctx.fillRect(0, 0, 32, 16);
+  // Fill tactical helmet / base
+  ctx.fillStyle = M;
+  ctx.fillRect(0, 0, 64, 32);
 
-  // Top hair (+Y, x: 8 to 16, y: 0 to 8)
-  for (let y = 0; y < 8; y++) {
-    for (let x = 8; x < 16; x++) {
-      ctx.fillStyle = (x + y) % 3 === 0 ? H2 : H;
+  // Top Helmet Surface (+Y, x: 16 to 32, y: 0 to 16)
+  for (let y = 0; y < 16; y++) {
+    for (let x = 16; x < 32; x++) {
+      ctx.fillStyle = (x + y) % 3 === 0 ? M2 : M;
       ctx.fillRect(x, y, 1, 1);
     }
   }
+  // Helmet top velcro patch & strobe mount
+  ctx.fillStyle = '#454e58';
+  ctx.fillRect(20, 4, 8, 8);
+  ctx.fillStyle = '#10b981';
+  ctx.fillRect(23, 7, 2, 2);
 
-  // Front Face (+Z, x: 8 to 16, y: 8 to 16) - Iconic Minecraft Steve Face
-  const face = [
-    [H, H, H, H, H, H, H, H],
-    [H, H, H, H, H, H, H, H],
-    [H, S, S, S, S, S, S, H],
-    [S, S, S, S, S, S, S, S],
-    [S, W, P, S, S, P, W, S], // Iconic Steve Eyes
-    [S, S, S, N, N, S, S, S], // Nose
-    [S, B, B, B, B, B, B, S], // Beard / Smile
-    [H, H, B2, B2, B2, B2, H, H],
-  ];
-  for (let r = 0; r < 8; r++) {
-    for (let c = 0; c < 8; c++) {
-      ctx.fillStyle = face[r][c];
-      ctx.fillRect(8 + c, 8 + r, 1, 1);
-    }
+  // Front Face (+Z, x: 16 to 32, y: 16 to 32)
+  // Helmet brow
+  ctx.fillStyle = M2;
+  ctx.fillRect(16, 16, 16, 4);
+  ctx.fillStyle = '#64748b'; // NVG Mount Shroud Plate
+  ctx.fillRect(22, 16, 4, 3);
+
+  // Face / Eyes area
+  ctx.fillStyle = S;
+  ctx.fillRect(16, 20, 16, 8);
+  // Steve Eyes
+  ctx.fillStyle = W;
+  ctx.fillRect(18, 22, 4, 3);
+  ctx.fillRect(26, 22, 4, 3);
+  ctx.fillStyle = P;
+  ctx.fillRect(20, 22, 2, 3);
+  ctx.fillRect(26, 22, 2, 3);
+  // Nose & Beard / Mask
+  ctx.fillStyle = N;
+  ctx.fillRect(23, 24, 2, 2);
+  ctx.fillStyle = B;
+  ctx.fillRect(18, 26, 12, 2);
+  ctx.fillStyle = M;
+  ctx.fillRect(16, 28, 16, 4); // Balaclava chin
+
+  // Right Side (+X, x: 0 to 16, y: 16 to 32) & Left Side (-X, x: 32 to 48, y: 16 to 32)
+  // Tactical Comms Headset Earcup / Helmet Rails
+  for (let s of [0, 32]) {
+    ctx.fillStyle = M;
+    ctx.fillRect(s, 16, 16, 16);
+    ctx.fillStyle = '#0f172a'; // Headset Earcups
+    ctx.fillRect(s + 4, 20, 8, 8);
+    ctx.fillStyle = '#334155';
+    ctx.fillRect(s + 6, 22, 4, 4);
+    ctx.fillStyle = '#475569'; // Helmet side rails
+    ctx.fillRect(s + 2, 17, 12, 2);
   }
 
-  // Right Face (+X, x: 0 to 8, y: 8 to 16) & Left Face (-X, x: 16 to 24, y: 8 to 16)
-  for (let r = 0; r < 8; r++) {
-    for (let c = 0; c < 8; c++) {
-      ctx.fillStyle = r < 3 ? H : (r < 5 && (c === 0 || c === 7) ? H : S);
-      ctx.fillRect(0 + c, 8 + r, 1, 1);
-      ctx.fillRect(16 + c, 8 + r, 1, 1);
-    }
-  }
+  // Back of Helmet (+Z, x: 48 to 64, y: 16 to 32)
+  ctx.fillStyle = M;
+  ctx.fillRect(48, 16, 16, 16);
+  ctx.fillStyle = '#475569'; // Battery pack / Counterweight
+  ctx.fillRect(52, 20, 8, 6);
 
   const tex = new THREE.CanvasTexture(canvas as unknown as HTMLCanvasElement);
   tex.magFilter = THREE.NearestFilter;
@@ -177,33 +198,52 @@ function createSteveHeadTexture(): THREE.Texture {
 }
 
 function createSteveTorsoTexture(): THREE.Texture {
-  const canvas = new OffscreenCanvas(16, 16);
+  const canvas = new OffscreenCanvas(32, 32);
   const ctx = canvas.getContext('2d')!;
 
-  const C = '#d4d8ca';
-  const C2 = '#a7ae9f';
-  const R = '#626b5f';
-  const D = '#343a34';
+  const C = '#3a443c'; // Tactical Olive / Digital Camo
+  const C2 = '#29322b';
+  const V = '#1a1e1b'; // Heavy Armor Plate Vest
+  const V2 = '#111412';
+  const R = '#d97706'; // Brass 5.56 cartridge peek
 
   ctx.fillStyle = C;
-  ctx.fillRect(0, 0, 16, 16);
+  ctx.fillRect(0, 0, 32, 32);
 
-  // Neutral tactical fabric keeps per-player instance tinting coherent.
-  for (let y = 0; y < 16; y++) {
-    for (let x = 4; x < 12; x++) {
-      ctx.fillStyle = (x + y) % 5 === 0 ? C2 : C;
+  // Camo pattern
+  for (let y = 0; y < 32; y++) {
+    for (let x = 0; x < 32; x++) {
+      ctx.fillStyle = (x * 3 + y * 7) % 5 === 0 ? C2 : C;
       ctx.fillRect(x, y, 1, 1);
     }
   }
-  ctx.fillStyle = D;
-  ctx.fillRect(7, 0, 2, 3);
+
+  // Front Tactical Plate Carrier (x: 8 to 24, y: 4 to 28)
+  ctx.fillStyle = V;
+  ctx.fillRect(6, 4, 20, 24);
+  // MOLLE webbing horizontal rows
+  ctx.fillStyle = V2;
+  ctx.fillRect(8, 8, 16, 2);
+  ctx.fillRect(8, 12, 16, 2);
+  ctx.fillRect(8, 16, 16, 2);
+  ctx.fillRect(8, 20, 16, 2);
+
+  // 3x Front Rifle Magazine Pouches
+  ctx.fillStyle = '#2c332e';
+  ctx.fillRect(8, 14, 4, 8);
+  ctx.fillRect(14, 14, 4, 8);
+  ctx.fillRect(20, 14, 4, 8);
+  // Mag retention pull tabs & brass round tips
   ctx.fillStyle = R;
-  ctx.fillRect(5, 3, 1, 10);
-  ctx.fillRect(10, 3, 1, 10);
-  ctx.fillRect(5, 10, 6, 1);
-  ctx.fillStyle = D;
-  ctx.fillRect(5, 11, 3, 3);
-  ctx.fillRect(9, 11, 2, 3);
+  ctx.fillRect(9, 13, 2, 1);
+  ctx.fillRect(15, 13, 2, 1);
+  ctx.fillRect(21, 13, 2, 1);
+
+  // Radio Pouch & Tactical Chest Patch
+  ctx.fillStyle = '#1e293b';
+  ctx.fillRect(8, 5, 4, 7);
+  ctx.fillStyle = '#64748b'; // Velcro flag patch
+  ctx.fillRect(15, 5, 8, 4);
 
   const tex = new THREE.CanvasTexture(canvas as unknown as HTMLCanvasElement);
   tex.magFilter = THREE.NearestFilter;
@@ -213,19 +253,40 @@ function createSteveTorsoTexture(): THREE.Texture {
 }
 
 function createSteveArmTexture(): THREE.Texture {
-  const canvas = new OffscreenCanvas(16, 16);
+  const canvas = new OffscreenCanvas(32, 32);
   const ctx = canvas.getContext('2d')!;
 
-  const C = '#d4d8ca';
-  const C2 = '#a7ae9f';
-  const G = '#303630';
+  const C = '#3a443c';
+  const C2 = '#29322b';
+  const E = '#111412'; // Tactical Elbow Pad
+  const G = '#1e242a'; // Combat Tactical Gloves
+  const K = '#0f1215'; // Knuckle armor
 
   ctx.fillStyle = C;
-  ctx.fillRect(0, 0, 16, 16);
-  ctx.fillStyle = C2;
-  ctx.fillRect(0, 6, 16, 2);
+  ctx.fillRect(0, 0, 32, 32);
+  for (let y = 0; y < 16; y++) {
+    for (let x = 0; x < 32; x++) {
+      ctx.fillStyle = (x + y) % 4 === 0 ? C2 : C;
+      ctx.fillRect(x, y, 1, 1);
+    }
+  }
+
+  // Shoulder Velcro Patch
+  ctx.fillStyle = '#64748b';
+  ctx.fillRect(4, 2, 8, 6);
+  ctx.fillRect(20, 2, 8, 6);
+
+  // Molded Tactical Elbow Pad
+  ctx.fillStyle = E;
+  ctx.fillRect(2, 12, 12, 8);
+  ctx.fillRect(18, 12, 12, 8);
+
+  // Tactical Combat Glove & Knuckle Armor (bottom)
   ctx.fillStyle = G;
-  ctx.fillRect(0, 12, 16, 4);
+  ctx.fillRect(0, 22, 32, 10);
+  ctx.fillStyle = K;
+  ctx.fillRect(2, 24, 12, 3);
+  ctx.fillRect(18, 24, 12, 3);
 
   const tex = new THREE.CanvasTexture(canvas as unknown as HTMLCanvasElement);
   tex.magFilter = THREE.NearestFilter;
@@ -235,28 +296,41 @@ function createSteveArmTexture(): THREE.Texture {
 }
 
 function createSteveLegTexture(): THREE.Texture {
-  const canvas = new OffscreenCanvas(16, 16);
+  const canvas = new OffscreenCanvas(32, 32);
   const ctx = canvas.getContext('2d')!;
 
-  const J = '#46505f';
-  const J2 = '#333b48';
-  const B = '#202522';
+  const J = '#2d3748'; // Tactical Combat Pants
+  const J2 = '#1a202c';
+  const K = '#111827'; // Tactical Knee Pad
+  const B = '#0f172a'; // Assault Combat Boots
 
   ctx.fillStyle = J;
-  ctx.fillRect(0, 0, 16, 16);
-
-  // Texture details
-  for (let y = 0; y < 12; y++) {
-    for (let x = 0; x < 16; x++) {
+  ctx.fillRect(0, 0, 32, 32);
+  for (let y = 0; y < 18; y++) {
+    for (let x = 0; x < 32; x++) {
       ctx.fillStyle = (x + y) % 4 === 0 ? J2 : J;
       ctx.fillRect(x, y, 1, 1);
     }
   }
-  ctx.fillStyle = '#252c34';
-  ctx.fillRect(0, 7, 16, 3);
-  // Shoes on bottom
+
+  // Cargo Pockets
+  ctx.fillStyle = J2;
+  ctx.fillRect(2, 4, 12, 8);
+  ctx.fillRect(18, 4, 12, 8);
+
+  // Reinforced Hard-Shell Knee Pads with Rivets
+  ctx.fillStyle = K;
+  ctx.fillRect(2, 14, 12, 8);
+  ctx.fillRect(18, 14, 12, 8);
+  ctx.fillStyle = '#64748b'; // Rivet studs
+  ctx.fillRect(4, 15, 2, 2); ctx.fillRect(10, 15, 2, 2);
+  ctx.fillRect(20, 15, 2, 2); ctx.fillRect(26, 15, 2, 2);
+
+  // Tactical Combat Assault Boots
   ctx.fillStyle = B;
-  ctx.fillRect(0, 12, 16, 4);
+  ctx.fillRect(0, 24, 32, 8);
+  ctx.fillStyle = '#020617'; // Boot Lug Sole
+  ctx.fillRect(0, 30, 32, 2);
 
   const tex = new THREE.CanvasTexture(canvas as unknown as HTMLCanvasElement);
   tex.magFilter = THREE.NearestFilter;
@@ -289,10 +363,10 @@ export class RemotePlayers {
     const faceUVs = [
       [0.00, 0.25, 0.00, 0.50], // +X (Right side)
       [0.50, 0.75, 0.00, 0.50], // -X (Left side)
-      [0.25, 0.50, 0.50, 1.00], // +Y (Top hair)
+      [0.25, 0.50, 0.50, 1.00], // +Y (Top helmet)
       [0.50, 0.75, 0.50, 1.00], // -Y (Bottom neck)
-      [0.75, 1.00, 0.00, 0.50], // +Z (Back hair)
-      [0.25, 0.50, 0.00, 0.50], // -Z (Front face with Steve eyes!)
+      [0.75, 1.00, 0.00, 0.50], // +Z (Back helmet)
+      [0.25, 0.50, 0.00, 0.50], // -Z (Front face with Steve eyes & mask)
     ];
     for (let f = 0; f < 6; f++) {
       const [u0, u1, v0, v1] = faceUVs[f];
@@ -304,7 +378,21 @@ export class RemotePlayers {
     }
     uvs.needsUpdate = true;
     geo.translate(0, 0.18, 0); // Pivot at neck
-    return geo;
+
+    // FAST Helmet Brim, NVG Shroud & Comms Headset Earcups
+    const brim = new THREE.BoxGeometry(0.38, 0.05, 0.12);
+    brim.translate(0, 0.34, -0.15);
+    const nvg = new THREE.BoxGeometry(0.08, 0.08, 0.04);
+    nvg.translate(0, 0.27, -0.19);
+    const earcupR = new THREE.BoxGeometry(0.05, 0.12, 0.12);
+    earcupR.translate(0.19, 0.18, 0);
+    const earcupL = new THREE.BoxGeometry(0.05, 0.12, 0.12);
+    earcupL.translate(-0.19, 0.18, 0);
+
+    const parts = [geo, brim, nvg, earcupR, earcupL];
+    const merged = mergeGeometries(parts)!;
+    for (const p of parts) p.dispose();
+    return merged;
   })();
 
   private bodyGeo = (() => {
@@ -315,7 +403,7 @@ export class RemotePlayers {
       [0.75, 1.00, 0.00, 1.00], // -X
       [0.25, 0.75, 0.75, 1.00], // +Y
       [0.25, 0.75, 0.00, 0.25], // -Y
-      [0.25, 0.75, 0.00, 1.00], // +Z (Front with V-neck)
+      [0.25, 0.75, 0.00, 1.00], // +Z
       [0.25, 0.75, 0.00, 1.00], // -Z
     ];
     for (let f = 0; f < 6; f++) {
@@ -327,14 +415,26 @@ export class RemotePlayers {
       uvs.setXY(base + 3, u1, v0);
     }
     uvs.needsUpdate = true;
-    const vest = new THREE.BoxGeometry(0.48, 0.34, 0.29);
-    vest.translate(0, 0.02, 0);
+
+    // Tactical Plate Carrier, Mag Pouches, Shoulder Straps & Radio Unit
+    const vest = new THREE.BoxGeometry(0.48, 0.38, 0.29);
+    vest.translate(0, 0.03, 0);
+    const strapR = new THREE.BoxGeometry(0.08, 0.12, 0.30);
+    strapR.translate(0.16, 0.24, 0);
+    const strapL = new THREE.BoxGeometry(0.08, 0.12, 0.30);
+    strapL.translate(-0.16, 0.24, 0);
+    const magPouches = new THREE.BoxGeometry(0.32, 0.16, 0.06);
+    magPouches.translate(0, -0.04, -0.16);
     const belt = new THREE.BoxGeometry(0.46, 0.08, 0.27);
     belt.translate(0, -0.26, 0);
-    const merged = mergeGeometries([geo, vest, belt])!;
-    geo.dispose();
-    vest.dispose();
-    belt.dispose();
+    const radio = new THREE.BoxGeometry(0.08, 0.14, 0.08);
+    radio.translate(-0.24, 0.06, 0);
+    const antenna = new THREE.BoxGeometry(0.015, 0.24, 0.015);
+    antenna.translate(-0.24, 0.22, 0);
+
+    const parts = [geo, vest, strapR, strapL, magPouches, belt, radio, antenna];
+    const merged = mergeGeometries(parts)!;
+    for (const p of parts) p.dispose();
     return merged;
   })();
 
@@ -349,8 +449,16 @@ export class RemotePlayers {
       uvs.setXY(base + 3, 1, 0);
     }
     uvs.needsUpdate = true;
-    geo.translate(0, -0.30, 0); // Pivot at right shoulder
-    return geo;
+    const shoulderPad = new THREE.BoxGeometry(0.18, 0.14, 0.18);
+    shoulderPad.translate(0, 0.16, 0);
+    const elbowPad = new THREE.BoxGeometry(0.18, 0.12, 0.18);
+    elbowPad.translate(0, -0.02, 0);
+
+    const parts = [geo, shoulderPad, elbowPad];
+    const merged = mergeGeometries(parts)!;
+    for (const p of parts) p.dispose();
+    merged.translate(0, -0.30, 0); // Pivot at right shoulder
+    return merged;
   })();
 
   private armLGeo = (() => {
@@ -364,8 +472,16 @@ export class RemotePlayers {
       uvs.setXY(base + 3, 1, 0);
     }
     uvs.needsUpdate = true;
-    geo.translate(0, -0.30, 0); // Pivot at left shoulder
-    return geo;
+    const shoulderPad = new THREE.BoxGeometry(0.18, 0.14, 0.18);
+    shoulderPad.translate(0, 0.16, 0);
+    const elbowPad = new THREE.BoxGeometry(0.18, 0.12, 0.18);
+    elbowPad.translate(0, -0.02, 0);
+
+    const parts = [geo, shoulderPad, elbowPad];
+    const merged = mergeGeometries(parts)!;
+    for (const p of parts) p.dispose();
+    merged.translate(0, -0.30, 0); // Pivot at left shoulder
+    return merged;
   })();
 
   private legRGeo = (() => {
@@ -379,8 +495,18 @@ export class RemotePlayers {
       uvs.setXY(base + 3, 1, 0);
     }
     uvs.needsUpdate = true;
-    geo.translate(0, -0.30, 0); // Pivot at right hip
-    return geo;
+    const holster = new THREE.BoxGeometry(0.06, 0.16, 0.12);
+    holster.translate(0.10, 0.10, 0);
+    const kneePad = new THREE.BoxGeometry(0.20, 0.14, 0.20);
+    kneePad.translate(0, -0.02, 0);
+    const bootToe = new THREE.BoxGeometry(0.19, 0.12, 0.08);
+    bootToe.translate(0, -0.24, -0.07);
+
+    const parts = [geo, holster, kneePad, bootToe];
+    const merged = mergeGeometries(parts)!;
+    for (const p of parts) p.dispose();
+    merged.translate(0, -0.30, 0); // Pivot at right hip
+    return merged;
   })();
 
   private legLGeo = (() => {
@@ -394,22 +520,37 @@ export class RemotePlayers {
       uvs.setXY(base + 3, 1, 0);
     }
     uvs.needsUpdate = true;
-    geo.translate(0, -0.30, 0); // Pivot at left hip
-    return geo;
+    const kneePad = new THREE.BoxGeometry(0.20, 0.14, 0.20);
+    kneePad.translate(0, -0.02, 0);
+    const bootToe = new THREE.BoxGeometry(0.19, 0.12, 0.08);
+    bootToe.translate(0, -0.24, -0.07);
+
+    const parts = [geo, kneePad, bootToe];
+    const merged = mergeGeometries(parts)!;
+    for (const p of parts) p.dispose();
+    merged.translate(0, -0.30, 0); // Pivot at left hip
+    return merged;
   })();
 
   private gunGeo = (() => {
-    const body = new THREE.BoxGeometry(0.08, 0.14, 0.58);
-    body.translate(0, 0, -0.18);
-    const barrel = new THREE.BoxGeometry(0.035, 0.035, 0.35);
-    barrel.translate(0, 0.04, -0.56);
-    const mag = new THREE.BoxGeometry(0.055, 0.22, 0.11);
-    mag.translate(0, -0.12, -0.15);
-    const scope = new THREE.BoxGeometry(0.05, 0.04, 0.22);
-    scope.translate(0, 0.09, -0.14);
-    const parts = [body, barrel, mag, scope];
+    const body = new THREE.BoxGeometry(0.08, 0.12, 0.52);
+    body.translate(0, 0, -0.16);
+    const barrel = new THREE.BoxGeometry(0.03, 0.03, 0.42);
+    barrel.translate(0, 0.03, -0.58);
+    const flashHider = new THREE.BoxGeometry(0.045, 0.045, 0.08);
+    flashHider.translate(0, 0.03, -0.80);
+    const mag = new THREE.BoxGeometry(0.055, 0.22, 0.12);
+    mag.translate(0, -0.12, -0.14);
+    const rail = new THREE.BoxGeometry(0.05, 0.02, 0.42);
+    rail.translate(0, 0.07, -0.16);
+    const scope = new THREE.BoxGeometry(0.055, 0.06, 0.18);
+    scope.translate(0, 0.11, -0.16);
+    const stock = new THREE.BoxGeometry(0.06, 0.12, 0.20);
+    stock.translate(0, -0.01, 0.18);
+
+    const parts = [body, barrel, flashHider, mag, rail, scope, stock];
     const merged = mergeGeometries(parts)!;
-    for (const part of parts) part.dispose();
+    for (const p of parts) p.dispose();
     return merged;
   })();
 

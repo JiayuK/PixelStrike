@@ -11,48 +11,45 @@ function createHDVoxelTexture(type: number): THREE.Texture {
   const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
 
   switch (type) {
-    case 0: { // 0: Tactical Sandstone / Concrete Floor (Clean stone tiles with subtle bevels)
-      ctx.fillStyle = '#b8a686';
+    case 0: { // 0: Tactical Sandstone / Concrete Floor (4 beveled tiles with micro-pitted surface)
+      ctx.fillStyle = '#bda98c';
       ctx.fillRect(0, 0, 128, 128);
-      // 4 Large square floor tiles with 2px beveled mortar seams
-      ctx.fillStyle = '#6b5e4a';
+      // Subtle ambient occlusion around perimeter
+      ctx.fillStyle = 'rgba(0,0,0,0.06)';
+      ctx.fillRect(0, 0, 128, 6); ctx.fillRect(0, 122, 128, 6);
+      ctx.fillRect(0, 0, 6, 128); ctx.fillRect(122, 0, 6, 128);
+
+      // 4 Large square floor tiles with 4px beveled mortar seams
+      ctx.fillStyle = '#5c4f3d';
       ctx.fillRect(0, 62, 128, 4);
       ctx.fillRect(62, 0, 4, 128);
       // Tile bevel highlights & shadows
-      ctx.fillStyle = '#d1bf9f';
-      ctx.fillRect(0, 0, 62, 3);
-      ctx.fillRect(0, 0, 3, 62);
-      ctx.fillRect(66, 0, 62, 3);
-      ctx.fillRect(66, 0, 3, 62);
-      ctx.fillRect(0, 66, 62, 3);
-      ctx.fillRect(0, 66, 3, 62);
-      ctx.fillRect(66, 66, 62, 3);
-      ctx.fillRect(66, 66, 3, 62);
+      ctx.fillStyle = '#dbcca9';
+      ctx.fillRect(2, 2, 58, 3); ctx.fillRect(2, 2, 3, 58);
+      ctx.fillRect(68, 2, 58, 3); ctx.fillRect(68, 2, 3, 58);
+      ctx.fillRect(2, 68, 58, 3); ctx.fillRect(2, 68, 3, 58);
+      ctx.fillRect(68, 68, 58, 3); ctx.fillRect(68, 68, 3, 58);
 
-      ctx.fillStyle = '#8f7e65';
-      ctx.fillRect(0, 59, 62, 3);
-      ctx.fillRect(59, 0, 3, 62);
-      ctx.fillRect(66, 59, 62, 3);
-      ctx.fillRect(125, 0, 3, 62);
-      ctx.fillRect(0, 125, 62, 3);
-      ctx.fillRect(59, 66, 3, 62);
-      ctx.fillRect(66, 125, 62, 3);
-      ctx.fillRect(125, 66, 3, 62);
+      ctx.fillStyle = '#85745b';
+      ctx.fillRect(2, 57, 58, 3); ctx.fillRect(57, 2, 3, 58);
+      ctx.fillRect(68, 57, 58, 3); ctx.fillRect(123, 2, 3, 58);
+      ctx.fillRect(2, 123, 58, 3); ctx.fillRect(57, 68, 3, 58);
+      ctx.fillRect(68, 123, 58, 3); ctx.fillRect(123, 68, 3, 58);
 
       // Micro surface roughness
-      for (let i = 0; i < 240; i++) {
+      for (let i = 0; i < 300; i++) {
         const x = Math.floor(rnd() * 128);
         const y = Math.floor(rnd() * 128);
-        ctx.fillStyle = rnd() > 0.5 ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+        ctx.fillStyle = rnd() > 0.5 ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)';
         ctx.fillRect(x, y, 2, 2);
       }
       break;
     }
     case 1: { // 1: Reinforced Concrete Masonry (Clean modern urban brick blocks)
-      ctx.fillStyle = '#7a8087';
+      ctx.fillStyle = '#7c838a';
       ctx.fillRect(0, 0, 128, 128);
       // Clean horizontal and staggered vertical mortar lines
-      ctx.fillStyle = '#3a3e43';
+      ctx.fillStyle = '#32363b';
       ctx.fillRect(0, 30, 128, 4);
       ctx.fillRect(0, 62, 128, 4);
       ctx.fillRect(0, 94, 128, 4);
@@ -65,79 +62,100 @@ function createHDVoxelTexture(type: number): THREE.Texture {
       ctx.fillRect(30, 98, 4, 26);
       ctx.fillRect(94, 98, 4, 26);
 
-      // Brick top highlights
-      ctx.fillStyle = '#9aa1a9';
+      // Brick top highlights & bevels
+      ctx.fillStyle = '#a0a8b2';
       ctx.fillRect(0, 0, 62, 2); ctx.fillRect(66, 0, 62, 2);
       ctx.fillRect(0, 34, 30, 2); ctx.fillRect(34, 34, 60, 2); ctx.fillRect(98, 34, 30, 2);
       ctx.fillRect(0, 66, 62, 2); ctx.fillRect(66, 66, 62, 2);
       ctx.fillRect(0, 98, 30, 2); ctx.fillRect(34, 98, 60, 2); ctx.fillRect(98, 98, 30, 2);
 
       // Concrete stippling
-      for (let i = 0; i < 200; i++) {
+      for (let i = 0; i < 260; i++) {
         const x = Math.floor(rnd() * 128);
         const y = Math.floor(rnd() * 128);
-        ctx.fillStyle = rnd() > 0.5 ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)';
+        ctx.fillStyle = rnd() > 0.5 ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.09)';
         ctx.fillRect(x, y, 2, 2);
       }
       break;
     }
-    case 2: { // 2: High-Def Military Wooden Crate (Dark oak with heavy steel braces & bolts)
-      ctx.fillStyle = '#6a4729';
+    case 2: { // 2: High-Def Military Wooden Crate (Dark oak with heavy steel braces & stencils)
+      ctx.fillStyle = '#5c3d22';
       ctx.fillRect(0, 0, 128, 128);
       // Wood plank grooves
-      ctx.fillStyle = '#3d2511';
+      ctx.fillStyle = '#311d0e';
       ctx.fillRect(0, 30, 128, 3);
       ctx.fillRect(0, 62, 128, 3);
       ctx.fillRect(0, 94, 128, 3);
 
       // Wood grain streaks
-      ctx.fillStyle = '#7d5633';
-      for (let i = 0; i < 40; i++) {
+      ctx.fillStyle = '#78502d';
+      for (let i = 0; i < 50; i++) {
         const y = Math.floor(rnd() * 128);
         const x = Math.floor(rnd() * 100);
-        ctx.fillRect(x, y, 24 + rnd() * 20, 2);
+        ctx.fillRect(x, y, 20 + rnd() * 24, 2);
       }
 
+      // Military Crate Stenciled Markings in center
+      ctx.fillStyle = 'rgba(235, 200, 120, 0.45)';
+      ctx.fillRect(36, 42, 56, 12);
+      ctx.fillStyle = '#311d0e';
+      ctx.fillRect(40, 44, 4, 8); ctx.fillRect(48, 44, 4, 8); ctx.fillRect(56, 44, 4, 8);
+      ctx.fillRect(66, 44, 12, 3); ctx.fillRect(70, 47, 4, 5);
+
       // Outer heavy metal frame
-      ctx.fillStyle = '#22252a';
-      ctx.fillRect(0, 0, 128, 10);
-      ctx.fillRect(0, 118, 128, 10);
-      ctx.fillRect(0, 0, 10, 128);
-      ctx.fillRect(118, 0, 10, 128);
+      ctx.fillStyle = '#1c1f24';
+      ctx.fillRect(0, 0, 128, 12);
+      ctx.fillRect(0, 116, 128, 12);
+      ctx.fillRect(0, 0, 12, 128);
+      ctx.fillRect(116, 0, 12, 128);
 
       // Diagonal cross-brace metal band
       ctx.beginPath();
-      ctx.strokeStyle = '#22252a';
-      ctx.lineWidth = 10;
+      ctx.strokeStyle = '#1c1f24';
+      ctx.lineWidth = 12;
       ctx.moveTo(0, 0); ctx.lineTo(128, 128);
       ctx.stroke();
 
       // Silver corner bolts
-      ctx.fillStyle = '#b0b8c2';
+      ctx.fillStyle = '#c5ccd6';
       const boltCoords = [
-        [4, 4], [120, 4], [4, 120], [120, 120],
-        [60, 4], [60, 120], [4, 60], [120, 60],
+        [5, 5], [117, 5], [5, 117], [117, 117],
+        [60, 5], [60, 117], [5, 60], [117, 60],
       ];
       for (const [bx, by] of boltCoords) {
-        ctx.fillRect(bx, by, 4, 4);
+        ctx.fillRect(bx, by, 5, 5);
+        ctx.fillStyle = '#2d333b';
+        ctx.fillRect(bx + 1, by + 1, 3, 3);
+        ctx.fillStyle = '#c5ccd6';
       }
       break;
     }
     case 3: { // 3: Diamond Steel Plate (Industrial metallic tread plate)
-      ctx.fillStyle = '#5a626a';
+      ctx.fillStyle = '#565e66';
       ctx.fillRect(0, 0, 128, 128);
       // Beveled outer border
-      ctx.fillStyle = '#838d97';
+      ctx.fillStyle = '#8b96a2';
       ctx.fillRect(0, 0, 128, 4);
       ctx.fillRect(0, 0, 4, 128);
-      ctx.fillStyle = '#3a3f45';
+      ctx.fillStyle = '#34383e';
       ctx.fillRect(0, 124, 128, 4);
       ctx.fillRect(124, 0, 4, 128);
 
-      // Diamond tread pattern
+      // Diamond tread pattern with drop shadows and specular edge
       for (let y = 12; y < 120; y += 20) {
         for (let x = 12; x < 120; x += 20) {
-          ctx.fillStyle = '#7a848e';
+          // Shadow
+          ctx.fillStyle = '#2c3136';
+          ctx.beginPath();
+          ctx.moveTo(x + 1, y - 5);
+          ctx.lineTo(x + 6, y + 1);
+          ctx.lineTo(x + 1, y + 7);
+          ctx.lineTo(x - 4, y + 1);
+          ctx.closePath();
+          ctx.fill();
+
+          // Highlight
+          ctx.fillStyle = '#838e9a';
           ctx.beginPath();
           ctx.moveTo(x, y - 6);
           ctx.lineTo(x + 4, y);
@@ -146,19 +164,19 @@ function createHDVoxelTexture(type: number): THREE.Texture {
           ctx.closePath();
           ctx.fill();
 
-          ctx.fillStyle = '#383e44';
-          ctx.fillRect(x + 1, y, 3, 2);
+          ctx.fillStyle = '#b2bcc7';
+          ctx.fillRect(x - 1, y - 4, 2, 2);
         }
       }
       break;
     }
     case 4: { // 4: Dark Basalt / Fortress Stone (Polished dark slate tiles)
-      ctx.fillStyle = '#2c2e33';
+      ctx.fillStyle = '#27292e';
       ctx.fillRect(0, 0, 128, 128);
-      ctx.fillStyle = '#18191c';
+      ctx.fillStyle = '#141518';
       ctx.fillRect(0, 62, 128, 4);
       ctx.fillRect(62, 0, 4, 128);
-      ctx.fillStyle = '#42454c';
+      ctx.fillStyle = '#4b4f57';
       ctx.fillRect(0, 0, 62, 2); ctx.fillRect(0, 0, 2, 62);
       ctx.fillRect(66, 0, 62, 2); ctx.fillRect(66, 0, 2, 62);
       ctx.fillRect(0, 66, 62, 2); ctx.fillRect(0, 66, 2, 62);
@@ -166,39 +184,41 @@ function createHDVoxelTexture(type: number): THREE.Texture {
       break;
     }
     case 5: { // 5: High-Def Foliage & Planters (Lush multi-tone emerald hedge)
-      ctx.fillStyle = '#2d5c27';
+      ctx.fillStyle = '#265221';
       ctx.fillRect(0, 0, 128, 128);
-      for (let i = 0; i < 400; i++) {
+      for (let i = 0; i < 480; i++) {
         const x = Math.floor(rnd() * 126);
         const y = Math.floor(rnd() * 126);
         const r = rnd();
-        ctx.fillStyle = r < 0.35 ? '#1f421a' : r < 0.7 ? '#3d7834' : '#529648';
+        ctx.fillStyle = r < 0.3 ? '#193815' : r < 0.65 ? '#366d2f' : '#4d8e43';
         ctx.fillRect(x, y, 4, 4);
       }
       break;
     }
     case 6: { // 6: Chiseled Desert Sandstone (Warm golden architectural relief)
-      ctx.fillStyle = '#d4c28d';
+      ctx.fillStyle = '#d6c490';
       ctx.fillRect(0, 0, 128, 128);
-      ctx.fillStyle = '#a69460';
+      ctx.fillStyle = '#9e8c58';
       ctx.fillRect(0, 0, 128, 8);
       ctx.fillRect(0, 120, 128, 8);
       // Center geometric relief
-      ctx.fillStyle = '#baaa78';
-      ctx.fillRect(20, 20, 88, 88);
-      ctx.fillStyle = '#d4c28d';
-      ctx.fillRect(36, 36, 56, 56);
-      ctx.fillStyle = '#a69460';
-      ctx.fillRect(52, 52, 24, 24);
+      ctx.fillStyle = '#bcaa77';
+      ctx.fillRect(18, 18, 92, 92);
+      ctx.fillStyle = '#d6c490';
+      ctx.fillRect(34, 34, 60, 60);
+      ctx.fillStyle = '#9e8c58';
+      ctx.fillRect(50, 50, 28, 28);
+      ctx.fillStyle = '#e8d9aa';
+      ctx.fillRect(56, 56, 16, 16);
       break;
     }
     case 7: { // 7: Red Terracotta / Nether Brick (Deep crimson masonry)
-      ctx.fillStyle = '#6b2d28';
+      ctx.fillStyle = '#6e2b26';
       ctx.fillRect(0, 0, 128, 128);
-      ctx.fillStyle = '#381411';
+      ctx.fillStyle = '#33120f';
       ctx.fillRect(0, 62, 128, 4);
       ctx.fillRect(62, 0, 4, 128);
-      ctx.fillStyle = '#873c36';
+      ctx.fillStyle = '#8f3f38';
       ctx.fillRect(0, 0, 62, 2); ctx.fillRect(66, 0, 62, 2);
       ctx.fillRect(0, 66, 62, 2); ctx.fillRect(66, 66, 62, 2);
       break;
@@ -206,7 +226,7 @@ function createHDVoxelTexture(type: number): THREE.Texture {
     case 8: { // 8: Cyber Beacon / Lamp (Luminous amber lattice with glowing core)
       ctx.fillStyle = '#f59e0b';
       ctx.fillRect(0, 0, 128, 128);
-      ctx.fillStyle = '#78350f';
+      ctx.fillStyle = '#6b2d07';
       ctx.fillRect(0, 0, 128, 8);
       ctx.fillRect(0, 120, 128, 8);
       ctx.fillRect(0, 0, 8, 128);
@@ -215,32 +235,32 @@ function createHDVoxelTexture(type: number): THREE.Texture {
       ctx.fillRect(0, 60, 128, 8);
 
       // Glowing white-hot center core
-      ctx.fillStyle = '#fffbeb';
-      ctx.fillRect(20, 20, 36, 36);
-      ctx.fillRect(72, 20, 36, 36);
-      ctx.fillRect(20, 72, 36, 36);
-      ctx.fillRect(72, 72, 36, 36);
+      ctx.fillStyle = '#fffdf0';
+      ctx.fillRect(18, 18, 40, 40);
+      ctx.fillRect(70, 18, 40, 40);
+      ctx.fillRect(18, 70, 40, 40);
+      ctx.fillRect(70, 70, 40, 40);
       break;
     }
-    case 9: { // 9: Obsidian Carbon (High-tech carbon fiber sheen)
-      ctx.fillStyle = '#14161c';
+    case 9: { // 9: Obsidian Carbon (High-tech 2x2 twill carbon fiber sheen)
+      ctx.fillStyle = '#111317';
       ctx.fillRect(0, 0, 128, 128);
       for (let y = 0; y < 128; y += 8) {
         for (let x = 0; x < 128; x += 8) {
-          ctx.fillStyle = (x + y) % 16 === 0 ? '#262933' : '#0e1014';
+          ctx.fillStyle = (x + y) % 16 === 0 ? '#2a2e38' : '#0c0d10';
           ctx.fillRect(x, y, 8, 8);
         }
       }
       break;
     }
     case 10: { // 10: Tactical Supply Shelf
-      ctx.fillStyle = '#543d2b';
+      ctx.fillStyle = '#4e3826';
       ctx.fillRect(0, 0, 128, 128);
-      ctx.fillStyle = '#2b1e15';
+      ctx.fillStyle = '#241810';
       ctx.fillRect(4, 4, 120, 56);
       ctx.fillRect(4, 68, 120, 56);
 
-      // Colorful supply packets
+      // Colorful tactical crates & aid packs
       const cols = ['#10b981', '#06b6d4', '#f59e0b', '#f43f5e', '#3b82f6'];
       for (let i = 0; i < 5; i++) {
         ctx.fillStyle = cols[i];
@@ -250,16 +270,16 @@ function createHDVoxelTexture(type: number): THREE.Texture {
       break;
     }
     case 11: { // 11: Tinted Security Glass
-      ctx.fillStyle = 'rgba(6, 182, 212, 0.35)';
+      ctx.fillStyle = 'rgba(6, 182, 212, 0.32)';
       ctx.fillRect(0, 0, 128, 128);
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
       ctx.fillRect(0, 0, 128, 4);
       ctx.fillRect(0, 124, 128, 4);
       ctx.fillRect(0, 0, 4, 128);
       ctx.fillRect(124, 0, 4, 128);
-      // Diagonal glint
+      // High-tech diagonal glints
       ctx.beginPath();
-      ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+      ctx.strokeStyle = 'rgba(255,255,255,0.75)';
       ctx.lineWidth = 4;
       ctx.moveTo(10, 10); ctx.lineTo(40, 40);
       ctx.moveTo(80, 80); ctx.lineTo(118, 118);
@@ -270,33 +290,41 @@ function createHDVoxelTexture(type: number): THREE.Texture {
       ctx.fillStyle = '#0284c7';
       ctx.fillRect(0, 0, 128, 128);
       // Soft organic water caustics ripples without harsh stripes
-      ctx.fillStyle = 'rgba(56, 189, 248, 0.28)';
-      for (let i = 0; i < 48; i++) {
+      ctx.fillStyle = 'rgba(56, 189, 248, 0.32)';
+      for (let i = 0; i < 56; i++) {
         const cx = Math.floor(rnd() * 128);
         const cy = Math.floor(rnd() * 128);
-        const cw = 6 + Math.floor(rnd() * 14);
-        const ch = 4 + Math.floor(rnd() * 8);
+        const cw = 6 + Math.floor(rnd() * 16);
+        const ch = 4 + Math.floor(rnd() * 10);
         ctx.fillRect(cx, cy, cw, ch);
       }
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.18)';
-      for (let i = 0; i < 24; i++) {
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.22)';
+      for (let i = 0; i < 28; i++) {
         const cx = Math.floor(rnd() * 128);
         const cy = Math.floor(rnd() * 128);
         ctx.fillRect(cx, cy, 3, 2);
       }
       break;
     }
-    default: { // 13: Paved Roadway / Asphalt
-      ctx.fillStyle = '#33373d';
+    default: { // 13: Paved Roadway / Asphalt with Dashed Center Markings
+      ctx.fillStyle = '#2e3238';
       ctx.fillRect(0, 0, 128, 128);
-      // Road boundary lines
-      ctx.fillStyle = '#cbd5e1';
-      ctx.fillRect(0, 0, 128, 4);
-      ctx.fillRect(0, 124, 128, 4);
+      // Asphalt stone speckles
+      for (let i = 0; i < 180; i++) {
+        ctx.fillStyle = rnd() > 0.5 ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.1)';
+        ctx.fillRect(Math.floor(rnd() * 128), Math.floor(rnd() * 128), 2, 2);
+      }
+      // White boundary curbs
+      ctx.fillStyle = '#e2e8f0';
+      ctx.fillRect(0, 0, 128, 5);
+      ctx.fillRect(0, 123, 128, 5);
+      // Yellow dashed center stripe
+      ctx.fillStyle = '#f59e0b';
+      ctx.fillRect(16, 61, 32, 6);
+      ctx.fillRect(80, 61, 32, 6);
       break;
     }
   }
-
   const tex = new THREE.CanvasTexture(canvas as unknown as HTMLCanvasElement);
   tex.magFilter = THREE.LinearFilter;
   tex.minFilter = THREE.LinearMipmapLinearFilter;
@@ -458,18 +486,24 @@ export class WorldView {
 
   private setupSky() {
     const sunBox = new THREE.Mesh(
-      new THREE.BoxGeometry(28, 28, 6),
-      new THREE.MeshBasicMaterial({ color: 0xfff1ba })
+      new THREE.BoxGeometry(26, 26, 6),
+      new THREE.MeshBasicMaterial({ color: 0xfffff0 })
     );
-    sunBox.position.set(90, 42, -130);
+    sunBox.position.set(100, 95, -120);
     sunBox.lookAt(0, 0, 0);
-    const halo = new THREE.Mesh(
-      new THREE.BoxGeometry(48, 48, 4),
-      new THREE.MeshBasicMaterial({ color: 0xffdf87, transparent: true, opacity: 0.16, depthWrite: false })
+    const haloInner = new THREE.Mesh(
+      new THREE.BoxGeometry(44, 44, 4),
+      new THREE.MeshBasicMaterial({ color: 0xfff2b0, transparent: true, opacity: 0.35, depthWrite: false })
     );
-    halo.position.copy(sunBox.position);
-    halo.lookAt(0, 0, 0);
-    this.sun.add(halo, sunBox);
+    haloInner.position.copy(sunBox.position);
+    haloInner.lookAt(0, 0, 0);
+    const haloOuter = new THREE.Mesh(
+      new THREE.BoxGeometry(72, 72, 2),
+      new THREE.MeshBasicMaterial({ color: 0xffdf80, transparent: true, opacity: 0.18, depthWrite: false })
+    );
+    haloOuter.position.copy(sunBox.position);
+    haloOuter.lookAt(0, 0, 0);
+    this.sun.add(haloOuter, haloInner, sunBox);
     this.scene.add(this.sun);
 
     const cloudMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.72 });

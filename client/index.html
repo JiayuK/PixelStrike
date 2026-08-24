@@ -140,21 +140,21 @@
     .menu-grid {
       min-height: 0;
       display: grid;
-      grid-template-columns: minmax(0, 1.55fr) minmax(340px, .75fr);
+      grid-template-columns: minmax(310px, 0.9fr) minmax(0, 1.4fr);
       gap: 14px;
       overflow: hidden;
     }
-    .deploy-panel, .intel-panel {
+    .preview-panel, .deploy-panel, .intel-panel {
       position: relative;
       min-height: 0;
       isolation: isolate;
       border: 1px solid var(--line);
       background: rgb(24 28 24 / .97);
       box-shadow: var(--shadow);
-      padding: clamp(18px, 2vw, 26px);
+      padding: clamp(16px, 1.8vw, 22px);
       overflow: hidden;
     }
-    .deploy-panel::after, .intel-panel::after, .dialog::after, #scoreboard::after {
+    .preview-panel::after, .deploy-panel::after, .intel-panel::after, .dialog::after, #scoreboard::after {
       content: "";
       position: absolute;
       right: 0;
@@ -163,26 +163,150 @@
       height: 5px;
       background: var(--accent);
     }
-    .deploy-panel::before {
-      content: "";
+    .preview-panel {
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      gap: 12px;
+      align-content: stretch;
+      background: rgb(18 22 20 / .97);
+    }
+    .preview-canvas-wrap {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      min-height: 310px;
+      border: 1px solid var(--line-strong);
+      background: radial-gradient(circle at 50% 45%, #243038 0%, #0d1214 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      cursor: grab;
+    }
+    .preview-canvas-wrap:active { cursor: grabbing; }
+    #character-preview-canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    .preview-drag-hint {
       position: absolute;
-      inset: 0;
-      z-index: -1;
-      background: radial-gradient(circle at 82% 10%, rgb(201 130 43 / .09), transparent 28%);
+      bottom: 8px;
+      left: 50%;
+      transform: translateX(-50%);
       pointer-events: none;
+      background: rgba(10, 14, 12, 0.78);
+      border: 1px solid var(--line);
+      padding: 4px 10px;
+      color: var(--dim);
+      font: 700 10px var(--font-mono);
+      letter-spacing: .06em;
+      white-space: nowrap;
+    }
+    .preview-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      border-top: 1px solid var(--line);
+      padding-top: 10px;
+    }
+    .skin-info-wrap {
+      display: grid;
+      gap: 2px;
+      min-width: 0;
+    }
+    .skin-label {
+      color: var(--muted);
+      font: 700 9px var(--font-mono);
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    #skin-name-badge {
+      color: var(--paper);
+      font: 700 12px var(--font-mono);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .dashboard-panel {
+      min-height: 0;
+      display: grid;
+      grid-template-rows: auto 1fr;
+      gap: 14px;
+      overflow-y: auto;
     }
     .deploy-panel {
       display: grid;
       grid-template-rows: auto auto auto auto;
       align-content: start;
-      gap: clamp(12px, 1.8vh, 17px);
+      gap: clamp(10px, 1.6vh, 15px);
       align-self: start;
     }
     .intel-panel {
       display: grid;
-      grid-template-rows: auto minmax(150px, 1fr) auto;
-      gap: 14px;
+      grid-template-rows: auto minmax(130px, 1fr) auto;
+      gap: 12px;
     }
+
+    #deploy-loader-overlay {
+      background: rgba(10, 14, 12, 0.95);
+      backdrop-filter: blur(10px);
+      z-index: 1200;
+    }
+    .deploy-loader-box {
+      width: min(520px, calc(100vw - 32px));
+      background: rgb(20 25 22 / .98);
+      border: 1px solid var(--line-strong);
+      box-shadow: 0 24px 56px rgba(0, 0, 0, 0.85);
+      padding: clamp(22px, 3vw, 32px);
+      display: grid;
+      gap: 16px;
+      position: relative;
+    }
+    .deploy-loader-box::after {
+      content: "";
+      position: absolute;
+      right: 0;
+      top: 0;
+      width: 48px;
+      height: 5px;
+      background: var(--accent);
+    }
+    .deploy-loader-box h2 {
+      margin: 0;
+      font: 700 clamp(20px, 2.4vw, 26px) var(--font-display);
+      letter-spacing: .04em;
+      color: var(--paper);
+    }
+    .deploy-progress-track {
+      width: 100%;
+      height: 10px;
+      background: #111413;
+      border: 1px solid var(--line);
+      position: relative;
+      overflow: hidden;
+    }
+    .deploy-progress-bar {
+      width: 0%;
+      height: 100%;
+      background: linear-gradient(90deg, #ca8a04, #f59e0b, #fbbf24);
+      box-shadow: 0 0 12px rgba(245, 158, 11, 0.6);
+      transition: width 0.08s ease-out;
+    }
+    .deploy-status-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: var(--muted);
+      font: 700 12px var(--font-mono);
+      letter-spacing: .04em;
+    }
+    #deploy-pct-text {
+      color: var(--accent-hi);
+      font-size: 14px;
+    }
+
     .mode-label {
       color: var(--accent-hi);
       font: 700 11px var(--font-mono);
@@ -992,111 +1116,130 @@
       </header>
 
       <div class="menu-grid">
-        <section class="deploy-panel" aria-labelledby="deploy-heading">
-          <header>
-            <div class="mode-label">FREE FOR ALL / VOXEL CITADEL</div>
-            <h1 class="deploy-title" id="deploy-heading"><span>进入要塞</span><span>赢下每次交火</span></h1>
-            <p class="deploy-copy">即时复活、自由配装、百人同房。先看角度，再压枪，活到下一次换弹。</p>
-          </header>
-
-          <div class="metric-rail" aria-label="服务器规格">
-            <div class="metric"><b>60 Hz</b><span>权威物理</span></div>
-            <div class="metric"><b>512 × 512</b><span>地图尺寸</span></div>
-            <div class="metric"><b>245</b><span>安全出生点</span></div>
-          </div>
-
-          <div>
-            <div class="loadout-grid">
-              <div class="field full">
-                <label for="name-input">特战代号 / CALLSIGN</label>
-                <input class="control" id="name-input" maxlength="16" autocomplete="nickname" placeholder="输入代号，支持中文">
-              </div>
-              <div class="field">
-                <label for="primary-select">主武器 / PRIMARY</label>
-                <select class="control" id="primary-select">
-                  <option value="-1" selected>随机主武器（每次重生随机）</option>
-                  <option value="3">AK-47 经典突击步枪</option>
-                  <option value="4">M4A4 特战突击步枪</option>
-                  <option value="9">FAMAS 突击步枪</option>
-                  <option value="10">AUG 光学突击步枪</option>
-                  <option value="2">MP5-SD 微声冲锋枪</option>
-                  <option value="8">UMP-45 战术冲锋枪</option>
-                  <option value="5">AWP 重型狙击步枪</option>
-                  <option value="11">SSG 08 轻型狙击</option>
-                  <option value="12">XM1014 战术霰弹</option>
-                </select>
-              </div>
-              <div class="field">
-                <label for="secondary-select">副武器 / SECONDARY</label>
-                <select class="control" id="secondary-select">
-                  <option value="-1" selected>随机副武器（每次重生随机）</option>
-                  <option value="0">GLOCK-18 战术手枪</option>
-                  <option value="7">USP-S 消音手枪</option>
-                  <option value="1">DESERT EAGLE 沙漠之鹰</option>
-                </select>
-              </div>
-            </div>
-
-            <div class="loadout-brief" id="weapon-spec-box">
-              <div class="brief-head"><span>主武器数据</span><span id="weapon-spec-tag">突击步枪 / 经典火力</span></div>
-              <div class="stat-grid">
-                <div class="stat-cell"><span>伤害</span><b id="spec-dmg-val">33</b></div>
-                <div class="stat-cell"><span>射速</span><b id="spec-rpm-val">600 RPM</b></div>
-                <div class="stat-cell"><span>爆头倍率</span><b id="spec-head-val">3.7 ×</b></div>
-                <div class="stat-cell"><span>弹药</span><b id="spec-mag-val">30 / 90</b></div>
-              </div>
-            </div>
-          </div>
-
-          <div class="deploy-bottom">
-            <div class="zone-brief">
-              <div class="zone-head"><b>VOXEL CITADEL</b><span>5 个交火区</span></div>
-              <div class="zone-list">
-                <span>北侧城堡</span>
-                <span>南侧古堡</span>
-                <span>中央石桥</span>
-                <span>西侧暗道</span>
-                <span>东侧工坊</span>
-              </div>
-            </div>
-            <button id="join-btn" type="button">进入战场</button>
-          </div>
-        </section>
-
-        <section class="intel-panel" aria-labelledby="leaderboard-heading">
+        <!-- Left Side: Interactive 3D Minecraft Character & Weapon Showcase -->
+        <section class="preview-panel" aria-label="3D角色预览">
           <header class="section-head">
             <div>
-              <h2 id="leaderboard-heading">真实玩家排行榜</h2>
-              <p>只统计产生过战绩的真人玩家</p>
+              <div class="mode-label">3D MC OPERATOR / 战备预览</div>
+              <h2 style="margin:4px 0 0;font:700 18px var(--font-display);letter-spacing:.04em;">特战角色展示</h2>
             </div>
-            <button id="lb-refresh-btn" type="button" aria-label="刷新排行榜">刷新</button>
           </header>
 
-          <div class="table-shell">
-            <table>
-              <thead><tr><th>排名</th><th>玩家</th><th>击杀</th><th>阵亡</th><th>K/D</th></tr></thead>
-              <tbody id="leaderboard">
-                <tr><td colspan="5"><span class="loading-line">同步战绩中</span></td></tr>
-              </tbody>
-            </table>
+          <div class="preview-canvas-wrap">
+            <canvas id="character-preview-canvas"></canvas>
+            <div class="preview-drag-hint"><span>🖱️ 拖拽可 360° 旋转视角</span></div>
           </div>
 
-          <div class="controls-brief">
-            <h3>战术操控 / CONTROLS</h3>
-            <div class="key-grid">
-              <div class="key-row"><kbd>WASD</kbd><span>移动</span></div>
-              <div class="key-row"><kbd>鼠标</kbd><span>观察与瞄准</span></div>
-              <div class="key-row"><kbd>空格</kbd><span>跳跃</span></div>
-              <div class="key-row"><kbd>C / Ctrl</kbd><span>下蹲移动</span></div>
-              <div class="key-row"><kbd>左键</kbd><span>射击</span></div>
-              <div class="key-row"><kbd>右键</kbd><span>切换精确瞄准</span></div>
-              <div class="key-row"><kbd>R</kbd><span>换弹</span></div>
-              <div class="key-row"><kbd>G / 4</kbd><span>装备手雷 · 右键拉栓 · 左键投掷</span></div>
-              <div class="key-row"><kbd>1 2 3 / 滚轮</kbd><span>主武器 / 副武器 / 刀切换</span></div>
-              <div class="key-row"><kbd>Tab</kbd><span>实时战绩</span></div>
+          <div class="preview-footer">
+            <div class="skin-info-wrap">
+              <span class="skin-label">战备角色皮肤</span>
+              <b id="skin-name-badge">经典史蒂夫 / Classic Steve</b>
             </div>
+            <button class="ghost-button" id="random-skin-btn" type="button">换个皮肤</button>
           </div>
         </section>
+
+        <!-- Right Side: Tactical Deployment, Weapon Loadout & Real-time Leaderboard -->
+        <div class="dashboard-panel">
+          <section class="deploy-panel" aria-labelledby="deploy-heading">
+            <header>
+              <div class="mode-label">FREE FOR ALL / VOXEL CITADEL</div>
+              <h1 class="deploy-title" id="deploy-heading"><span>进入要塞</span><span>赢下每次交火</span></h1>
+            </header>
+
+            <div>
+              <div class="loadout-grid">
+                <div class="field full">
+                  <label for="name-input">特战代号 / CALLSIGN</label>
+                  <input class="control" id="name-input" maxlength="16" autocomplete="nickname" placeholder="输入代号，支持中文">
+                </div>
+                <div class="field">
+                  <label for="primary-select">主武器 / PRIMARY</label>
+                  <select class="control" id="primary-select">
+                    <option value="-1" selected>随机主武器（每次重生随机）</option>
+                    <option value="3">AK-47 经典突击步枪</option>
+                    <option value="4">M4A4 特战突击步枪</option>
+                    <option value="9">FAMAS 突击步枪</option>
+                    <option value="10">AUG 光学突击步枪</option>
+                    <option value="2">MP5-SD 微声冲锋枪</option>
+                    <option value="8">UMP-45 战术冲锋枪</option>
+                    <option value="5">AWP 重型狙击步枪</option>
+                    <option value="11">SSG 08 轻型狙击</option>
+                    <option value="12">XM1014 战术霰弹</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="secondary-select">副武器 / SECONDARY</label>
+                  <select class="control" id="secondary-select">
+                    <option value="-1" selected>随机副武器（每次重生随机）</option>
+                    <option value="0">GLOCK-18 战术手枪</option>
+                    <option value="7">USP-S 消音手枪</option>
+                    <option value="1">DESERT EAGLE 沙漠之鹰</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="loadout-brief" id="weapon-spec-box">
+                <div class="brief-head"><span>主武器数据</span><span id="weapon-spec-tag">突击步枪 / 经典火力</span></div>
+                <div class="stat-grid">
+                  <div class="stat-cell"><span>伤害</span><b id="spec-dmg-val">33</b></div>
+                  <div class="stat-cell"><span>射速</span><b id="spec-rpm-val">600 RPM</b></div>
+                  <div class="stat-cell"><span>爆头倍率</span><b id="spec-head-val">3.7 ×</b></div>
+                  <div class="stat-cell"><span>弹药</span><b id="spec-mag-val">30 / 90</b></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="deploy-bottom">
+              <div class="zone-brief">
+                <div class="zone-head"><b>VOXEL CITADEL</b><span>5 个交火区</span></div>
+                <div class="zone-list">
+                  <span>北侧城堡</span>
+                  <span>南侧古堡</span>
+                  <span>中央石桥</span>
+                  <span>西侧暗道</span>
+                  <span>东侧工坊</span>
+                </div>
+              </div>
+              <button id="join-btn" type="button">进入战场</button>
+            </div>
+          </section>
+
+          <section class="intel-panel" aria-labelledby="leaderboard-heading">
+            <header class="section-head">
+              <div>
+                <h2 id="leaderboard-heading">真实玩家排行榜</h2>
+                <p>只统计产生过战绩的真人玩家</p>
+              </div>
+              <button id="lb-refresh-btn" type="button" aria-label="刷新排行榜">刷新</button>
+            </header>
+
+            <div class="table-shell">
+              <table>
+                <thead><tr><th>排名</th><th>玩家</th><th>击杀</th><th>阵亡</th><th>K/D</th></tr></thead>
+                <tbody id="leaderboard">
+                  <tr><td colspan="5"><span class="loading-line">同步战绩中</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="controls-brief">
+              <h3>战术操控 / CONTROLS</h3>
+              <div class="key-grid">
+                <div class="key-row"><kbd>WASD</kbd><span>移动</span></div>
+                <div class="key-row"><kbd>鼠标</kbd><span>观察与瞄准</span></div>
+                <div class="key-row"><kbd>空格</kbd><span>跳跃</span></div>
+                <div class="key-row"><kbd>C / Ctrl</kbd><span>下蹲移动</span></div>
+                <div class="key-row"><kbd>左键</kbd><span>射击</span></div>
+                <div class="key-row"><kbd>右键</kbd><span>切换精确瞄准</span></div>
+                <div class="key-row"><kbd>R</kbd><span>换弹</span></div>
+                <div class="key-row"><kbd>G / 4</kbd><span>装备手雷 · 右键拉栓 · 左键投掷</span></div>
+                <div class="key-row"><kbd>1 2 3 / 滚轮</kbd><span>主武器 / 副武器 / 刀切换</span></div>
+                <div class="key-row"><kbd>Tab</kbd><span>实时战绩</span></div>
+              </div>
+            </div>
+          </section>
+        </div>
       </div>
     </div>
   </main>
@@ -1214,6 +1357,19 @@
     </div>
   </section>
 
+  <div id="deploy-loader-overlay" class="overlay" role="progressbar" aria-label="正在进入战场" style="display:none;">
+    <div class="deploy-loader-box">
+      <div class="dialog-label">TACTICAL DEPLOYMENT</div>
+      <h2 id="deploy-loader-title">正在空降进入要塞战场</h2>
+      <div class="deploy-progress-track">
+        <div id="deploy-progress-bar" class="deploy-progress-bar"></div>
+      </div>
+      <div class="deploy-status-row">
+        <span id="deploy-status-text">初始化体素物理与网络同步...</span>
+        <b id="deploy-pct-text">0%</b>
+      </div>
+    </div>
+  </div>
 
   <div id="pause-overlay" class="overlay" role="dialog" aria-modal="true" aria-labelledby="pause-title">
     <div class="dialog">

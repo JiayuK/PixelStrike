@@ -13,31 +13,30 @@ const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
 const wsUrl = import.meta.env.VITE_WS_URL || `${proto}//${location.host}/ws`;
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x87bfe1);
-scene.fog = new THREE.Fog(0x87bfe1, 36, 210);
+scene.background = new THREE.Color(0x64aae8);
+scene.fog = new THREE.Fog(0x84c2ee, 80, 380);
 
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.05, 400);
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.05, 450);
 camera.rotation.order = 'YXZ';
 camera.layers.enable(0);
 camera.layers.disable(1);
 const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.15;
+renderer.toneMappingExposure = 1.22;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 document.body.appendChild(renderer.domElement);
 
-const hemiLight = new THREE.HemisphereLight(0xd9f1ff, 0x756f5d, 0.95);
+const hemiLight = new THREE.HemisphereLight(0xe0f4ff, 0x6e6552, 1.10);
 scene.add(hemiLight);
 
-const sun = new THREE.DirectionalLight(0xfff0cf, 1.48);
-sun.position.set(90, 48, -120);
+const sun = new THREE.DirectionalLight(0xfffae6, 1.85);
+sun.position.set(100, 110, -80);
 scene.add(sun);
 scene.add(camera);
 
-const fillLight = new THREE.DirectionalLight(0xa8cff0, 0.38);
-fillLight.position.set(-70, 28, 90);
+const fillLight = new THREE.DirectionalLight(0x9ecff6, 0.45);
+fillLight.position.set(-80, 45, 80);
 scene.add(fillLight);
-
 const hud = new Hud();
 const audio = new AudioEngine();
 const net = new Net();
