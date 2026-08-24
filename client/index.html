@@ -53,10 +53,13 @@
       z-index: 30;
       min-height: 100dvh;
       overflow: auto;
-      padding: 18px;
+      padding: clamp(12px, 1.6vw, 22px);
       background:
-        linear-gradient(90deg, rgb(11 13 11 / .94), rgb(11 13 11 / .84)),
-        repeating-conic-gradient(from 90deg at 1px 1px, #171a16 0 25%, #121511 0 50%) 0 0 / 48px 48px;
+        radial-gradient(circle at 14% -12%, rgb(201 130 43 / .16), transparent 34%),
+        linear-gradient(100deg, rgb(11 13 11 / .97), rgb(11 13 11 / .9)),
+        repeating-linear-gradient(90deg, transparent 0 47px, rgb(98 105 91 / .08) 48px),
+        repeating-linear-gradient(0deg, transparent 0 47px, rgb(98 105 91 / .08) 48px),
+        var(--ink);
     }
     #menu::before {
       content: "";
@@ -64,18 +67,19 @@
       inset: 0;
       pointer-events: none;
       background:
-        linear-gradient(115deg, transparent 0 62%, rgb(201 130 43 / .08) 62% 74%, transparent 74%),
-        linear-gradient(25deg, rgb(255 255 255 / .018) 25%, transparent 25% 75%, rgb(255 255 255 / .018) 75%);
+        linear-gradient(118deg, transparent 0 64%, rgb(201 130 43 / .07) 64% 72%, transparent 72%),
+        radial-gradient(circle at 82% 20%, rgb(240 234 220 / .035), transparent 24%);
     }
 
     .menu-frame {
       position: relative;
-      width: min(1260px, 100%);
-      min-height: calc(100dvh - 36px);
+      width: min(1340px, 100%);
+      height: calc(100dvh - clamp(24px, 3.2vw, 44px));
+      min-height: 690px;
       margin: 0 auto;
       display: grid;
-      grid-template-rows: auto 1fr;
-      gap: 12px;
+      grid-template-rows: auto minmax(0, 1fr);
+      gap: 14px;
     }
     .command-bar {
       min-height: 54px;
@@ -84,8 +88,8 @@
       align-items: center;
       border: 1px solid var(--line);
       border-left: 4px solid var(--accent);
-      background: rgb(24 28 24 / .97);
-      box-shadow: var(--shadow);
+      background: linear-gradient(90deg, rgb(32 37 31 / .98), rgb(24 28 24 / .95));
+      box-shadow: 0 12px 34px rgb(3 5 3 / .34);
       padding: 8px 12px;
     }
     .wordmark { display: flex; align-items: center; gap: 11px; min-width: 0; }
@@ -136,15 +140,18 @@
     .menu-grid {
       min-height: 0;
       display: grid;
-      grid-template-columns: minmax(0, 1.35fr) minmax(350px, .82fr);
-      gap: 12px;
+      grid-template-columns: minmax(0, 1.55fr) minmax(340px, .75fr);
+      gap: 14px;
+      overflow: hidden;
     }
     .deploy-panel, .intel-panel {
       position: relative;
+      min-height: 0;
+      isolation: isolate;
       border: 1px solid var(--line);
       background: rgb(24 28 24 / .97);
       box-shadow: var(--shadow);
-      padding: clamp(16px, 2.2vw, 28px);
+      padding: clamp(18px, 2vw, 26px);
       overflow: hidden;
     }
     .deploy-panel::after, .intel-panel::after, .dialog::after, #scoreboard::after {
@@ -156,11 +163,20 @@
       height: 5px;
       background: var(--accent);
     }
+    .deploy-panel::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: -1;
+      background: radial-gradient(circle at 82% 10%, rgb(201 130 43 / .09), transparent 28%);
+      pointer-events: none;
+    }
     .deploy-panel {
       display: grid;
       grid-template-rows: auto auto auto auto;
-      align-content: space-between;
-      gap: 15px;
+      align-content: start;
+      gap: clamp(12px, 1.8vh, 17px);
+      align-self: start;
     }
     .intel-panel {
       display: grid;
@@ -174,41 +190,48 @@
       text-transform: uppercase;
     }
     .deploy-title {
-      margin-top: 6px;
-      max-width: 720px;
-      font: clamp(42px, 6vw, 76px)/.88 var(--font-display);
-      letter-spacing: .03em;
+      display: grid;
+      margin-top: 7px;
+      max-width: 760px;
+      font: clamp(46px, 4.8vw, 68px)/.88 var(--font-display);
+      letter-spacing: .025em;
       text-wrap: balance;
     }
+    .deploy-title span:last-child {
+      color: var(--paper);
+      font-size: .72em;
+      letter-spacing: .075em;
+    }
     .deploy-copy {
-      max-width: 60ch;
-      margin-top: 9px;
+      max-width: 52ch;
+      margin-top: 10px;
       color: var(--muted);
-      font-size: 13px;
+      font-size: 12px;
       line-height: 1.55;
+      text-wrap: pretty;
     }
     .metric-rail {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
-      border: 1px solid var(--line);
-      background: var(--base);
+      border-block: 1px solid var(--line);
+      background: rgb(11 13 11 / .48);
     }
     .metric {
       min-width: 0;
-      padding: 10px 12px;
+      padding: 9px 12px;
       border-right: 1px solid var(--line);
     }
     .metric:last-child { border-right: 0; }
-    .metric b { display: block; color: var(--paper); font: 700 17px var(--font-mono); }
-    .metric span { display: block; margin-top: 2px; color: var(--dim); font: 10px var(--font-mono); }
+    .metric b { display: block; color: var(--paper); font: 700 16px var(--font-mono); font-variant-numeric: tabular-nums; }
+    .metric span { display: block; margin-top: 2px; color: var(--dim); font: 9px var(--font-mono); }
 
     .loadout-grid {
       display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
+      grid-template-columns: 1.08fr 1fr 1fr;
+      gap: 9px;
     }
     .field { display: grid; gap: 6px; min-width: 0; }
-    .field.full { grid-column: 1 / -1; }
+    .field.full { grid-column: auto; }
     .field label {
       color: var(--muted);
       font: 700 10px var(--font-mono);
@@ -240,9 +263,10 @@
     }
 
     .loadout-brief {
+      margin-top: 10px;
       border-top: 1px solid var(--line);
       border-bottom: 1px solid var(--line);
-      padding: 10px 0;
+      padding: 9px 0;
     }
     .brief-head {
       display: flex;
@@ -279,17 +303,18 @@
     }
     #join-btn {
       width: 100%;
-      min-height: 64px;
+      min-height: 58px;
       border: 2px solid #efb15d;
       border-radius: 0;
       background: var(--accent);
       color: #17110a;
       box-shadow: inset 0 -5px 0 #87521b, 5px 5px 0 #080a08;
-      font: 28px var(--font-display);
+      font: 26px var(--font-display);
       letter-spacing: .07em;
-      transition: transform .12s ease, background-color .12s ease;
+      white-space: nowrap;
+      transition: transform .12s ease, background-color .12s ease, box-shadow .12s ease;
     }
-    #join-btn:hover { background: var(--accent-hi); transform: translate(-1px, -1px); }
+    #join-btn:hover { background: var(--accent-hi); transform: translate(-1px, -1px); box-shadow: inset 0 -5px 0 #87521b, 7px 7px 0 #080a08; }
     #join-btn:active { transform: translate(2px, 3px); box-shadow: inset 0 -3px 0 #87521b, 2px 2px 0 #080a08; }
 
     .section-head { display: flex; justify-content: space-between; align-items: end; gap: 10px; }
@@ -905,15 +930,17 @@
 
     @media (max-width: 1040px) {
       .menu-grid { grid-template-columns: minmax(0, 1.15fr) minmax(330px, .85fr); }
+      .loadout-grid { grid-template-columns: 1fr 1fr; }
+      .field.full { grid-column: 1 / -1; }
       .deploy-bottom { grid-template-columns: 1fr; }
       .key-grid { grid-template-columns: 1fr; }
     }
     @media (max-width: 800px) {
       #menu { padding: 10px; }
-      .menu-frame { min-height: calc(100dvh - 20px); }
+      .menu-frame { height: auto; min-height: calc(100dvh - 20px); }
       .command-bar { grid-template-columns: 1fr auto; }
       .sync-readout { display: none; }
-      .menu-grid { grid-template-columns: 1fr; }
+      .menu-grid { grid-template-columns: 1fr; overflow: visible; }
       .deploy-panel, .intel-panel { overflow: visible; }
       .intel-panel { min-height: 520px; }
       .zone-list { grid-template-columns: repeat(3, 1fr); }
@@ -928,6 +955,7 @@
       .wordmark small { display: none; }
       .wordmark strong { font-size: 22px; }
       .deploy-title { font-size: 44px; }
+      .deploy-title span:last-child { font-size: .7em; }
       .loadout-grid, .dialog-actions { grid-template-columns: 1fr; }
       .field.full { grid-column: auto; }
       .stat-grid { grid-template-columns: 1fr 1fr; }
@@ -967,7 +995,7 @@
         <section class="deploy-panel" aria-labelledby="deploy-heading">
           <header>
             <div class="mode-label">FREE FOR ALL / VOXEL CITADEL</div>
-            <h1 class="deploy-title" id="deploy-heading">进入要塞<br>赢下每次交火</h1>
+            <h1 class="deploy-title" id="deploy-heading"><span>进入要塞</span><span>赢下每次交火</span></h1>
             <p class="deploy-copy">即时复活、自由配装、百人同房。先看角度，再压枪，活到下一次换弹。</p>
           </header>
 
@@ -986,7 +1014,7 @@
               <div class="field">
                 <label for="primary-select">主武器 / PRIMARY</label>
                 <select class="control" id="primary-select">
-                  <option value="-1" selected>🎲 随机主武器（每次重生随机）</option>
+                  <option value="-1" selected>随机主武器（每次重生随机）</option>
                   <option value="3">AK-47 经典突击步枪</option>
                   <option value="4">M4A4 特战突击步枪</option>
                   <option value="9">FAMAS 突击步枪</option>
@@ -1001,7 +1029,7 @@
               <div class="field">
                 <label for="secondary-select">副武器 / SECONDARY</label>
                 <select class="control" id="secondary-select">
-                  <option value="-1" selected>🎲 随机副武器（每次重生随机）</option>
+                  <option value="-1" selected>随机副武器（每次重生随机）</option>
                   <option value="0">GLOCK-18 战术手枪</option>
                   <option value="7">USP-S 消音手枪</option>
                   <option value="1">DESERT EAGLE 沙漠之鹰</option>
