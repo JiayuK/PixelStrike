@@ -592,7 +592,7 @@ export class Hud {
   }
 
   setCrosshair(spread: number) {
-    const px = Math.round(Math.max(3, Math.min(42, spread)));
+    const px = Math.round(Math.max(2, Math.min(32, spread)));
     if (px === this.lastCrosshair) return;
     this.lastCrosshair = px;
     this.crosshair.style.setProperty('--spread', `${px}px`);

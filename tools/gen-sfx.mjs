@@ -107,6 +107,26 @@ wav('fire_ak47', mix(
 wav('fire_m4a4', mix(
   gunshot(0.36, 20, 0.36, 0.065, 0.9), tone(122, 0.2, 'square', 0.24, 14), sweep(980, 130, 0.13, 0.2, 22),
   delayed(gunshot(0.15, 27, 0.13, 0.04, 0.08), 0.052, 0.14)));
+const effectsSeed = seed;
+wav('fire_usp', mix(
+  gunshot(0.19, 34, 0.38, 0.1, 0.28), tone(132, 0.13, 'sine', 0.28, 28), sweep(620, 180, 0.08, 0.12, 32),
+  delayed(tone(2400, 0.025, 'square', 0.10, 72), 0.01)));
+wav('fire_ump', mix(
+  gunshot(0.27, 25, 0.25, 0.06, 0.42), tone(92, 0.20, 'square', 0.34, 16), sweep(420, 72, 0.12, 0.18, 24),
+  delayed(gunshot(0.1, 36, 0.12, 0.04, 0.06), 0.04, 0.12)));
+wav('fire_famas', mix(
+  gunshot(0.31, 22, 0.34, 0.05, 0.78), tone(148, 0.16, 'triangle', 0.28, 20), sweep(1100, 160, 0.11, 0.22, 30),
+  delayed(tone(1850, 0.025, 'square', 0.11, 75), 0.018)));
+wav('fire_aug', mix(
+  gunshot(0.34, 20, 0.3, 0.055, 0.68), tone(112, 0.22, 'sine', 0.34, 16), sweep(820, 105, 0.14, 0.18, 24),
+  delayed(gunshot(0.13, 31, 0.11, 0.04, 0.06), 0.05, 0.12)));
+wav('fire_scout', mix(
+  gunshot(0.62, 11, 0.19, 0.04, 0.92), tone(62, 0.46, 'sine', 0.55, 6), sweep(520, 55, 0.31, 0.32, 11),
+  delayed(tone(1700, 0.035, 'square', 0.12, 62), 0.022)));
+wav('fire_xm', mix(
+  gunshot(0.58, 12, 0.18, 0.04, 0.88), tone(58, 0.46, 'sine', 0.72, 7), sweep(390, 42, 0.34, 0.35, 10),
+  delayed(gunshot(0.2, 21, 0.1, 0.035, 0.08), 0.075, 0.18)));
+seed = effectsSeed;
 
 // 2. Combat impact & hit sounds
 wav('headshot_ding', mix(tone(1760, 0.4, 'sine', 0.6, 8), tone(2640, 0.25, 'sine', 0.35, 12), tone(880, 0.3, 'square', 0.15, 10)));
@@ -126,4 +146,4 @@ wav('knife_slash', mix(sweep(1350, 240, 0.15, 0.42, 15), tone(760, 0.075, 'noise
 wav('knife_hit', mix(tone(135, 0.13, 'sine', 0.65, 20), tone(1750, 0.035, 'saw', 0.45, 48), tone(580, 0.055, 'noise', 0.32, 30)));
 wav('weapon_switch', cat(tone(1900, 0.025, 'noise', 0.26, 65), tone(760, 0.045, 'square', 0.22, 42), tone(1500, 0.035, 'saw', 0.26, 48)));
 wav('grenade_explode', mix(gunshot(0.9, 7, 0.12, 0.035), tone(48, 0.8, 'sine', 0.9, 3)));
-console.log('generated 21 game WAV audio assets');
+console.log('generated 27 game WAV audio assets');

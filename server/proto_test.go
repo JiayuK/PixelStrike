@@ -71,11 +71,20 @@ func TestSnapshotDropForcesKeyframe(t *testing.T) {
 	}
 }
 
+func TestWebSocketHeartbeatToleratesThrottledBrowserTimers(t *testing.T) {
+	if pingPeriod*2 >= readDeadline {
+		t.Fatalf("heartbeat %v cannot keep read deadline %v alive", pingPeriod, readDeadline)
+	}
+	if writeChanSize < 64 {
+		t.Fatalf("write queue too small for short event bursts: %d", writeChanSize)
+	}
+}
+
 func TestBalanceValues(t *testing.T) {
 	if RespawnDelayS != 3*time.Second || WalkSpeed != 6.4 || GroundAccel != 44 || StopAccel != 60 || AirAccel != 9.5 || JumpVel != 8.4 || MaxRewindTicks != 8 {
 		t.Fatalf("unexpected movement balance")
 	}
-	wantDamage := []float64{20, 41, 22, 28, 26, 92, 34, 23, 22, 26, 26, 68, 12}
+	wantDamage := []float64{21, 44, 21, 33, 29, 103, 34, 24, 25, 28, 27, 72, 14}
 	wantMag := []int{30, 11, 45, 45, 45, 8, 0, 18, 38, 38, 45, 12, 8}
 	wantReserve := []int{180, 53, 180, 135, 135, 45, 0, 36, 150, 135, 135, 120, 36}
 	for i, weapon := range Weapons {
@@ -251,6 +260,17 @@ func TestArsenalRolesStaySeparated(t *testing.T) {
 	ak, m4, aug := Weapons[3], Weapons[4], Weapons[10]
 	if aug.Dmg*aug.ArmorPen >= ak.Dmg*ak.ArmorPen {
 		t.Fatalf("AUG body (%.1f) should not match AK (%.1f)", aug.Dmg*aug.ArmorPen, ak.Dmg*ak.ArmorPen)
+	}
+	if ak.Dmg*ak.HeadMult*ak.ArmorPen < MaxHP {
+		t.Fatal("AK armored headshot should be lethal")
+	}
+	deagle := Weapons[1]
+	if deagle.Dmg*deagle.HeadMult*deagle.ArmorPen < MaxHP {
+		t.Fatal("Deagle armored headshot should be lethal")
+	}
+	awp := Weapons[5]
+	if awp.Dmg*awp.ArmorPen < MaxHP {
+		t.Fatal("AWP armored body shot should be lethal")
 	}
 	if m4.SpreadDeg >= ak.SpreadDeg {
 		t.Fatal("M4 should stay more accurate than AK")

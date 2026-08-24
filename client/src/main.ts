@@ -1109,50 +1109,50 @@ function applyRecoil(weapon: number, shot: number, ads: boolean) {
   let yaw = 0;
   switch (weapon) {
     case 0:
-      pitch = 0.009 + Math.min(i, 5) * 0.0010;
-      yaw = (i % 2 ? 1 : -1) * 0.0015;
+      pitch = 0.008 + Math.min(i, 5) * 0.0008;
+      yaw = (i % 2 ? 1 : -1) * 0.0012;
       break;
     case 1:
-      pitch = 0.026;
-      yaw = i % 2 ? 0.005 : -0.004;
+      pitch = 0.030;
+      yaw = i % 2 ? 0.0045 : -0.0035;
       break;
     case 2:
-      pitch = 0.007 + Math.min(i, 8) * 0.0008;
-      yaw = Math.sin(i * 1.7) * 0.0020;
+      pitch = 0.0055 + Math.min(i, 8) * 0.0005;
+      yaw = Math.sin(i * 1.7) * 0.0015;
       break;
     case 3:
-      pitch = 0.020 + Math.min(i, 7) * 0.0028;
-      yaw = i < 8 ? (i % 2 ? 0.0036 : -0.0028) : -0.006;
+      pitch = 0.019 + Math.min(i, 7) * 0.0026;
+      yaw = i < 8 ? (i % 2 ? 0.0034 : -0.0026) : -0.0055;
       break;
     case 4:
-      pitch = 0.016 + Math.min(i, 7) * 0.0022;
-      yaw = i < 8 ? (i % 2 ? 0.0028 : -0.0028) : 0.0045;
+      pitch = 0.014 + Math.min(i, 7) * 0.0018;
+      yaw = i < 8 ? (i % 2 ? 0.0024 : -0.0024) : 0.0038;
       break;
     case 5:
-      pitch = 0.038;
+      pitch = 0.044;
       break;
     case 7:
-      pitch = 0.014;
-      yaw = (i % 2 ? 1 : -1) * 0.0015;
+      pitch = 0.009;
+      yaw = (i % 2 ? 1 : -1) * 0.0010;
       break;
     case 8:
-      pitch = 0.013 + Math.min(i, 7) * 0.0016;
-      yaw = Math.sin(i * 1.4) * 0.0032;
+      pitch = 0.011 + Math.min(i, 7) * 0.0014;
+      yaw = Math.sin(i * 1.4) * 0.0028;
       break;
     case 9:
-      pitch = 0.018 + Math.min(i, 6) * 0.0022;
-      yaw = i < 7 ? (i % 2 ? 0.0032 : -0.0028) : 0.005;
+      pitch = 0.016 + Math.min(i, 6) * 0.0019;
+      yaw = i < 7 ? (i % 2 ? 0.0028 : -0.0024) : 0.0042;
       break;
     case 10:
-      pitch = 0.018 + Math.min(i, 6) * 0.0024;
-      yaw = (i % 2 ? 0.003 : -0.0026);
+      pitch = 0.012 + Math.min(i, 6) * 0.0014;
+      yaw = i % 2 ? 0.0020 : -0.0018;
       break;
     case 11:
-      pitch = 0.036;
+      pitch = 0.034;
       break;
     case 12:
-      pitch = 0.038;
-      yaw = i % 2 ? 0.006 : -0.006;
+      pitch = 0.050;
+      yaw = i % 2 ? 0.007 : -0.007;
       break;
     default:
       return;

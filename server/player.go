@@ -18,10 +18,11 @@ import (
 )
 
 const (
-	writeChanSize      = 16
+	writeChanSize      = 64
 	writeDeadlineEvery = 30
 	maxMsgSize         = 4096
-	readDeadlineS      = 30
+	readDeadline       = 75 * time.Second
+	pingPeriod         = 20 * time.Second
 )
 
 var upgrader = websocket.Upgrader{ReadBufferSize: 2048, WriteBufferSize: 2048, CheckOrigin: sameOrigin}
@@ -166,7 +167,10 @@ func ServeWS(hub *Hub, w http.ResponseWriter, r *http.Request, allowedOrigin str
 func (p *Player) readPump(hub *Hub) {
 	defer hub.Leave(p)
 	p.ws.SetReadLimit(maxMsgSize)
-	p.ws.SetReadDeadline(time.Now().Add(readDeadlineS * time.Second))
+	p.ws.SetReadDeadline(time.Now().Add(readDeadline))
+	p.ws.SetPongHandler(func(string) error {
+		return p.ws.SetReadDeadline(time.Now().Add(readDeadline))
+	})
 	var readBuffer bytes.Buffer
 	readBuffer.Grow(maxMsgSize)
 	for {
@@ -182,7 +186,7 @@ func (p *Player) readPump(hub *Hub) {
 		if mt != websocket.BinaryMessage || len(data) < 1 {
 			continue
 		}
-		p.ws.SetReadDeadline(time.Now().Add(readDeadlineS * time.Second))
+		p.ws.SetReadDeadline(time.Now().Add(readDeadline))
 		op, payload := data[0], data[1:]
 		now := time.Now()
 		if p.joined && op != OpPing && !p.InputRateOK(now) {
@@ -404,6 +408,8 @@ func (p *Player) Send(msg []byte) {
 }
 func (p *Player) writePump() {
 	defer p.ws.Close()
+	ping := time.NewTicker(pingPeriod)
+	defer ping.Stop()
 	writes := 0
 	for {
 		var msg []byte
@@ -415,6 +421,13 @@ func (p *Player) writePump() {
 			case msg, ok = <-p.send:
 			case msg = <-p.latestSnapshot:
 				ok, isSnapshot = true, true
+			case <-ping.C:
+				deadline := time.Now().Add(5 * time.Second)
+				p.ws.SetWriteDeadline(deadline)
+				if err := p.ws.WriteControl(websocket.PingMessage, nil, deadline); err != nil {
+					return
+				}
+				continue
 			}
 		}
 		if !ok {
