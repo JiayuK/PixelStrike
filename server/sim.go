@@ -86,8 +86,6 @@ type PlayerState struct {
 	Yaw, Pitch                                                     float64
 	HP, Armor                                                      uint8
 	Alive, IsBot, OnGround, Crouch, Flying                         bool
-	Primary, Secondary, ActiveSlot, Weapon                         uint8
-	Alive, IsBot, OnGround, Crouch                                 bool
 	Primary, Secondary, ActiveSlot, Weapon, Skin                   uint8
 	Mags                                                           [2]int
 	Reserves                                                       [2]int
