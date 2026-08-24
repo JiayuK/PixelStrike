@@ -1,4 +1,4 @@
-export const PROTOCOL_VERSION = 4;
+export const PROTOCOL_VERSION = 5;
 
 export const OP = {
   Join: 0x01,
@@ -9,6 +9,7 @@ export const OP = {
   Switch: 0x08,
   Loadout: 0x09,
   RosterRequest: 0x0a,
+  ToggleFlight: 0x0b,
   Welcome: 0x81,
   Snapshot: 0x82,
   Events: 0x83,
@@ -108,6 +109,7 @@ export const KEY = {
   Jump: 16,
   Crouch: 32,
   Aim: 64,
+  Descend: 128,
 } as const;
 
 export const PHYS = {
@@ -122,4 +124,6 @@ export const PHYS = {
   crouchEye: 1.12,
   standingHeight: 1.8,
   crouchingHeight: 1.3,
+  flightSpeed: 6.4,
+  maxFlightHeight: 45,
 };

@@ -11,6 +11,7 @@ export class LocalPlayer {
   keys = 0;
   onGround = true;
   crouch = false;
+  flying = false;
   weaponId = 3;
   speedMultiplier = 1;
   update(dt: number, canStand = true) {
@@ -22,14 +23,15 @@ export class LocalPlayer {
     const moving = forward !== 0 || side !== 0;
     if (forward && side) { forward *= Math.SQRT1_2; side *= Math.SQRT1_2; }
 
-    if (this.keys & KEY.Crouch) this.crouch = true;
+    if (this.flying) this.crouch = false;
+    else if (this.keys & KEY.Crouch) this.crouch = true;
     else if (canStand) this.crouch = false;
     let speed = PHYS.walkSpeed * (WEAPONS[this.weaponId]?.speedMult ?? 1) * this.speedMultiplier;
     if (this.crouch) speed *= PHYS.crouchSpeed;
     const sin = Math.sin(this.yaw), cos = Math.cos(this.yaw);
     const targetX = (side * cos - forward * sin) * speed;
     const targetZ = (-forward * cos - side * sin) * speed;
-    const accel = (this.onGround ? (moving ? PHYS.groundAccel : PHYS.stopAccel) : PHYS.airAccel) * dt;
+    const accel = (this.flying ? PHYS.groundAccel : this.onGround ? (moving ? PHYS.groundAccel : PHYS.stopAccel) : PHYS.airAccel) * dt;
     this.vel.x = approach(this.vel.x, targetX, accel);
     this.vel.z = approach(this.vel.z, targetZ, accel);
     const horizontalSpeedSq = this.vel.x * this.vel.x + this.vel.z * this.vel.z;
@@ -39,6 +41,11 @@ export class LocalPlayer {
       this.vel.z *= scale;
     }
 
+    if (this.flying) {
+      const targetY = (this.keys & KEY.Jump ? PHYS.flightSpeed : 0) - (this.keys & KEY.Descend ? PHYS.flightSpeed : 0);
+      this.vel.y = approach(this.vel.y, targetY, PHYS.groundAccel * dt);
+      return;
+    }
     if (this.keys & KEY.Jump && this.onGround) {
       this.vel.y = PHYS.jumpVel;
       this.onGround = false;
@@ -63,7 +70,7 @@ export class LocalPlayer {
       return;
     }
     if (errorSq < 0.0004) return;
-    const cy = this.onGround ? (target.y - this.pos.y) * 0.15 : 0;
+    const cy = this.onGround || this.flying ? (target.y - this.pos.y) * 0.15 : 0;
     correction.set((target.x - this.pos.x) * 0.15, cy, (target.z - this.pos.z) * 0.15);
     if (boxes) moveAABB(this.pos, correction, 1, boxes, this.height(), false);
     else this.pos.add(correction);

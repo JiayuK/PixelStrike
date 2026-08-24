@@ -57,6 +57,9 @@ pixel-strike/
 | `1` / `2` / `3` | 主武器 / 副武器 / 刀 |
 | `R` / `G` | 换弹 / HE |
 | `Tab` / `Esc` | 战绩 / 设置 |
+| `Esc` → 中国人能飞 | 开关飞行模式，开启时全场广播「玩家名 能飞」 |
+| 飞行中 `Space` / `Shift` | 上升 / 下降（贴地后 `Shift` 不再下降） |
+| 飞行中 `WASD` | 空中水平移动，限制在地图范围内、最高 25 个角色身高 |
 
 ## 性能与带宽
 
@@ -158,11 +161,11 @@ Compose 默认强制后台 Cookie 使用 HTTPS，并将 `TRUSTED_PROXY_CIDRS` �
 
 Compose 已限制服务端 512 MB、静态前端 128 MB，总上限 640 MB。
 
-## 协议 v4 摘要
+## 协议 v5 摘要
 
 所有多字节字段均为 Little-Endian。
 
-- 客户端：Join `01`、Input `02`、Fire `03`、Reload `04`、Grenade `06`、SetBots `07`、Switch `08`、Loadout `09`、RosterRequest `0A`、Ping `F0`。
+- 客户端：Join `01`、Input `02`、Fire `03`、Reload `04`、Grenade `06`、Switch `08`、Loadout `09`、RosterRequest `0A`、ToggleFlight `0B`、Ping `F0`。
 - 服务端：Welcome `81`、Snapshot `82`、Events `83`、Pong `84`、Self `86`、Roster `87`、Reject `88`。
 - Snapshot：`tick(u32) + inputAck(u16) + count(u8)`，玩家记录由 `id(u16) + fieldMask(u16)` 开始；`0x8000` 表示完整关键帧。
 

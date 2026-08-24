@@ -9,7 +9,7 @@ import (
 	"unicode/utf8"
 )
 
-func TestWelcomeV4(t *testing.T) {
+func TestWelcomeV5(t *testing.T) {
 	b := Welcome(42, 0x12345678)
 	if len(b) != 8 || b[0] != OpWelcome || b[1] != ProtocolVersion || binary.LittleEndian.Uint16(b[2:]) != 42 {
 		t.Fatalf("bad welcome: %v", b)
@@ -449,5 +449,39 @@ func TestCrouchedPlayerCanMove(t *testing.T) {
 	(&Room{World: w}).Move(p, time.Now())
 	if !p.Crouch || p.Vel.Z >= 0 {
 		t.Fatalf("crouched movement failed: crouch=%v vel=%v", p.Crouch, p.Vel)
+	}
+}
+
+func TestFlightMovementAndBounds(t *testing.T) {
+	w := &World{
+		Size:  [2]float64{512, 512},
+		aabbs: []AABB{{Min: Vec3{-256, -1, -256}, Max: Vec3{256, 0, 256}}},
+	}
+	r := &Room{World: w}
+	p := &PlayerState{Alive: true, Flying: true, Pos: Vec3{X: 255.6, Y: MaxFlightHeight - .01}, CmdKeys: KeyRight | KeyJump}
+	p.ApplyLoadout(3, 0)
+	for range 120 {
+		r.Move(p, time.Now())
+	}
+	if p.Pos.X > 256-PlayerHalf || p.Pos.Y > MaxFlightHeight {
+		t.Fatalf("flight escaped map bounds: pos=%v", p.Pos)
+	}
+	if p.Vel.Y != 0 {
+		t.Fatalf("flight ceiling did not stop ascent: vel=%v", p.Vel)
+	}
+
+	p.Pos.Y, p.Vel.Y, p.CmdKeys = 1, 0, KeyDescend
+	for range 120 {
+		r.Move(p, time.Now())
+	}
+	if p.Pos.Y < 0 || p.Vel.Y < 0 {
+		t.Fatalf("flight descended through ground: pos=%v vel=%v", p.Pos, p.Vel)
+	}
+}
+
+func TestFlightSnapshotStateBit(t *testing.T) {
+	state := quantizeState(&PlayerState{Alive: true, Flying: true}, 0)
+	if state.state&32 == 0 {
+		t.Fatalf("flight state bit missing: %08b", state.state)
 	}
 }

@@ -82,6 +82,7 @@ export class Hud {
   onFovChange: ((fov: number) => void) | null = null;
   onQualityChange: ((q: 'low' | 'medium' | 'high') => void) | null = null;
   onLoadoutChange: ((primary: number, secondary: number) => void) | null = null;
+  onFlightToggle: (() => void) | null = null;
   onExit: (() => void) | null = null;
   onSettingsClose: (() => void) | null = null;
   private menu = el('menu');
@@ -119,6 +120,7 @@ export class Hud {
   private lastAmmo = '';
   private hurtTimer = 0;
   private toastTimer = 0;
+  private flightTimer = 0;
   private reconnectTimer = 0;
 
   constructor() {
@@ -274,6 +276,7 @@ export class Hud {
     el('close-settings-btn')?.addEventListener('click', () => this.toggleSettings(false));
     el('exit-btn')?.addEventListener('click', () => this.onExit?.());
     el('pause-resume-btn')?.addEventListener('click', () => this.showPause(false));
+    el('pause-flight-btn')?.addEventListener('click', () => this.onFlightToggle?.());
     el('pause-exit-btn')?.addEventListener('click', () => this.onExit?.());
   }
 
@@ -565,6 +568,25 @@ export class Hud {
     toast.classList.add('show');
     clearTimeout(this.toastTimer);
     this.toastTimer = window.setTimeout(() => toast.classList.remove('show'), 1200);
+  }
+
+  setFlightState(enabled: boolean, available: boolean) {
+    const button = el('pause-flight-btn') as HTMLButtonElement;
+    if (!button) return;
+    button.disabled = !available;
+    button.classList.toggle('active', enabled);
+    button.setAttribute('aria-pressed', String(enabled));
+    button.title = enabled ? '已开启；再次点击关闭飞行模式' : '开启飞行模式';
+  }
+
+  showFlightAnnouncement(name: string) {
+    const banner = el('flight-announcement');
+    banner.textContent = `${name || '特战队员'} 能飞`;
+    banner.classList.remove('show');
+    void banner.offsetWidth;
+    banner.classList.add('show');
+    clearTimeout(this.flightTimer);
+    this.flightTimer = window.setTimeout(() => banner.classList.remove('show'), 2600);
   }
 
 

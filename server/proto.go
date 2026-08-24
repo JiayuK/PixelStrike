@@ -6,7 +6,7 @@ import (
 	"unicode/utf8"
 )
 
-const ProtocolVersion = 4
+const ProtocolVersion = 5
 
 const (
 	OpJoin          = 0x01
@@ -17,6 +17,7 @@ const (
 	OpSwitch        = 0x08
 	OpLoadout       = 0x09
 	OpRosterRequest = 0x0A
+	OpToggleFlight  = 0x0B
 
 	OpWelcome     = 0x81
 	OpSnapshot    = 0x82
@@ -42,6 +43,7 @@ const (
 	EvPlayerLeave
 	EvPickupSpawn
 	EvPickupTaken
+	EvFlightToggle
 )
 
 type Event struct {
@@ -176,6 +178,12 @@ func Events(evts []Event) []byte {
 			w.U16(e.Victim)
 			w.U8(e.Kind)
 			w.U16(e.Ms)
+		case EvFlightToggle:
+			w.U16(e.Player)
+			w.U8(e.Kind)
+			nb := safeNameBytes(e.Name)
+			w.U8(uint8(len(nb)))
+			w.b = append(w.b, nb...)
 		}
 	}
 	return w.Bytes()

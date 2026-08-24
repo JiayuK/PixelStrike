@@ -766,6 +766,32 @@
     #pickup-toast[data-kind="health"] { --pickup-rgb: 94 210 118; }
     #pickup-toast[data-kind="speed"] { --pickup-rgb: 53 201 232; }
     #pickup-toast.show { display: grid; animation: pickup-flash 1.2s ease-out forwards; }
+    #flight-announcement {
+      position: absolute;
+      top: 15%;
+      left: 50%;
+      z-index: 9;
+      display: none;
+      min-width: min(560px, 78vw);
+      padding: 11px 24px;
+      transform: translateX(-50%);
+      border-block: 1px solid rgb(53 201 232 / .68);
+      background: linear-gradient(90deg, transparent, rgb(5 18 26 / .94) 14%, rgb(5 18 26 / .94) 86%, transparent);
+      color: #8eeaff;
+      text-align: center;
+      font: 700 clamp(17px, 2vw, 26px) var(--font-display);
+      letter-spacing: .1em;
+      text-shadow: 0 0 20px rgb(53 201 232 / .72);
+      pointer-events: none;
+    }
+    #flight-announcement.show { display: block; animation: pickup-flash 2.6s ease-out forwards; }
+    #pause-flight-btn.active {
+      border-color: #35c9e8;
+      background: rgb(53 201 232 / .13);
+      color: #8eeaff;
+      box-shadow: inset 3px 0 #35c9e8;
+    }
+    #pause-flight-btn:disabled { opacity: .42; cursor: not-allowed; }
     #fx-grain {
       position: fixed;
       inset: 0;
@@ -1154,6 +1180,7 @@
     <div id="damage-flash" aria-hidden="true"></div>
     <div id="lowhp-vignette" aria-hidden="true"></div>
     <div id="pickup-toast" role="status" aria-live="polite"></div>
+    <div id="flight-announcement" role="status" aria-live="assertive"></div>
     <div id="death-countdown" role="status" aria-live="polite"></div>
 
     <div id="vitals">
@@ -1222,6 +1249,7 @@
       <p>继续后会重新锁定鼠标，并立即返回当前交火位置。</p>
       <div class="dialog-actions">
         <button id="pause-resume-btn" class="secondary-button" type="button">继续战斗</button>
+        <button id="pause-flight-btn" class="secondary-button" type="button" aria-pressed="false" disabled>中国人能飞</button>
         <button id="pause-exit-btn" class="danger-button" type="button">退出战场</button>
       </div>
     </div>

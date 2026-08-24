@@ -15,6 +15,7 @@ const (
 	KeyJump
 	KeyCrouch
 	KeyAim
+	KeyDescend
 )
 
 type WeaponDef struct {
@@ -74,6 +75,8 @@ const (
 	CrouchEyeH      = 1.12
 	StandingHeight  = 1.8
 	CrouchingHeight = 1.3
+	FlightSpeed     = WalkSpeed
+	MaxFlightHeight = StandingHeight * 25
 )
 
 type PlayerState struct {
@@ -82,7 +85,7 @@ type PlayerState struct {
 	Pos, Vel                                                       Vec3
 	Yaw, Pitch                                                     float64
 	HP, Armor                                                      uint8
-	Alive, IsBot, OnGround, Crouch                                 bool
+	Alive, IsBot, OnGround, Crouch, Flying                         bool
 	Primary, Secondary, ActiveSlot, Weapon                         uint8
 	Mags                                                           [2]int
 	Reserves                                                       [2]int
@@ -218,7 +221,9 @@ func (r *Room) Move(p *PlayerState, now time.Time) {
 		fwd /= math.Sqrt2
 		side /= math.Sqrt2
 	}
-	if k&KeyCrouch != 0 {
+	if p.Flying {
+		p.Crouch = false
+	} else if k&KeyCrouch != 0 {
 		p.Crouch = true
 	} else if !p.Crouch || r.World.CanOccupy(p.Pos, StandingHeight) {
 		p.Crouch = false
@@ -233,7 +238,7 @@ func (r *Room) Move(p *PlayerState, now time.Time) {
 	sin, cos := math.Sin(p.Yaw), math.Cos(p.Yaw)
 	wishX, wishZ := (side*cos-fwd*sin)*speed, (-fwd*cos-side*sin)*speed
 	accel := GroundAccel * TickDT
-	if !p.OnGround {
+	if !p.OnGround && !p.Flying {
 		accel = AirAccel * TickDT
 	}
 	if !moving && p.OnGround {
@@ -246,6 +251,25 @@ func (r *Room) Move(p *PlayerState, now time.Time) {
 		scale := speed / horizontalSpeed
 		p.Vel.X *= scale
 		p.Vel.Z *= scale
+	}
+	if p.Flying {
+		wishY := 0.0
+		if k&KeyJump != 0 {
+			wishY += FlightSpeed
+		}
+		if k&KeyDescend != 0 {
+			wishY -= FlightSpeed
+		}
+		p.Vel.Y = approach(p.Vel.Y, wishY, GroundAccel*TickDT)
+		p.OnGround = r.World.MoveAABB(&p.Pos, &p.Vel, TickDT, StandingHeight, false)
+		halfX, halfZ := r.World.Size[0]/2-PlayerHalf, r.World.Size[1]/2-PlayerHalf
+		p.Pos.X = math.Max(-halfX, math.Min(halfX, p.Pos.X))
+		p.Pos.Z = math.Max(-halfZ, math.Min(halfZ, p.Pos.Z))
+		p.Pos.Y = math.Max(0, math.Min(MaxFlightHeight, p.Pos.Y))
+		if p.Pos.Y == 0 && p.Vel.Y < 0 || p.Pos.Y == MaxFlightHeight && p.Vel.Y > 0 {
+			p.Vel.Y = 0
+		}
+		return
 	}
 	if k&KeyJump != 0 && p.OnGround {
 		p.Vel.Y = JumpVel
@@ -266,7 +290,7 @@ func (r *Room) CheckSanity(p *PlayerState) {
 		log.Printf("player %d (%s): invalid position reset", p.Id, p.Name)
 		p.Pos = r.BestSpawn(p)
 		p.Vel = Vec3{}
-		p.OnGround, p.Crouch = true, false
+		p.OnGround, p.Crouch, p.Flying = true, false, false
 	}
 }
 
@@ -459,7 +483,7 @@ func (r *Room) Respawn(p *PlayerState, now time.Time) {
 	p.HP = MaxHP
 	p.Armor = 100
 	p.Alive = true
-	p.OnGround, p.Crouch = true, false
+	p.OnGround, p.Crouch, p.Flying = true, false, false
 	p.CmdKeys = 0
 	p.ApplyLoadout(p.Primary, p.Secondary)
 	p.InvincibleUntil = now.Add(SpawnProtectS)
