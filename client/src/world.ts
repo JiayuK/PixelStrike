@@ -456,18 +456,22 @@ export class WorldView {
   }
 
   private setupSky() {
-    // Luminous Voxel Sun
     const sunBox = new THREE.Mesh(
-      new THREE.BoxGeometry(22, 22, 6),
-      new THREE.MeshBasicMaterial({ color: 0xfffae0 })
+      new THREE.BoxGeometry(28, 28, 6),
+      new THREE.MeshBasicMaterial({ color: 0xffb060 })
     );
-    sunBox.position.set(110, 160, -150);
+    sunBox.position.set(90, 42, -130);
     sunBox.lookAt(0, 0, 0);
-    this.sun.add(sunBox);
+    const halo = new THREE.Mesh(
+      new THREE.BoxGeometry(48, 48, 4),
+      new THREE.MeshBasicMaterial({ color: 0xff7a3a, transparent: true, opacity: 0.28, depthWrite: false })
+    );
+    halo.position.copy(sunBox.position);
+    halo.lookAt(0, 0, 0);
+    this.sun.add(halo, sunBox);
     this.scene.add(this.sun);
 
-    // High Stratified Volumetric Clouds across 512x512 arena
-    const cloudMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.88 });
+    const cloudMat = new THREE.MeshBasicMaterial({ color: 0xffd2a8, transparent: true, opacity: 0.62 });
     const cloudGeos: THREE.BufferGeometry[] = [];
     let cSeed = 42;
     const cRnd = () => (cSeed = (cSeed * 16807) % 2147483647) / 2147483647;

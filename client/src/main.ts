@@ -6,28 +6,37 @@ import { Weapons } from './weapons.js';
 import { Hud } from './hud.js';
 import { AudioEngine, type SfxName } from './audio.js';
 import { ParticleSystem } from './particles.js';
-import { KEY, PHYS, WEAPONS, type MapData, type PlayerSnap, type RosterEntry, type WeaponDef } from './constants.js';
+import { KEY, PHYS, WEAPONS, isSniper, scopeSettleMs, type MapData, type PlayerSnap, type RosterEntry, type WeaponDef } from './constants.js';
 import bundledMap from '../../map.json';
 
 const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
 const wsUrl = import.meta.env.VITE_WS_URL || `${proto}//${location.host}/ws`;
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x8bc4f5);
-scene.fog = new THREE.Fog(0xa2d2f8, 50, 260);
+scene.background = new THREE.Color(0xc48a5a);
+scene.fog = new THREE.Fog(0xc48a5a, 36, 210);
 
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.05, 400);
 camera.rotation.order = 'YXZ';
+camera.layers.enable(0);
+camera.layers.disable(1);
 const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.08;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
 document.body.appendChild(renderer.domElement);
 
-const hemiLight = new THREE.HemisphereLight(0xb4dcff, 0x5a7840, 0.75);
+const hemiLight = new THREE.HemisphereLight(0xffc8a0, 0x3a2a1c, 0.62);
 scene.add(hemiLight);
 
-const sun = new THREE.DirectionalLight(0xfffae8, 1.25);
-sun.position.set(110, 160, -150);
+const sun = new THREE.DirectionalLight(0xffd4a0, 1.42);
+sun.position.set(90, 48, -120);
 scene.add(sun);
 scene.add(camera);
+
+const fillLight = new THREE.DirectionalLight(0x6a8cb0, 0.22);
+fillLight.position.set(-70, 28, 90);
+scene.add(fillLight);
 
 const hud = new Hud();
 const audio = new AudioEngine();
@@ -51,7 +60,6 @@ let inputSeq = 0;
 let shotSeq = 0;
 let lastInput = 0;
 const INPUT_INTERVAL = 1000 / 60;
-const AWP_SCOPE_MS = 450;
 const SPEED_BOOST_MULTIPLIER = 1.35;
 let fireHeld = false;
 let firePressed = false;
@@ -80,8 +88,8 @@ let lastWeaponSlot = 1;
 let grenadePrimed = false;
 let userPrimaryChoice = -1;
 let userSecondaryChoice = -1;
-const PRIMARY_IDS = [3, 4, 2, 5];
-const SECONDARY_IDS = [0, 1];
+const PRIMARY_IDS = [3, 4, 2, 5, 8, 9, 10, 11, 12];
+const SECONDARY_IDS = [0, 1, 7];
 
 function resolveLoadout(p: number, s: number): { primary: number; secondary: number } {
   const actualPrimary = p === -1 ? PRIMARY_IDS[Math.floor(Math.random() * PRIMARY_IDS.length)] : p;
@@ -120,6 +128,7 @@ function resize() {
   renderer.setSize(window.innerWidth, window.innerHeight);
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
+  weapons.setAspect(camera.aspect);
   crosshairScale = window.innerHeight * 0.5 / Math.tan(camera.fov * Math.PI / 360);
 }
 resize();
@@ -130,6 +139,15 @@ hud.onQualityChange = (q) => {
   resize();
 };
 hud.onVolumeChange = (v) => audio.setVolume(v);
+hud.onFovChange = () => {
+  if (!aiming) {
+    camera.fov = hud.hipFov;
+    camera.updateProjectionMatrix();
+    crosshairScale = window.innerHeight * 0.5 / Math.tan(camera.fov * Math.PI / 360);
+  }
+};
+camera.fov = hud.hipFov;
+camera.updateProjectionMatrix();
 audio.setVolume(hud.volume);
 
 const keys = new Set<string>();
@@ -155,6 +173,9 @@ function resetInventory(primary: number, secondary: number) {
 
 function refreshWeaponHud() {
   hud.setInventory(primaryWeapon, secondaryWeapon, activeSlot, slotMags, nades, grenadePrimed);
+  if (activeSlot === 3) hud.setAmmoDisplay('KNIFE', '—', '');
+  else if (activeSlot === 4) hud.setAmmoDisplay('HE', String(nades), grenadePrimed ? 'PIN' : '');
+  else hud.setAmmoDisplay(WEAPONS[weapons.weaponId]?.name ?? '', String(mag), String(reserve));
 }
 
 function grenadeVelocity(out: THREE.Vector3) {
@@ -367,7 +388,7 @@ window.addEventListener('mousemove', (e) => {
 
   const mx = Math.max(-80, Math.min(80, e.movementX));
   const my = Math.max(-80, Math.min(80, e.movementY));
-  const sens = aiming && weapons.weaponId === 5 ? hud.sensitivity * camera.fov / 75 : hud.sensitivity;
+  const sens = aiming && isSniper(weapons.weaponId) ? hud.sensitivity * camera.fov / hud.hipFov : hud.sensitivity;
   local.yaw -= mx * sens;
   local.pitch = Math.max(-1.45, Math.min(1.45, local.pitch - my * sens));
   mouseX = Math.max(-160, Math.min(160, mouseX + mx));
@@ -393,8 +414,8 @@ window.addEventListener('mousedown', (e) => {
   if (e.button === 0) {
     fireHeld = true;
     firePressed = true;
-  } else if (e.button === 2 && weapons.weaponId < 6) {
-    if (weapons.weaponId === 5 && awpRescopeAt) return;
+  } else if (e.button === 2 && weapons.weaponId !== 6) {
+    if (isSniper(weapons.weaponId) && awpRescopeAt) return;
     if (aiming) stopAiming();
     else {
       aimStartedAt = performance.now();
@@ -680,6 +701,18 @@ function handleEvent(e: GameEvent) {
       hud.damageFlash();
       audio.play('hurt', 0.7);
       screenShake = Math.max(screenShake, 0.05);
+      const attacker = states.get(e.player ?? -1);
+      if (attacker) {
+        const dx = attacker.x - local.pos.x;
+        const dz = attacker.z - local.pos.z;
+        const fx = -Math.sin(local.yaw);
+        const fz = -Math.cos(local.yaw);
+        const rx = Math.cos(local.yaw);
+        const rz = -Math.sin(local.yaw);
+        hud.showHurtDir(Math.atan2(dx * rx + dz * rz, dx * fx + dz * fz));
+      } else {
+        hud.showHurtDir(Math.PI);
+      }
     }
     if (e.player === net.yourId) {
       const headshot = e.headshot === 1;
@@ -791,7 +824,7 @@ function refreshScoreboard() {
 }
 
 remotes.onShot = (s, position) => {
-  if (s.weapon >= 6) {
+  if (s.weapon === 6) {
     playSpatial('knife_slash', position.x, position.z, 0.55, 22);
     return;
   }
@@ -854,7 +887,7 @@ function frame(t: number) {
       audio.play('step', 0.18, 0.92 + Math.random() * 0.16);
     }
 
-    if (awpRescopeAt && t >= awpRescopeAt && weapons.weaponId === 5 && reloadPendingSlot !== activeSlot && !weapons.isReloading(t)) {
+    if (awpRescopeAt && t >= awpRescopeAt && isSniper(weapons.weaponId) && reloadPendingSlot !== activeSlot && !weapons.isReloading(t)) {
       awpRescopeAt = 0;
       aiming = true;
       aimStartedAt = t;
@@ -868,7 +901,7 @@ function frame(t: number) {
     if (shouldFire && document.pointerLockElement === renderer.domElement) {
       if (reloadPendingSlot !== activeSlot && weapons.canFire(t)) {
         fire(0, t);
-      } else if (firePressed && reloadPendingSlot !== activeSlot && weapons.ammoLocal === 0 && !weapons.isReloading(t) && t >= weapons.nextFireAt && weapons.weaponId < 6) {
+      } else if (firePressed && reloadPendingSlot !== activeSlot && weapons.ammoLocal === 0 && !weapons.isReloading(t) && t >= weapons.nextFireAt && weapons.weaponId !== 6) {
         if (reserve > 0) {
           startReload(t, true);
         } else {
@@ -896,9 +929,10 @@ function frame(t: number) {
     }
     camera.rotation.y = local.yaw;
     camera.rotation.x = local.pitch;
+    camera.rotation.z = 0;
 
-    const targetFov = aiming ? WEAPONS[weapons.weaponId].adsFov : 75;
-    const aimRate = weapons.weaponId === 5 ? 4.5 : 14;
+    const targetFov = aiming ? WEAPONS[weapons.weaponId].adsFov : hud.hipFov;
+    const aimRate = isSniper(weapons.weaponId) ? 5.5 : weapons.weaponId === 10 ? 8 : 14;
     const nextFov = camera.fov + (targetFov - camera.fov) * Math.min(1, dt * aimRate);
     if (Math.abs(nextFov - camera.fov) > 0.01) {
       camera.fov = nextFov;
@@ -906,7 +940,7 @@ function frame(t: number) {
       crosshairScale = window.innerHeight * 0.5 / Math.tan(camera.fov * Math.PI / 360);
     }
 
-    weapons.animate(t, dt, moving && local.onGround, aiming, mouseX, mouseY, activeSlot !== 4);
+    weapons.animate(t, dt, moving && local.onGround, aiming, mouseX, mouseY, activeSlot !== 4, hud.bobScale);
     mouseX = 0;
     mouseY = 0;
 
@@ -915,12 +949,13 @@ function frame(t: number) {
     const reloadPending = reloadPendingSlot === activeSlot;
     hud.setReloading(activeSlot <= 2 && (localReloading || reloadPending), localReloading ? weapons.getReloadProgress(t) : 1);
   } else if (joined && !alive) {
+    camera.rotation.z = 0;
     deathCam();
   }
-  hud.setScope(joined && alive && activeSlot !== 4 && weapons.weaponId === 5 && weapons.adsProgress > (aiming ? 0.86 : 0.14));
+  hud.setScope(joined && alive && activeSlot !== 4 && isSniper(weapons.weaponId) && weapons.adsProgress > (aiming ? 0.86 : 0.14));
 
   hud.setDeathCountdown(joined && !alive && respawnAt ? Math.max(0, Math.ceil((respawnAt - t) / 1000)) : -1);
-  const spread = joined && alive && activeSlot !== 4 && weapons.weaponId < 6 ? localSpread(t) : 0;
+  const spread = joined && alive && activeSlot !== 4 && weapons.weaponId !== 6 ? localSpread(t) : 0;
   const targetCrosshair = Math.tan(spread * Math.PI / 180) * crosshairScale;
   const crosshairResponse = targetCrosshair > displayedCrosshair ? 18 : 10;
   displayedCrosshair += (targetCrosshair - displayedCrosshair) * (1 - Math.exp(-dt * crosshairResponse));
@@ -930,7 +965,9 @@ function frame(t: number) {
     remotes.update(t);
     particles.update(dt, t, world);
     world?.animate(t);
+    weapons.syncFrom(camera);
     renderer.render(scene, camera);
+    if (alive) weapons.renderOverlay(renderer, scene);
     if (t - lastLabels >= 1000 / 30) {
       lastLabels = t;
       remotes.updateLabels(camera, world);
@@ -941,30 +978,33 @@ requestAnimationFrame(frame);
 
 function fire(mode: number, t: number) {
   const origin = localShotOrigin.set(local.pos.x, local.eyeY(), local.pos.z);
-  const autoRescope = weapons.weaponId === 5 && aiming && weapons.ammoLocal > 1;
+  const autoRescope = isSniper(weapons.weaponId) && aiming && weapons.ammoLocal > 1;
   if (t - lastPatternShot > 420) patternShots = 0;
-  const spread = weapons.weaponId < 6 ? localSpread(t) : 0;
+  const spread = weapons.weaponId === 6 ? 0 : localSpread(t);
   lastPatternShot = t;
   patternShots++;
+  const pellets = Math.max(1, WEAPONS[weapons.weaponId]?.pellets ?? 1);
   const dir = shotDirection(localShotDir, local.yaw, local.pitch, spread, patternShots, weapons.weaponId);
   weapons.onFired(t, origin);
   net.sendFire(++shotSeq, net.lastServerTick, mode | (aiming ? 0x80 : 0), local.yaw, local.pitch);
   mag = weapons.ammoLocal;
-  if (weapons.weaponId === 5) {
+  if (isSniper(weapons.weaponId)) {
     stopAiming();
-    if (autoRescope) awpRescopeAt = weapons.nextFireAt - AWP_SCOPE_MS;
+    if (autoRescope) awpRescopeAt = weapons.nextFireAt - scopeSettleMs(weapons.weaponId);
   }
   if (activeSlot === 1 || activeSlot === 2) slotMags[activeSlot] = mag;
   refreshWeaponHud();
-  if (weapons.weaponId < 6) {
+  if (weapons.weaponId !== 6) {
     audio.play(fireSound(weapons.weaponId), 1, 0.985 + Math.random() * 0.03, 0, true);
-    const dist = world?.raycastDistance(origin, dir, 180) ?? 180;
-    weapons.spawnTracer(origin, dir, dist);
-    if (dist < 180) {
-      particles.spawnImpact(impactPoint.copy(origin).addScaledVector(dir, dist), impactNormal, 0xd6b36e, 4);
+    for (let i = 0; i < pellets; i++) {
+      const pelletDir = pellets === 1 ? dir : shotDirection(localShotDir.clone(), local.yaw, local.pitch, spread, patternShots * 17 + i, weapons.weaponId);
+      const dist = world?.raycastDistance(origin, pelletDir, 180) ?? 180;
+      weapons.spawnTracer(origin, pelletDir, dist);
+      if (dist < 180) {
+        particles.spawnImpact(impactPoint.copy(origin).addScaledVector(pelletDir, dist), impactNormal, 0xd6b36e, pellets > 1 ? 3 : 5);
+      }
     }
-    const climb = weapons.weaponId === 3 ? 0.028 : weapons.weaponId === 4 ? 0.022 : weapons.weaponId === 5 ? 0.045 : 0.012;
-    local.pitch = Math.min(1.5, local.pitch + climb * (aiming ? 0.45 : 1.0));
+    applyRecoil(weapons.weaponId, patternShots, aiming);
   } else {
     weapons.onKnifeSlash();
     audio.play('knife_slash', 0.85);
@@ -973,7 +1013,7 @@ function fire(mode: number, t: number) {
       particles.spawnImpact(impactPoint.copy(origin).addScaledVector(dir, dist), impactNormal, 0xd6b36e, 3);
     }
   }
-  if (mag === 0 && reserve > 0 && weapons.weaponId < 6) startReload(t);
+  if (mag === 0 && reserve > 0 && weapons.weaponId !== 6) startReload(t);
 }
 
 function deathCam() {
@@ -992,29 +1032,89 @@ function deathCam() {
   camera.rotation.x = Math.atan2(dy, Math.hypot(dx, dz));
 }
 
-function weaponSpread(def: WeaponDef, vx: number, vz: number, onGround: boolean, crouching: boolean, landing: boolean, burstShots: number): number {
+function weaponSpread(def: WeaponDef, vx: number, vz: number, onGround: boolean, crouching: boolean, landing: boolean, ads: boolean, burstShots: number): number {
   const moveFactor = Math.min(1, Math.hypot(vx, vz) / 3);
   let spread = def.spread + (def.moveSpread - def.spread) * moveFactor;
-  spread += Math.min(def.moveSpread - def.spread, burstShots * def.bloom);
-  if (!onGround) spread = Math.max(spread, def.moveSpread * 2.2 + 1);
-  if (crouching) spread *= 0.6;
-  if (landing) spread = Math.max(spread, def.moveSpread * 1.35);
+  spread += Math.min(0.22, burstShots * def.bloom * 0.12);
+  if (!onGround) spread = Math.max(spread, def.moveSpread * 1.55 + 0.45);
+  if (crouching) spread *= 0.55;
+  if (ads && !isSniper(def.id)) spread *= 0.48;
+  if (landing) spread = Math.max(spread, def.moveSpread * 1.12);
   return spread;
 }
 
 function localSpread(t: number): number {
   const def = WEAPONS[weapons.weaponId];
   const burstShots = t - lastPatternShot <= 420 ? patternShots : 0;
-  let spread = weaponSpread(def, local.vel.x, local.vel.z, local.onGround, local.crouch, t < landingPenaltyUntil, burstShots);
-  if (weapons.weaponId === 5 && (!aiming || t - aimStartedAt < AWP_SCOPE_MS)) spread = Math.max(spread, def.moveSpread);
+  let spread = weaponSpread(def, local.vel.x, local.vel.z, local.onGround, local.crouch, t < landingPenaltyUntil, aiming, burstShots);
+  if (isSniper(weapons.weaponId) && (!aiming || t - aimStartedAt < scopeSettleMs(weapons.weaponId))) spread = Math.max(spread, def.moveSpread);
   return spread;
 }
 
 function remoteSpread(s: PlayerSnap): number {
   const def = WEAPONS[s.weapon];
-  let spread = weaponSpread(def, s.vx, s.vz, !!(s.state & 8), !!(s.state & 4), false, Math.max(0, s.shot - 1));
-  if (s.weapon === 5 && !(s.state & 16)) spread = Math.max(spread, def.moveSpread);
+  let spread = weaponSpread(def, s.vx, s.vz, !!(s.state & 8), !!(s.state & 4), false, !!(s.state & 16), Math.max(0, s.shot - 1));
+  if (isSniper(s.weapon) && !(s.state & 16)) spread = Math.max(spread, def.moveSpread);
   return spread;
+}
+
+function applyRecoil(weapon: number, shot: number, ads: boolean) {
+  const i = Math.max(0, shot - 1);
+  const scale = ads ? 0.45 : 1;
+  let pitch = 0;
+  let yaw = 0;
+  switch (weapon) {
+    case 0:
+      pitch = 0.009 + Math.min(i, 5) * 0.0010;
+      yaw = (i % 2 ? 1 : -1) * 0.0015;
+      break;
+    case 1:
+      pitch = 0.026;
+      yaw = i % 2 ? 0.005 : -0.004;
+      break;
+    case 2:
+      pitch = 0.007 + Math.min(i, 8) * 0.0008;
+      yaw = Math.sin(i * 1.7) * 0.0020;
+      break;
+    case 3:
+      pitch = 0.020 + Math.min(i, 7) * 0.0028;
+      yaw = i < 8 ? (i % 2 ? 0.0036 : -0.0028) : -0.006;
+      break;
+    case 4:
+      pitch = 0.016 + Math.min(i, 7) * 0.0022;
+      yaw = i < 8 ? (i % 2 ? 0.0028 : -0.0028) : 0.0045;
+      break;
+    case 5:
+      pitch = 0.038;
+      break;
+    case 7:
+      pitch = 0.014;
+      yaw = (i % 2 ? 1 : -1) * 0.0015;
+      break;
+    case 8:
+      pitch = 0.013 + Math.min(i, 7) * 0.0016;
+      yaw = Math.sin(i * 1.4) * 0.0032;
+      break;
+    case 9:
+      pitch = 0.018 + Math.min(i, 6) * 0.0022;
+      yaw = i < 7 ? (i % 2 ? 0.0032 : -0.0028) : 0.005;
+      break;
+    case 10:
+      pitch = 0.018 + Math.min(i, 6) * 0.0024;
+      yaw = (i % 2 ? 0.003 : -0.0026);
+      break;
+    case 11:
+      pitch = 0.036;
+      break;
+    case 12:
+      pitch = 0.038;
+      yaw = i % 2 ? 0.006 : -0.006;
+      break;
+    default:
+      return;
+  }
+  local.pitch = Math.min(1.45, local.pitch + pitch * scale);
+  local.yaw -= yaw * scale;
 }
 
 function shotDirection(out: THREE.Vector3, yaw: number, pitch: number, spread: number, shot: number, weapon: number): THREE.Vector3 {
@@ -1048,6 +1148,12 @@ const sounds: Record<number, SfxName> = {
   3: 'fire_ak47',
   4: 'fire_m4a4',
   5: 'fire_awp',
+  7: 'fire_usp',
+  8: 'fire_ump',
+  9: 'fire_famas',
+  10: 'fire_aug',
+  11: 'fire_scout',
+  12: 'fire_xm',
 };
 
 function fireSound(id: number): SfxName {

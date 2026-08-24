@@ -96,6 +96,23 @@ export class ParticleSystem {
         gravity: 18,
       });
     }
+    const sparks = Math.min(5, Math.max(0, MAX_PARTICLES - this.particles.length));
+    for (let i = 0; i < sparks; i++) {
+      const speed = 5 + Math.random() * 6;
+      this.particles.push({
+        x: pos.x,
+        y: pos.y,
+        z: pos.z,
+        vx: (normal.x + (Math.random() - 0.5)) * speed,
+        vy: Math.abs(normal.y) * speed + 2,
+        vz: (normal.z + (Math.random() - 0.5)) * speed,
+        color: FIRE_COLORS[i % FIRE_COLORS.length],
+        born: now,
+        life: 180 + Math.random() * 140,
+        size: 0.45 + Math.random() * 0.35,
+        gravity: 12,
+      });
+    }
   }
   spawnDeath(pos: THREE.Vector3, headshot = false) {
     const count = Math.min(headshot ? 42 : 30, MAX_PARTICLES - this.particles.length);

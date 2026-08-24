@@ -224,6 +224,58 @@ func TestKnifeAttackDoesNotRequireAmmo(t *testing.T) {
 	}
 }
 
+func TestArsenalRolesStaySeparated(t *testing.T) {
+	ak, m4, aug := Weapons[3], Weapons[4], Weapons[10]
+	if aug.Dmg*aug.ArmorPen >= ak.Dmg*ak.ArmorPen {
+		t.Fatalf("AUG body (%.1f) should not match AK (%.1f)", aug.Dmg*aug.ArmorPen, ak.Dmg*ak.ArmorPen)
+	}
+	if m4.SpreadDeg >= ak.SpreadDeg {
+		t.Fatal("M4 should stay more accurate than AK")
+	}
+	if Weapons[7].Dmg >= 30 {
+		t.Fatalf("USP damage too rifle-like: %v", Weapons[7].Dmg)
+	}
+	ssg := Weapons[11]
+	if ssg.Dmg*ssg.ArmorPen >= MaxHP {
+		t.Fatalf("SSG should not body one-shot: %.1f", ssg.Dmg*ssg.ArmorPen)
+	}
+	xm := Weapons[12]
+	if float64(xm.Pellets)*xm.Dmg*xm.ArmorPen >= MaxHP {
+		t.Fatalf("XM should not armor-dump with all pellets: %.1f", float64(xm.Pellets)*xm.Dmg*xm.ArmorPen)
+	}
+	if Weapons[2].SpreadDeg >= .7 {
+		t.Fatal("MP5 spread still unusable")
+	}
+	if Weapons[8].Rpm >= Weapons[2].Rpm {
+		t.Fatal("UMP should not out-cycle MP5")
+	}
+}
+
+func TestLoadoutAcceptsExpandedArsenal(t *testing.T) {
+	if !validLoadout(12, 7) || !validLoadout(11, 1) || !validLoadout(8, 0) {
+		t.Fatal("new primary/secondary pairs rejected")
+	}
+	if validLoadout(7, 3) || validLoadout(6, 0) || validLoadout(3, 8) {
+		t.Fatal("invalid loadout accepted")
+	}
+}
+
+func TestWeaponSpreadStaysControllable(t *testing.T) {
+	ak := Weapons[3]
+	first := weaponSpread(ak, 0, 0, true, false, false, false, 0)
+	hipSpray := weaponSpread(ak, 0, 0, true, false, false, false, 20)
+	ads := weaponSpread(ak, 0, 0, true, false, false, true, 20)
+	if first > ak.SpreadDeg+0.05 {
+		t.Fatalf("first shot inaccuracy too high: %.3f", first)
+	}
+	if hipSpray > first+0.3 {
+		t.Fatalf("spray bloom still dominates recoil: first=%.3f spray=%.3f", first, hipSpray)
+	}
+	if ads >= hipSpray {
+		t.Fatalf("ADS did not tighten inaccuracy: ads=%.3f hip=%.3f", ads, hipSpray)
+	}
+}
+
 func TestPatternDirStaysInsideSpread(t *testing.T) {
 	aim := AimDir(.3, -.2)
 	limit := math.Cos(2 * math.Pi / 180)

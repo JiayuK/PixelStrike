@@ -26,7 +26,13 @@ const WEAPON_BADGES: Record<number, string> = {
   4: 'M4A4',
   5: 'AWP',
   6: 'KNIFE',
-  7: 'GRENADE',
+  7: 'USP-S',
+  8: 'UMP-45',
+  9: 'FAMAS',
+  10: 'AUG',
+  11: 'SSG 08',
+  12: 'XM1014',
+  13: 'HE',
 };
 
 const BLOCK_RADAR_COLORS: Record<number, string> = {
@@ -54,17 +60,26 @@ const WEAPON_SVGS: Record<number, string> = {
   4: `<svg viewBox="0 0 32 32"><rect x="3" y="14" width="7" height="6" fill="#22252a"/><rect x="10" y="13" width="10" height="6" fill="#333842"/><rect x="20" y="13" width="7" height="6" fill="#555d68"/><rect x="27" y="14" width="4" height="3" fill="#88929e"/><rect x="14" y="19" width="3" height="8" fill="#22252a" transform="rotate(25 7 19)"/><rect x="7" y="19" width="3" height="6" fill="#22252a" transform="rotate(25 7 19)"/></svg>`,
   5: `<svg viewBox="0 0 32 32"><rect x="2" y="15" width="8" height="6" fill="#344d37"/><rect x="10" y="14" width="12" height="6" fill="#344d37"/><rect x="22" y="15" width="8" height="3" fill="#22252a"/><rect x="29" y="14" width="2" height="5" fill="#555d68"/><rect x="11" y="9" width="11" height="4" rx="1" fill="#1b1b1e"/><rect x="13" y="13" width="2" height="2" fill="#555d68"/><rect x="19" y="13" width="2" height="2" fill="#555d68"/><rect x="14" y="20" width="4" height="5" fill="#22252a"/></svg>`,
   6: `<svg viewBox="0 0 32 32"><path d="M6 26 L12 20 L15 21 L9 27 Z" fill="#22252a"/><path d="M11 19 L14 17 L16 19 L13 21 Z" fill="#555d68"/><path d="M14 17 L25 5 L27 7 L16 19 Z" fill="#d2d6dc"/><path d="M23 7 L25 5 L27 7 L25 9 Z" fill="#ffffff"/></svg>`,
-  7: `<svg viewBox="0 0 32 32"><ellipse cx="16" cy="18" rx="7" ry="9" fill="#475e38"/><rect x="11" y="17" width="10" height="2" fill="#2e3f24"/><rect x="15" y="11" width="2" height="14" fill="#2e3f24"/><rect x="14" y="7" width="4" height="4" fill="#9fa3ab"/><circle cx="11" cy="8" r="2.5" fill="none" stroke="#d2d6dc" stroke-width="1.5"/></svg>`,
+  7: `<svg viewBox="0 0 32 32"><rect x="7" y="12" width="15" height="5" fill="#2a3340"/><rect x="20" y="13" width="6" height="3" fill="#223547"/><rect x="9" y="17" width="5" height="7" fill="#1b1b1e" transform="rotate(18 9 17)"/></svg>`,
+  8: `<svg viewBox="0 0 32 32"><rect x="4" y="13" width="18" height="7" fill="#4a4036"/><rect x="20" y="14" width="8" height="5" fill="#22252a"/><rect x="10" y="20" width="4" height="7" fill="#22252a" transform="rotate(20 10 20)"/><rect x="12" y="18" width="5" height="8" fill="#1b1b1e"/></svg>`,
+  9: `<svg viewBox="0 0 32 32"><rect x="3" y="12" width="20" height="8" fill="#5a6848"/><rect x="22" y="14" width="7" height="4" fill="#555d68"/><rect x="8" y="20" width="3" height="7" fill="#22252a" transform="rotate(18 8 20)"/></svg>`,
+  10: `<svg viewBox="0 0 32 32"><rect x="4" y="13" width="22" height="7" fill="#3d4a3a"/><rect x="14" y="8" width="8" height="5" rx="1" fill="#1b1b1e"/><rect x="24" y="14" width="5" height="4" fill="#555d68"/></svg>`,
+  11: `<svg viewBox="0 0 32 32"><rect x="2" y="15" width="24" height="4" fill="#2f3a48"/><rect x="12" y="9" width="10" height="4" rx="1" fill="#1b1b1e"/><rect x="26" y="14" width="4" height="3" fill="#555d68"/></svg>`,
+  12: `<svg viewBox="0 0 32 32"><rect x="3" y="13" width="20" height="7" fill="#6a5a3a"/><rect x="22" y="14" width="7" height="5" fill="#22252a"/><rect x="9" y="20" width="4" height="7" fill="#22252a" transform="rotate(18 9 20)"/></svg>`,
+  13: `<svg viewBox="0 0 32 32"><ellipse cx="16" cy="18" rx="7" ry="9" fill="#475e38"/><rect x="11" y="17" width="10" height="2" fill="#2e3f24"/><rect x="15" y="11" width="2" height="14" fill="#2e3f24"/><rect x="14" y="7" width="4" height="4" fill="#9fa3ab"/><circle cx="11" cy="8" r="2.5" fill="none" stroke="#d2d6dc" stroke-width="1.5"/></svg>`,
 };
 export class Hud {
   root = el('hud');
   sensitivity = 0.00216;
   volume = 0.8;
+  hipFov = 75;
+  bobScale = 0.55;
   quality: 'low' | 'medium' | 'high' = 'medium';
   private loadoutPrimary = -1;
   private loadoutSecondary = -1;
   onJoin: ((name: string, primary: number, secondary: number) => void) | null = null;
   onVolumeChange: ((v: number) => void) | null = null;
+  onFovChange: ((fov: number) => void) | null = null;
   onQualityChange: ((q: 'low' | 'medium' | 'high') => void) | null = null;
   onLoadoutChange: ((primary: number, secondary: number) => void) | null = null;
   onExit: (() => void) | null = null;
@@ -101,6 +116,9 @@ export class Hud {
   private lastDeathCountdown = -2;
   private lastReloading: boolean | null = null;
   private lastReloadPct = -1;
+  private lastAmmo = '';
+  private hurtTimer = 0;
+  private toastTimer = 0;
 
   constructor() {
     const name = el('name-input') as HTMLInputElement;
@@ -148,7 +166,8 @@ export class Hud {
       }
       const weapon = WEAPONS[id];
       if (!weapon) return;
-      tag.textContent = `${weapon.name.toUpperCase()} / ${id === 5 ? '重型狙击' : id === 2 ? '微声冲锋' : '突击步枪'}`;
+      const kind = id === 5 || id === 11 ? '狙击步枪' : id === 2 || id === 8 ? '冲锋枪' : id === 12 ? '霰弹枪' : id === 10 ? '光学步枪' : '突击步枪';
+      tag.textContent = `${weapon.name.toUpperCase()} / ${kind}`;
       dmgVal.textContent = String(weapon.dmg);
       rpmVal.textContent = `${weapon.rpm} RPM`;
       headVal.textContent = `${weapon.headMult.toFixed(1)} ×`;
@@ -201,18 +220,26 @@ export class Hud {
     const sens = el('sens-slider') as HTMLInputElement;
     const vol = el('vol-slider') as HTMLInputElement;
     const quality = el('quality-select') as HTMLSelectElement;
+    const fov = el('fov-slider') as HTMLInputElement;
+    const bob = el('bob-slider') as HTMLInputElement;
 
     const savedSens = localStorage.getItem('ps_sens');
     const savedVol = localStorage.getItem('ps_vol');
     const savedQ = localStorage.getItem('ps_quality') as typeof this.quality | null;
+    const savedFov = localStorage.getItem('ps_hip_fov');
+    const savedBob = localStorage.getItem('ps_gun_bob');
 
     if (savedSens && sens) sens.value = savedSens;
     if (savedVol && vol) vol.value = savedVol;
     if (savedQ && quality) quality.value = savedQ;
+    if (savedFov && fov) fov.value = savedFov;
+    if (savedBob && bob) bob.value = savedBob;
 
     this.sensitivity = sens ? (+sens.value / 50) * 0.0024 : 0.00216;
     this.volume = vol ? +vol.value / 100 : 0.8;
     this.quality = quality ? (quality.value as typeof this.quality) : 'medium';
+    this.hipFov = fov ? +fov.value : 75;
+    this.bobScale = bob ? +bob.value / 100 : 0.55;
 
     sens?.addEventListener('input', () => {
       this.sensitivity = (+sens.value / 50) * 0.0024;
@@ -229,6 +256,17 @@ export class Hud {
       this.quality = quality.value as typeof this.quality;
       localStorage.setItem('ps_quality', this.quality);
       this.onQualityChange?.(this.quality);
+    });
+
+    fov?.addEventListener('input', () => {
+      this.hipFov = +fov.value;
+      localStorage.setItem('ps_hip_fov', fov.value);
+      this.onFovChange?.(this.hipFov);
+    });
+
+    bob?.addEventListener('input', () => {
+      this.bobScale = +bob.value / 100;
+      localStorage.setItem('ps_gun_bob', bob.value);
     });
 
     el('open-settings-btn')?.addEventListener('click', () => this.toggleSettings(true));
@@ -330,6 +368,34 @@ export class Hud {
     if (hpEl) hpEl.textContent = String(v);
     const fillEl = el('hp-bar-fill');
     if (fillEl) fillEl.style.width = `${Math.max(0, Math.min(100, v))}%`;
+    this.root.classList.toggle('low-hp', v > 0 && v <= 30);
+  }
+
+  setAmmoDisplay(weapon: string, mag: string, reserve: string) {
+    const state = `${weapon}:${mag}:${reserve}`;
+    if (state === this.lastAmmo) return;
+    this.lastAmmo = state;
+    const nameEl = el('ammo-weapon');
+    if (nameEl) nameEl.textContent = weapon;
+    const magEl = el('ammo');
+    if (magEl) {
+      magEl.textContent = mag;
+      const n = Number(mag);
+      magEl.classList.toggle('empty', Number.isFinite(n) && n <= 0);
+      magEl.classList.toggle('low', Number.isFinite(n) && n > 0 && n <= 5);
+    }
+    const reserveEl = el('ammo-reserve');
+    if (reserveEl) reserveEl.textContent = reserve ? `/ ${reserve}` : '';
+  }
+
+  showHurtDir(radians: number) {
+    const arc = el('hurt-arc');
+    if (!arc) return;
+    const deg = ((radians * 180 / Math.PI) + 360) % 360;
+    arc.style.setProperty('--hurt-dir', `${deg}deg`);
+    arc.classList.add('on');
+    clearTimeout(this.hurtTimer);
+    this.hurtTimer = window.setTimeout(() => arc.classList.remove('on'), 280);
   }
 
   setArmor(v: number) {
@@ -358,7 +424,7 @@ export class Hud {
     const slot3Icon = el('slot-3-icon');
     if (slot3Icon && slot3Icon.innerHTML === '') slot3Icon.innerHTML = WEAPON_SVGS[6];
     const slot4Icon = el('slot-4-icon');
-    if (slot4Icon && slot4Icon.innerHTML === '') slot4Icon.innerHTML = WEAPON_SVGS[7];
+    if (slot4Icon && slot4Icon.innerHTML === '') slot4Icon.innerHTML = WEAPON_SVGS[13];
 
     const slot1Ammo = el('slot-1-ammo');
     if (slot1Ammo) slot1Ammo.textContent = String(mags[1] ?? 30);
@@ -488,12 +554,12 @@ export class Hud {
   }
 
   showPickupNotice(message: string) {
-    const row = document.createElement('div');
-    row.className = 'kill-row mine';
-    row.textContent = message;
-    this.killfeed.prepend(row);
-    while (this.killfeed.children.length > 6) this.killfeed.lastElementChild?.remove();
-    setTimeout(() => row.remove(), 2400);
+    const toast = el('pickup-toast');
+    if (!toast) return;
+    toast.textContent = message;
+    toast.classList.add('show');
+    clearTimeout(this.toastTimer);
+    this.toastTimer = window.setTimeout(() => toast.classList.remove('show'), 2200);
   }
 
 
@@ -565,6 +631,7 @@ export class Hud {
     document.exitPointerLock?.();
     void document.exitFullscreen?.();
     this.root.style.display = 'none';
+    this.root.classList.remove('low-hp');
     this.menu.style.display = 'block';
     if (this.pause) this.pause.style.display = 'none';
     if (this.settings) this.settings.style.display = 'none';

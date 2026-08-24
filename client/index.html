@@ -470,13 +470,13 @@
     .player-name {
       overflow: hidden;
       color: #fff;
-      font: 700 10px var(--font-ui);
+      font: 800 12px var(--font-ui);
       line-height: 1;
       text-overflow: ellipsis;
-      text-shadow: 0 1px 2px #000;
+      text-shadow: 0 1px 3px #000, 0 0 8px rgb(0 0 0 / .8);
       white-space: nowrap;
     }
-    .player-health { height: 4px; overflow: hidden; border: 1px solid rgb(240 234 220 / .35); background: rgb(11 13 11 / .88); }
+    .player-health { height: 6px; overflow: hidden; border: 1px solid rgb(240 234 220 / .5); background: rgb(11 13 11 / .88); }
     .player-health i { display: block; width: 100%; height: 100%; transform-origin: left; }
     .player-hp { width: 21px; color: var(--paper); font: 700 9px var(--font-mono); text-align: right; }
 
@@ -491,7 +491,7 @@
       contain: layout style;
       --spread: 0px;
     }
-    .ch-line, .ch-dot { position: absolute; background: #e8e7dd; box-shadow: 0 0 1px #0b0d0b; }
+    .ch-line, .ch-dot { position: absolute; background: #f4f1e4; box-shadow: 0 0 0 1px rgb(11 13 11 / .85); }
     .ch-line { will-change: transform; }
     .ch-top, .ch-bot { width: 2px; height: 6px; left: 11px; }
     .ch-top { top: 0; }
@@ -689,15 +689,91 @@
       height: 40px;
       filter: drop-shadow(2px 2px 0 #000000);
     }
-      border-color: var(--accent-hi);
-      background: rgb(34 197 94 / .14);
-      color: var(--paper);
+    #ammo-wrap {
+      position: absolute;
+      right: 18px;
+      bottom: 18px;
+      min-width: 168px;
+      text-align: right;
+      pointer-events: none;
+      text-shadow: 0 2px 8px #000, 0 0 18px rgb(0 0 0 / .55);
     }
-    .inventory-item.primed { border-color: #f0b429; color: #ffd166; }
-    .item-head { display: flex; justify-content: space-between; gap: 4px; }
-    .item-key { color: var(--accent-hi); }
-    .item-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .item-ammo { display: block; margin-top: 2px; color: var(--muted); font-size: 7px; }
+    #ammo-weapon {
+      color: var(--accent-hi);
+      font: 700 11px var(--font-mono);
+      letter-spacing: .14em;
+      text-transform: uppercase;
+    }
+    .ammo-count {
+      display: flex;
+      align-items: baseline;
+      justify-content: flex-end;
+      gap: 6px;
+      line-height: .85;
+    }
+    #ammo {
+      color: #fff8ea;
+      font: 64px/.8 var(--font-display);
+      letter-spacing: .02em;
+    }
+    #ammo.low { color: #ffb020; }
+    #ammo.empty { color: #ef4444; }
+    #ammo-reserve {
+      color: var(--muted);
+      font: 700 22px var(--font-mono);
+    }
+    #pickup-toast {
+      position: absolute;
+      left: 50%;
+      bottom: 92px;
+      display: none;
+      transform: translateX(-50%);
+      border: 1px solid rgb(240 234 220 / .35);
+      border-left: 4px solid var(--accent-hi);
+      background: rgb(11 13 11 / .92);
+      padding: 8px 14px;
+      color: #fff8ea;
+      font: 700 12px var(--font-mono);
+      letter-spacing: .06em;
+      box-shadow: 0 8px 24px rgb(0 0 0 / .45);
+      pointer-events: none;
+    }
+    #pickup-toast.show { display: block; animation: toast-in .16s ease-out; }
+    #fx-grain {
+      position: fixed;
+      inset: 0;
+      z-index: 12;
+      pointer-events: none;
+      opacity: .055;
+      mix-blend-mode: overlay;
+      background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+      background-size: 220px 220px;
+    }
+    #lowhp-vignette {
+      position: absolute;
+      inset: 0;
+      display: none;
+      background: radial-gradient(circle, transparent 40%, rgb(120 18 16 / .58) 100%);
+      pointer-events: none;
+    }
+    #hud.low-hp #lowhp-vignette { display: block; animation: lowhp-pulse 1.05s ease-in-out infinite; }
+    #hud.low-hp #vitals { border-left-color: #ff3b30; box-shadow: 0 0 18px rgb(239 68 68 / .35); }
+    #hurt-arc {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 320px;
+      height: 320px;
+      margin: -160px 0 0 -160px;
+      border-radius: 50%;
+      opacity: 0;
+      background: conic-gradient(from var(--hurt-dir, 0deg), transparent 0 148deg, rgb(189 81 70 / .62) 180deg, transparent 212deg 360deg);
+      -webkit-mask: radial-gradient(circle, transparent 54%, #000 70%, transparent 84%);
+      mask: radial-gradient(circle, transparent 54%, #000 70%, transparent 84%);
+      pointer-events: none;
+      transition: opacity .08s linear;
+    }
+    #hurt-arc.on { opacity: 1; }
     #sniper-scope {
       position: fixed;
       inset: 0;
@@ -799,6 +875,8 @@
     @keyframes streak-in { from { opacity: 0; transform: translate(-50%, -10px) scale(.9); } to { opacity: 1; transform: translateX(-50%) scale(1); } }
     @keyframes dialog-in { from { opacity: 0; transform: translateY(8px); } }
     @keyframes menu-in { from { opacity: 0; transform: translateY(6px); } }
+    @keyframes toast-in { from { opacity: 0; transform: translate(-50%, 8px); } }
+    @keyframes lowhp-pulse { 0%, 100% { opacity: .72; } 50% { opacity: 1; } }
     @media (prefers-reduced-motion: no-preference) {
       .deploy-panel { animation: menu-in .24s ease-out both; }
       .intel-panel { animation: menu-in .24s .04s ease-out both; }
@@ -898,8 +976,13 @@
                   <option value="-1" selected>🎲 随机主武器（每次重生随机）</option>
                   <option value="3">AK-47 经典突击步枪</option>
                   <option value="4">M4A4 特战突击步枪</option>
+                  <option value="9">FAMAS 突击步枪</option>
+                  <option value="10">AUG 光学突击步枪</option>
                   <option value="2">MP5-SD 微声冲锋枪</option>
+                  <option value="8">UMP-45 战术冲锋枪</option>
                   <option value="5">AWP 重型狙击步枪</option>
+                  <option value="11">SSG 08 轻型狙击</option>
+                  <option value="12">XM1014 战术霰弹</option>
                 </select>
               </div>
               <div class="field">
@@ -907,6 +990,7 @@
                 <select class="control" id="secondary-select">
                   <option value="-1" selected>🎲 随机副武器（每次重生随机）</option>
                   <option value="0">GLOCK-18 战术手枪</option>
+                  <option value="7">USP-S 消音手枪</option>
                   <option value="1">DESERT EAGLE 沙漠之鹰</option>
                 </select>
               </div>
@@ -982,7 +1066,7 @@
       <div class="radar-meta"><span>CITADEL 128M</span><span>在线 <strong id="online-count">0</strong></span></div>
     </div>
 
-    <div id="match-strip"><span>FREE FOR ALL</span><span id="shield-badge">出生保护</span></div>
+    <div id="match-strip"><span>FREE FOR ALL</span><span>黄昏要塞</span><span id="shield-badge">出生保护</span></div>
     <div id="net-stats" aria-live="polite">
       <span>延迟 <strong id="latency-value">-- ms</strong></span>
       <span>总带宽 <strong id="bandwidth-value">0.0 Mbps</strong></span>
@@ -1025,7 +1109,10 @@
     </div>
     <div id="grenade-ready" role="status" aria-live="polite">右键拉栓</div>
     <div id="hitmarker" aria-hidden="true"></div>
+    <div id="hurt-arc" aria-hidden="true"></div>
     <div id="damage-flash" aria-hidden="true"></div>
+    <div id="lowhp-vignette" aria-hidden="true"></div>
+    <div id="pickup-toast" role="status" aria-live="polite"></div>
     <div id="death-countdown" role="status" aria-live="polite"></div>
 
     <div id="vitals">
@@ -1060,6 +1147,11 @@
         <div class="slot-icon" id="slot-4-icon"></div>
         <span class="slot-stack" id="slot-4-ammo">1</span>
       </div>
+    </div>
+
+    <div id="ammo-wrap">
+      <div id="ammo-weapon">AK-47</div>
+      <div class="ammo-count"><strong id="ammo">30</strong><span id="ammo-reserve">/ 90</span></div>
     </div>
 
     <div id="reload-bar-wrap">
@@ -1115,6 +1207,14 @@
             <option value="high">超清 / DPR 1.5</option>
           </select>
         </div>
+        <div class="field">
+          <label for="fov-slider">视野 FOV</label>
+          <input id="fov-slider" type="range" min="70" max="100" value="75">
+        </div>
+        <div class="field">
+          <label for="bob-slider">持枪手感</label>
+          <input id="bob-slider" type="range" min="0" max="100" value="55">
+        </div>
       </div>
       <div class="dialog-actions">
         <button class="secondary-button" id="close-settings-btn" type="button">保存并返回</button>
@@ -1131,6 +1231,7 @@
     </div>
   </div>
 
+  <div id="fx-grain" aria-hidden="true"></div>
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>
