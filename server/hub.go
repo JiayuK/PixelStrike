@@ -76,13 +76,13 @@ func (h *Hub) OnlineSnapshot() []AdminPlayer {
 	return players
 }
 
-func (h *Hub) JoinIfAllowed(p *Player, name string, primary, secondary, skin, primaryWeaponSkin, secondaryWeaponSkin uint8) bool {
+func (h *Hub) JoinIfAllowed(p *Player, account, name string, primary, secondary, skin, primaryWeaponSkin, secondaryWeaponSkin uint8) bool {
 	h.banMu.RLock()
 	defer h.banMu.RUnlock()
 	if h.Store.IsIPBanned(p.IP) {
 		return false
 	}
-	h.Join(p, name, primary, secondary, skin, primaryWeaponSkin, secondaryWeaponSkin)
+	h.Join(p, account, name, primary, secondary, skin, primaryWeaponSkin, secondaryWeaponSkin)
 	return true
 }
 
@@ -138,7 +138,7 @@ func (h *Hub) SetBotCount(count int) (int, int) {
 	return count, active
 }
 
-func (h *Hub) Join(p *Player, name string, primary, secondary, skin, primaryWeaponSkin, secondaryWeaponSkin uint8) {
+func (h *Hub) Join(p *Player, account, name string, primary, secondary, skin, primaryWeaponSkin, secondaryWeaponSkin uint8) {
 	h.mu.Lock()
 	var room *Room
 	for _, candidate := range h.rooms {
@@ -173,9 +173,10 @@ func (h *Hub) Join(p *Player, name string, primary, secondary, skin, primaryWeap
 		}
 	}
 	p.Id = room.allocPlayerID()
+	p.Account = account
 	p.Name = name
-	p.PrimaryWeaponSkin = h.Store.UnlockedWeaponSkin(name, primary, primaryWeaponSkin)
-	p.SecondaryWeaponSkin = h.Store.UnlockedWeaponSkin(name, secondary, secondaryWeaponSkin)
+	p.PrimaryWeaponSkin = h.Store.UnlockedWeaponSkin(account, primary, primaryWeaponSkin)
+	p.SecondaryWeaponSkin = h.Store.UnlockedWeaponSkin(account, secondary, secondaryWeaponSkin)
 	p.joined = true
 	p.Room = room
 	p.ApplyLoadout(primary, secondary)

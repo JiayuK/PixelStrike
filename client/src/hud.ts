@@ -9,15 +9,6 @@ function esc(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] ?? c));
 }
 
-function setCookie(name: string, value: string, days: number) {
-  const expires = new Date(Date.now() + days * 864e5).toUTCString();
-  document.cookie = `${name}=${encodeURIComponent(value)}; expires=${expires}; path=/; SameSite=Lax`;
-}
-
-function getCookie(name: string): string | null {
-  const match = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
-  return match ? decodeURIComponent(match[1]) : null;
-}
 
 const WEAPON_BADGES: Record<number, string> = {
   0: 'GLOCK-18',
@@ -128,7 +119,6 @@ export class Hud {
   private refreshWeaponProgress: (() => void) | null = null;
 
   constructor() {
-    const name = el('name-input') as HTMLInputElement;
     const primary = el('primary-select') as HTMLSelectElement;
     const secondary = el('secondary-select') as HTMLSelectElement;
     const primaryWeaponSkin = el('primary-weapon-skin') as HTMLSelectElement;
@@ -155,11 +145,7 @@ export class Hud {
     };
     this.refreshWeaponProgress = loadWeaponProgress;
     loadWeaponProgress();
-    // Restore username and loadout.
-    const savedName = localStorage.getItem('pixel_strike_name') || getCookie('ps_name');
-    if (savedName && name) {
-      name.value = savedName;
-    }
+    // Restore loadout only; every deployment requires an explicit name.
     const savedPrimary = localStorage.getItem('pixel_strike_primary');
     if (savedPrimary && primary) {
       primary.value = savedPrimary;
@@ -172,13 +158,6 @@ export class Hud {
     } else if (secondary) {
       secondary.value = '-1';
     }
-    name.addEventListener('input', () => {
-      const val = name.value.trim();
-      if (val) {
-        localStorage.setItem('pixel_strike_name', val);
-        setCookie('ps_name', val, 365);
-      }
-    });
 
     const updateWeaponSpecs = (id: number) => {
       const tag = el('weapon-spec-tag');
@@ -251,11 +230,12 @@ export class Hud {
     let deploying = false;
     const startDeploy = () => {
       if (deploying) return;
-      const trimmed = name.value.trim();
-      const n = [...trimmed].slice(0, 16).join('') || `特战队员-${Math.floor(100 + Math.random() * 900)}`;
-      if (trimmed) {
-        localStorage.setItem('pixel_strike_name', trimmed);
-        setCookie('ps_name', trimmed, 365);
+      const enteredName = window.prompt('请输入玩家名字（最多 16 个字符）');
+      if (enteredName === null) return;
+      const n = [...enteredName.trim()].slice(0, 16).join('');
+      if (!n) {
+        window.alert('玩家名字不能为空');
+        return;
       }
       this.loadoutPrimary = +primary.value;
       this.loadoutSecondary = +secondary.value;
@@ -308,9 +288,6 @@ export class Hud {
     };
 
     el('join-btn').addEventListener('click', startDeploy);
-    name.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') startDeploy();
-    });
 
     el('lb-refresh-btn')?.addEventListener('click', () => this.loadLeaderboard());
 

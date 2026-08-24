@@ -225,10 +225,12 @@ func (p *Player) readPump(hub *Hub) {
 				p.Fingerprint = sanitizeFingerprint(string(payload[7+n:]))
 			}
 			if name == "" {
-				name = "player"
+				p.Send(Reject("请输入玩家名字"))
+				time.Sleep(20 * time.Millisecond)
+				return
 			}
-			resolved := hub.Store.GetOrCreatePlayer(p.IP, p.Fingerprint, name)
-			if !hub.JoinIfAllowed(p, resolved, primary, secondary, skin, primaryWeaponSkin, secondaryWeaponSkin) {
+			account := hub.Store.GetOrCreatePlayer(p.IP, p.Fingerprint, name)
+			if !hub.JoinIfAllowed(p, account, name, primary, secondary, skin, primaryWeaponSkin, secondaryWeaponSkin) {
 				p.Send(Reject("访问已被封禁"))
 				time.Sleep(20 * time.Millisecond)
 				return
@@ -299,8 +301,8 @@ func (p *Player) readPump(hub *Hub) {
 				room.mu.Lock()
 				if !p.Alive {
 					p.Primary, p.Secondary = payload[0], payload[1]
-					p.PrimaryWeaponSkin = hub.Store.UnlockedWeaponSkin(p.Name, payload[0], payload[2])
-					p.SecondaryWeaponSkin = hub.Store.UnlockedWeaponSkin(p.Name, payload[1], payload[3])
+					p.PrimaryWeaponSkin = hub.Store.UnlockedWeaponSkin(p.Account, payload[0], payload[2])
+					p.SecondaryWeaponSkin = hub.Store.UnlockedWeaponSkin(p.Account, payload[1], payload[3])
 				}
 				room.mu.Unlock()
 			}

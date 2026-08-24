@@ -469,6 +469,9 @@ func TestSanitizeNameUTF8(t *testing.T) {
 	if s := sanitizeName(strings.Repeat("汉", 20)); len([]rune(s)) != 16 {
 		t.Fatalf("sanitizeName len = %d", len([]rune(s)))
 	}
+	if s := sanitizeName(" \t\n "); s != "" {
+		t.Fatalf("blank sanitizeName = %q", s)
+	}
 }
 
 func TestIPIsTheProgressionAccount(t *testing.T) {
@@ -514,16 +517,16 @@ func TestBotKillsDoNotUnlockWeaponSkins(t *testing.T) {
 	}
 	defer store.Close()
 	room := &Room{Store: store}
-	attacker := &PlayerState{Name: "Alice"}
+	attacker := &PlayerState{Name: "Manual Display Name", Account: "Alice"}
 	room.Damage(attacker, &PlayerState{Alive: true, IsBot: true, HP: 1}, 10, false, 3, time.Now())
 	store.Flush()
-	progress, err := store.WeaponProgress(attacker.Name)
+	progress, err := store.WeaponProgress(attacker.Account)
 	if err != nil || len(progress) != 0 {
 		t.Fatalf("bot kill changed weapon progress: %#v, %v", progress, err)
 	}
 	room.Damage(attacker, &PlayerState{Alive: true, HP: 1}, 10, false, 3, time.Now())
 	store.Flush()
-	progress, err = store.WeaponProgress(attacker.Name)
+	progress, err = store.WeaponProgress(attacker.Account)
 	if err != nil || len(progress) != 1 || progress[0].Kills != 1 {
 		t.Fatalf("human kill did not change weapon progress: %#v, %v", progress, err)
 	}

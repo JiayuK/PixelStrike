@@ -81,7 +81,7 @@ const (
 
 type PlayerState struct {
 	Id                                                             uint16
-	Name                                                           string
+	Name, Account                                                  string
 	Pos, Vel                                                       Vec3
 	Yaw, Pitch                                                     float64
 	HP, Armor                                                      uint8
@@ -443,13 +443,13 @@ func (r *Room) Damage(attacker, victim *PlayerState, dmg float64, headshot bool,
 	attacker.Kills++
 	victim.Deaths++
 	if !attacker.IsBot {
-		r.Store.Accumulate(attacker.Name, 1, 0)
+		r.Store.Accumulate(attacker.Account, 1, 0)
 		if !victim.IsBot && isGun(weapon) {
-			r.Store.AccumulateWeaponKill(attacker.Name, weapon)
+			r.Store.AccumulateWeaponKill(attacker.Account, weapon)
 		}
 	}
 	if !victim.IsBot {
-		r.Store.Accumulate(victim.Name, 0, 1)
+		r.Store.Accumulate(victim.Account, 0, 1)
 	}
 	victim.Alive, victim.Reloading = false, false
 	victim.RespawnAt = now.Add(RespawnDelayS)
