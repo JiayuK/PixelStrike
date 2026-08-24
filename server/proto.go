@@ -6,7 +6,7 @@ import (
 	"unicode/utf8"
 )
 
-const ProtocolVersion = 5
+const ProtocolVersion = 6
 const SkinCount uint8 = 8
 
 const (
@@ -97,14 +97,14 @@ func Maintenance(retryAfter uint8) []byte {
 }
 
 type compactSelfState struct {
-	slot, weapon, mag, nades uint8
-	reserve                  uint16
+	slot, weapon, weaponSkin, mag, nades uint8
+	reserve                              uint16
 }
 
 func compactSelf(p *PlayerState) compactSelfState {
 	mag, reserve := p.ActiveAmmo()
 	return compactSelfState{
-		slot: p.ActiveSlot, weapon: p.Weapon,
+		slot: p.ActiveSlot, weapon: p.Weapon, weaponSkin: p.WeaponSkin,
 		mag: uint8(max(0, min(mag, 255))), reserve: uint16(max(0, min(reserve, 65535))),
 		nades: uint8(max(0, min(p.Grenades, 255))),
 	}
@@ -116,6 +116,7 @@ func SelfState(p *PlayerState) []byte {
 	w.U16(p.LastInputSeq)
 	w.U8(state.slot)
 	w.U8(state.weapon)
+	w.U8(state.weaponSkin)
 	w.U8(state.mag)
 	w.U16(state.reserve)
 	w.U8(state.nades)

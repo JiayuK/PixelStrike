@@ -42,6 +42,8 @@ pixel-strike/
 - 无限 FFA，无回合、经济和购买阶段；3 秒自动复活，2 秒出生保护（开火即解除）。
 - 自由选择一把主武器和一把副武器；1/2/3 切换主武器、副武器、刀。
 - Glock、Deagle、MP5-SD、AK-47、M4A4、AWP、刀和一枚 HE。
+- 真人玩家按服务端解析出的客户端 IP 绑定进度账号；每把枪分别累计击杀，100 杀解锁黄金皮肤、500 杀解锁钻石皮肤。
+- 进入游戏时可为主、副武器选择默认、黄金、钻石或随机已解锁皮肤；随机武器会先抽枪，再抽取该枪已解锁的皮肤。
 - 弹匣、备弹、换弹、护甲穿透、动态准星、同步弹道、移动/落地散布、蹲伏精度、后坐力、跳跃、爆头与刀背刺。
 - AK-47 与 Deagle 奖励精准爆头；AWP 开镜需 180 ms 稳定，远近枪声、爆炸和脚步按距离与方向播放。
 - 服务端 60 Hz 权威模拟，最多 200 ms 延迟补偿。
@@ -161,12 +163,12 @@ Compose 默认强制后台 Cookie 使用 HTTPS，并将 `TRUSTED_PROXY_CIDRS` �
 
 Compose 已限制服务端 512 MB、静态前端 128 MB，总上限 640 MB。
 
-## 协议 v5 摘要
+## 协议 v6 摘要
 
 所有多字节字段均为 Little-Endian。
 
-- 客户端：Join `01`、Input `02`、Fire `03`、Reload `04`、Grenade `06`、Switch `08`、Loadout `09`、RosterRequest `0A`、ToggleFlight `0B`、Ping `F0`。
+- 客户端：Join `01`、Input `02`、Fire `03`、Reload `04`、Grenade `06`、Switch `08`、Loadout `09`、RosterRequest `0A`、ToggleFlight `0B`、Ping `F0`。Join 与 Loadout 均携带主、副武器皮肤选择，服务端按解锁进度校验。
 - 服务端：Welcome `81`、Snapshot `82`、Events `83`、Pong `84`、Self `86`、Roster `87`、Reject `88`。
-- Snapshot：`tick(u32) + inputAck(u16) + count(u8)`，玩家记录由 `id(u16) + fieldMask(u16)` 开始；`0x8000` 表示完整关键帧。
+- Snapshot：`tick(u32) + inputAck(u16) + count(u8)`，玩家记录由 `id(u16) + fieldMask(u16)` 开始；`0x8000` 表示完整关键帧，状态包含角色皮肤和当前枪械皮肤。
 
 主要实现位置：`server/netstate.go`（带宽）、`server/sim.go`（权威玩法）、`server/room.go`（60 Hz 房间）、`client/src/net.ts`（协议）、`client/src/player.ts`（预测与实例化角色）、`tools/bots.mjs`（压测）。

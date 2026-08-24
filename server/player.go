@@ -195,7 +195,7 @@ func (p *Player) readPump(hub *Hub) {
 		}
 		switch op {
 		case OpJoin:
-			if p.joined || len(payload) < 5 {
+			if p.joined || len(payload) < 7 {
 				return
 			}
 			if hub.Store.IsIPBanned(p.IP) {
@@ -209,25 +209,26 @@ func (p *Player) readPump(hub *Hub) {
 				return
 			}
 			n := int(payload[1])
-			if n > len(payload)-5 {
+			if n > len(payload)-7 {
 				continue
 			}
 			name := sanitizeName(string(payload[2 : 2+n]))
 			primary, secondary, skin := payload[2+n], payload[3+n], payload[4+n]
+			primaryWeaponSkin, secondaryWeaponSkin := payload[5+n], payload[6+n]
 			if !validLoadout(primary, secondary) {
 				primary, secondary = 3, 0
 			}
 			if skin >= SkinCount {
 				skin = 0
 			}
-			if len(payload) > 5+n {
-				p.Fingerprint = sanitizeFingerprint(string(payload[5+n:]))
+			if len(payload) > 7+n {
+				p.Fingerprint = sanitizeFingerprint(string(payload[7+n:]))
 			}
 			if name == "" {
 				name = "player"
 			}
 			resolved := hub.Store.GetOrCreatePlayer(p.IP, p.Fingerprint, name)
-			if !hub.JoinIfAllowed(p, resolved, primary, secondary, skin) {
+			if !hub.JoinIfAllowed(p, resolved, primary, secondary, skin, primaryWeaponSkin, secondaryWeaponSkin) {
 				p.Send(Reject("访问已被封禁"))
 				time.Sleep(20 * time.Millisecond)
 				return
@@ -291,13 +292,15 @@ func (p *Player) readPump(hub *Hub) {
 				room.mu.Unlock()
 			}
 		case OpLoadout:
-			if len(payload) < 2 || !validLoadout(payload[0], payload[1]) {
+			if len(payload) < 4 || !validLoadout(payload[0], payload[1]) {
 				continue
 			}
 			if room := p.Room; room != nil {
 				room.mu.Lock()
 				if !p.Alive {
 					p.Primary, p.Secondary = payload[0], payload[1]
+					p.PrimaryWeaponSkin = hub.Store.UnlockedWeaponSkin(p.Name, payload[0], payload[2])
+					p.SecondaryWeaponSkin = hub.Store.UnlockedWeaponSkin(p.Name, payload[1], payload[3])
 				}
 				room.mu.Unlock()
 			}

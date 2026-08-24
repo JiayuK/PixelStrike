@@ -5,9 +5,11 @@ import (
 	"errors"
 	"log"
 	"math"
+	"math/rand/v2"
 	"net"
 	"net/netip"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -33,9 +35,23 @@ type IPBan struct {
 }
 
 type delta struct {
-	name   string
-	kills  int
-	deaths int
+	name        string
+	kills       int
+	deaths      int
+	weapon      int
+	weaponKills int
+}
+
+const (
+	GoldKillRequirement    = 100
+	DiamondKillRequirement = 500
+)
+
+type WeaponProgress struct {
+	Weapon  uint8 `json:"weapon"`
+	Kills   int   `json:"kills"`
+	Gold    bool  `json:"gold"`
+	Diamond bool  `json:"diamond"`
 }
 
 func NewStore(path string) (*Store, error) {
@@ -59,6 +75,12 @@ func NewStore(path string) (*Store, error) {
 			ip TEXT PRIMARY KEY,
 			reason TEXT NOT NULL DEFAULT '',
 			created_at INTEGER NOT NULL)`,
+		`CREATE TABLE IF NOT EXISTS weapon_kills(
+			account TEXT NOT NULL,
+			weapon INTEGER NOT NULL,
+			kills INTEGER NOT NULL DEFAULT 0,
+			updated_at INTEGER NOT NULL,
+			PRIMARY KEY(account, weapon))`,
 	} {
 		if _, err := db.Exec(schema); err != nil {
 			return nil, err
@@ -151,6 +173,14 @@ func (s *Store) writer() {
 				log.Printf("store upsert: %v", err)
 				return
 			}
+			if d.weapon >= 0 && d.weaponKills > 0 {
+				if _, err := tx.Exec(`INSERT INTO weapon_kills(account,weapon,kills,updated_at) VALUES(?,?,?,strftime('%s','now'))
+					ON CONFLICT(account,weapon) DO UPDATE SET kills=kills+excluded.kills, updated_at=excluded.updated_at`, d.name, d.weapon, d.weaponKills); err != nil {
+					_ = tx.Rollback()
+					log.Printf("store weapon upsert: %v", err)
+					return
+				}
+			}
 		}
 		if err := tx.Commit(); err != nil {
 			log.Printf("store commit: %v", err)
@@ -163,21 +193,27 @@ func (s *Store) writer() {
 		case <-ticker.C:
 			flush()
 		case d := <-s.ch:
-			acc := batch[d.name]
+			key := d.name + "\x00" + strconv.Itoa(d.weapon)
+			acc := batch[key]
 			acc.name = d.name
 			acc.kills += d.kills
 			acc.deaths += d.deaths
-			batch[d.name] = acc
+			acc.weaponKills += d.weaponKills
+			acc.weapon = d.weapon
+			batch[key] = acc
 		case done := <-s.flushCh:
 			// Drain all pending deltas in channel before flushing
 			for {
 				select {
 				case d := <-s.ch:
-					acc := batch[d.name]
+					key := d.name + "\x00" + strconv.Itoa(d.weapon)
+					acc := batch[key]
 					acc.name = d.name
 					acc.kills += d.kills
 					acc.deaths += d.deaths
-					batch[d.name] = acc
+					acc.weaponKills += d.weaponKills
+					acc.weapon = d.weapon
+					batch[key] = acc
 				default:
 					goto drained
 				}
@@ -191,11 +227,14 @@ func (s *Store) writer() {
 			for {
 				select {
 				case d := <-s.ch:
-					acc := batch[d.name]
+					key := d.name + "\x00" + strconv.Itoa(d.weapon)
+					acc := batch[key]
 					acc.name = d.name
 					acc.kills += d.kills
 					acc.deaths += d.deaths
-					batch[d.name] = acc
+					acc.weaponKills += d.weaponKills
+					acc.weapon = d.weapon
+					batch[key] = acc
 				default:
 					flush()
 					close(done)
@@ -209,9 +248,17 @@ func (s *Store) writer() {
 // Accumulate queues a stat change; persisted on the next 30s tick.
 func (s *Store) Accumulate(name string, kills, deaths int) {
 	select {
-	case s.ch <- delta{name, kills, deaths}:
+	case s.ch <- delta{name: name, kills: kills, deaths: deaths, weapon: -1}:
 	default:
 		log.Printf("store queue full, dropping stats for %q", name)
+	}
+}
+
+func (s *Store) AccumulateWeaponKill(name string, weapon uint8) {
+	select {
+	case s.ch <- delta{name: name, weapon: int(weapon), weaponKills: 1}:
+	default:
+		log.Printf("store queue full, dropping weapon kill for %q", name)
 	}
 }
 
@@ -227,10 +274,7 @@ func (s *Store) Flush() {
 
 // Invalidate drops the cached account for a disconnecting player.
 func (s *Store) Invalidate(ip, fp string) {
-	key := fp
-	if key == "" {
-		key = ip
-	}
+	key := ip
 	if key == "" {
 		return
 	}
@@ -317,10 +361,10 @@ func (s *Store) ListIPBans() []IPBan {
 }
 
 func (s *Store) GetOrCreatePlayer(ip, fp, name string) string {
-	key := fp
-	if key == "" {
-		key = ip
-	}
+	// The experiment intentionally treats the public client IP as the account.
+	// Fingerprints are retained only for backwards-compatible schema data and
+	// never split one IP into multiple progression accounts.
+	key := ip
 	if key != "" {
 		s.cacheMu.RLock()
 		cached, ok := s.cache[key]
@@ -331,11 +375,7 @@ func (s *Store) GetOrCreatePlayer(ip, fp, name string) string {
 
 		var existingName string
 		var err error
-		if fp != "" {
-			err = s.db.QueryRow(`SELECT name FROM stats WHERE fingerprint = ? LIMIT 1`, fp).Scan(&existingName)
-		} else {
-			err = s.db.QueryRow(`SELECT name FROM stats WHERE ip != '' AND ip = ? LIMIT 1`, ip).Scan(&existingName)
-		}
+		err = s.db.QueryRow(`SELECT name FROM stats WHERE ip != '' AND ip = ? ORDER BY updated_at DESC LIMIT 1`, ip).Scan(&existingName)
 		if err == nil && existingName != "" {
 			// Backfill whichever of ip/fingerprint was missing so both stay
 			// uniquely bound to this one account row.
@@ -363,6 +403,64 @@ func (s *Store) GetOrCreatePlayer(ip, fp, name string) string {
 		s.cacheMu.Unlock()
 	}
 	return resolved
+}
+
+func (s *Store) AccountForIP(ip string) (string, bool) {
+	var name string
+	err := s.db.QueryRow(`SELECT name FROM stats WHERE ip != '' AND ip=? ORDER BY updated_at DESC LIMIT 1`, ip).Scan(&name)
+	return name, err == nil && name != ""
+}
+
+func (s *Store) WeaponProgressForIP(ip string) ([]WeaponProgress, error) {
+	name, ok := s.AccountForIP(ip)
+	if !ok {
+		return []WeaponProgress{}, nil
+	}
+	return s.WeaponProgress(name)
+}
+
+func (s *Store) WeaponProgress(name string) ([]WeaponProgress, error) {
+	rows, err := s.db.Query(`SELECT weapon, kills FROM weapon_kills WHERE account=? ORDER BY weapon`, name)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []WeaponProgress{}
+	for rows.Next() {
+		var p WeaponProgress
+		if err := rows.Scan(&p.Weapon, &p.Kills); err != nil {
+			return nil, err
+		}
+		p.Gold = p.Kills >= GoldKillRequirement
+		p.Diamond = p.Kills >= DiamondKillRequirement
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) UnlockedWeaponSkin(name string, weapon, requested uint8) uint8 {
+	if requested == 0 {
+		return 0
+	}
+	var kills int
+	_ = s.db.QueryRow(`SELECT kills FROM weapon_kills WHERE account=? AND weapon=?`, name, weapon).Scan(&kills)
+	if requested == 3 {
+		maxSkin := 0
+		if kills >= GoldKillRequirement {
+			maxSkin = 1
+		}
+		if kills >= DiamondKillRequirement {
+			maxSkin = 2
+		}
+		return uint8(rand.IntN(maxSkin + 1))
+	}
+	if requested == 2 && kills >= DiamondKillRequirement {
+		return 2
+	}
+	if requested == 1 && kills >= GoldKillRequirement {
+		return 1
+	}
+	return 0
 }
 
 type LeaderRow struct {

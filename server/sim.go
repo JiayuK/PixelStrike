@@ -87,6 +87,7 @@ type PlayerState struct {
 	HP, Armor                                                      uint8
 	Alive, IsBot, OnGround, Crouch, Flying                         bool
 	Primary, Secondary, ActiveSlot, Weapon, Skin                   uint8
+	PrimaryWeaponSkin, SecondaryWeaponSkin, WeaponSkin             uint8
 	Mags                                                           [2]int
 	Reserves                                                       [2]int
 	CmdKeys                                                        uint8
@@ -139,6 +140,7 @@ func (p *PlayerState) ApplyLoadout(primary, secondary uint8) {
 	p.Mags = [2]int{Weapons[primary].Mag, Weapons[secondary].Mag}
 	p.Reserves = [2]int{Weapons[primary].Reserve, Weapons[secondary].Reserve}
 	p.ActiveSlot, p.Weapon, p.Grenades = 1, primary, 1
+	p.WeaponSkin = p.PrimaryWeaponSkin
 	p.Reloading = false
 }
 func (p *PlayerState) SwitchSlot(slot uint8) bool {
@@ -146,10 +148,13 @@ func (p *PlayerState) SwitchSlot(slot uint8) bool {
 	switch slot {
 	case 1:
 		weapon = p.Primary
+		p.WeaponSkin = p.PrimaryWeaponSkin
 	case 2:
 		weapon = p.Secondary
+		p.WeaponSkin = p.SecondaryWeaponSkin
 	case 3:
 		weapon = 6
+		p.WeaponSkin = 0
 	default:
 		return false
 	}
@@ -439,6 +444,9 @@ func (r *Room) Damage(attacker, victim *PlayerState, dmg float64, headshot bool,
 	victim.Deaths++
 	if !attacker.IsBot {
 		r.Store.Accumulate(attacker.Name, 1, 0)
+		if isGun(weapon) {
+			r.Store.AccumulateWeaponKill(attacker.Name, weapon)
+		}
 	}
 	if !victim.IsBot {
 		r.Store.Accumulate(victim.Name, 0, 1)
