@@ -1,0 +1,50 @@
+client/src/hud.ts
+  e6714a25af043149 85,123,279,573-589
+client/src/net.ts
+  e6714a25af043149 109-114,122
+client/src/constants.ts
+  e6714a25af043149 1,12,112,127-128
+server/proto_test.go
+  e6714a25af043149 12,454-487
+server/proto.go
+  e6714a25af043149 9,20,46,181-186
+client/index.html
+  e6714a25af043149 769-794,1183,1252
+client/src/main.ts
+  e6714a25af043149 14,164,507-509,617-618,705-706,754-755,836-837,843-844,889-896
+server/sim.go
+  e6714a25af043149 18,78-79,88,224-226,241,255-272,293,486
+tools/bots.mjs
+  e6714a25af043149 6
+server/netstate.go
+  e6714a25af043149 31-33
+server/room.go
+  e6714a25af043149 173
+server/player.go
+  e6714a25af043149 233,303-313,323-325,327
+client/src/player.ts
+  e6714a25af043149 14,26-27,34,44-48,73
+README.md
+  e6714a25af043149 60-62,164,168
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.6-codex",
+  "base_commit_sha": "2f4875a0131bf7c6e18b412072f00edec4ee5013",
+  "prompts": {
+    "e6714a25af043149": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "71f27710-0147-4b11-ab8b-565822a06a10",
+        "model": "auto-smart"
+      },
+      "human_author": "JiayuK",
+      "messages": [],
+      "total_additions": 199,
+      "total_deletions": 18,
+      "accepted_lines": 199,
+      "overriden_lines": 0,
+      "messages_url": "https://codeaiapi.xinfei-inc.cn/cas/f68c90b9dca10f07a7d19c4f3ffde72c509dbe4806b3973d2a6aa85341e6bbe0"
+    }
+  }
+}
