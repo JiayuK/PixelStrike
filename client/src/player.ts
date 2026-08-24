@@ -90,6 +90,8 @@ interface RemoteModel {
   sampleAt: number;
   flashUntil: number;
   lastShot: number;
+  lastShotAt: number;
+  burstShots: number;
   yaw: number;
   pitch: number;
   walk: number;
@@ -169,8 +171,8 @@ function createSteveHeadTexture(): THREE.Texture {
 
   const tex = new THREE.CanvasTexture(canvas as unknown as HTMLCanvasElement);
   tex.magFilter = THREE.NearestFilter;
-  tex.minFilter = THREE.NearestFilter;
-  tex.generateMipmaps = false;
+  tex.minFilter = THREE.NearestMipmapNearestFilter;
+  tex.colorSpace = THREE.SRGBColorSpace;
   return tex;
 }
 
@@ -178,29 +180,35 @@ function createSteveTorsoTexture(): THREE.Texture {
   const canvas = new OffscreenCanvas(16, 16);
   const ctx = canvas.getContext('2d')!;
 
-  const C = '#00a8aa'; // Steve Cyan Shirt
-  const C2 = '#008e90';
-  const S = '#d9a377'; // Skin V-neck
+  const C = '#d4d8ca';
+  const C2 = '#a7ae9f';
+  const R = '#626b5f';
+  const D = '#343a34';
 
   ctx.fillStyle = C;
   ctx.fillRect(0, 0, 16, 16);
 
-  // Front (+Z, x: 4 to 12, y: 0 to 16) with V-neck collar
+  // Neutral tactical fabric keeps per-player instance tinting coherent.
   for (let y = 0; y < 16; y++) {
     for (let x = 4; x < 12; x++) {
-      if (y < 4 && (x >= 6 && x <= 9)) {
-        ctx.fillStyle = S; // V-neck skin
-      } else {
-        ctx.fillStyle = (x + y) % 5 === 0 ? C2 : C;
-      }
+      ctx.fillStyle = (x + y) % 5 === 0 ? C2 : C;
       ctx.fillRect(x, y, 1, 1);
     }
   }
+  ctx.fillStyle = D;
+  ctx.fillRect(7, 0, 2, 3);
+  ctx.fillStyle = R;
+  ctx.fillRect(5, 3, 1, 10);
+  ctx.fillRect(10, 3, 1, 10);
+  ctx.fillRect(5, 10, 6, 1);
+  ctx.fillStyle = D;
+  ctx.fillRect(5, 11, 3, 3);
+  ctx.fillRect(9, 11, 2, 3);
 
   const tex = new THREE.CanvasTexture(canvas as unknown as HTMLCanvasElement);
   tex.magFilter = THREE.NearestFilter;
-  tex.minFilter = THREE.NearestFilter;
-  tex.generateMipmaps = false;
+  tex.minFilter = THREE.NearestMipmapNearestFilter;
+  tex.colorSpace = THREE.SRGBColorSpace;
   return tex;
 }
 
@@ -208,19 +216,21 @@ function createSteveArmTexture(): THREE.Texture {
   const canvas = new OffscreenCanvas(16, 16);
   const ctx = canvas.getContext('2d')!;
 
-  const C = '#00a8aa'; // Cyan Sleeve
-  const S = '#d9a377'; // Skin Arm
+  const C = '#d4d8ca';
+  const C2 = '#a7ae9f';
+  const G = '#303630';
 
-  // Top 1/3 is sleeve, bottom 2/3 is skin
-  ctx.fillStyle = S;
-  ctx.fillRect(0, 0, 16, 16);
   ctx.fillStyle = C;
-  ctx.fillRect(0, 0, 16, 6);
+  ctx.fillRect(0, 0, 16, 16);
+  ctx.fillStyle = C2;
+  ctx.fillRect(0, 6, 16, 2);
+  ctx.fillStyle = G;
+  ctx.fillRect(0, 12, 16, 4);
 
   const tex = new THREE.CanvasTexture(canvas as unknown as HTMLCanvasElement);
   tex.magFilter = THREE.NearestFilter;
-  tex.minFilter = THREE.NearestFilter;
-  tex.generateMipmaps = false;
+  tex.minFilter = THREE.NearestMipmapNearestFilter;
+  tex.colorSpace = THREE.SRGBColorSpace;
   return tex;
 }
 
@@ -228,9 +238,9 @@ function createSteveLegTexture(): THREE.Texture {
   const canvas = new OffscreenCanvas(16, 16);
   const ctx = canvas.getContext('2d')!;
 
-  const J = '#2b3577'; // Denim Jeans Blue
-  const J2 = '#222b64';
-  const B = '#3a3a3a'; // Dark Gray Shoes
+  const J = '#46505f';
+  const J2 = '#333b48';
+  const B = '#202522';
 
   ctx.fillStyle = J;
   ctx.fillRect(0, 0, 16, 16);
@@ -242,19 +252,21 @@ function createSteveLegTexture(): THREE.Texture {
       ctx.fillRect(x, y, 1, 1);
     }
   }
+  ctx.fillStyle = '#252c34';
+  ctx.fillRect(0, 7, 16, 3);
   // Shoes on bottom
   ctx.fillStyle = B;
   ctx.fillRect(0, 12, 16, 4);
 
   const tex = new THREE.CanvasTexture(canvas as unknown as HTMLCanvasElement);
   tex.magFilter = THREE.NearestFilter;
-  tex.minFilter = THREE.NearestFilter;
-  tex.generateMipmaps = false;
+  tex.minFilter = THREE.NearestMipmapNearestFilter;
+  tex.colorSpace = THREE.SRGBColorSpace;
   return tex;
 }
 export class RemotePlayers {
   group = new THREE.Group();
-  onShot: ((state: PlayerSnap, position: THREE.Vector3) => void) | null = null;
+  onShot: ((state: PlayerSnap, position: THREE.Vector3, burstShots: number) => void) | null = null;
   onStep: ((position: THREE.Vector3) => void) | null = null;
   private models = new Map<number, RemoteModel>();
   private free = Array.from({ length: MAX_PLAYERS }, (_, i) => MAX_PLAYERS - 1 - i);
@@ -315,7 +327,15 @@ export class RemotePlayers {
       uvs.setXY(base + 3, u1, v0);
     }
     uvs.needsUpdate = true;
-    return geo;
+    const vest = new THREE.BoxGeometry(0.48, 0.34, 0.29);
+    vest.translate(0, 0.02, 0);
+    const belt = new THREE.BoxGeometry(0.46, 0.08, 0.27);
+    belt.translate(0, -0.26, 0);
+    const merged = mergeGeometries([geo, vest, belt])!;
+    geo.dispose();
+    vest.dispose();
+    belt.dispose();
+    return merged;
   })();
 
   private armRGeo = (() => {
@@ -387,7 +407,10 @@ export class RemotePlayers {
     mag.translate(0, -0.12, -0.15);
     const scope = new THREE.BoxGeometry(0.05, 0.04, 0.22);
     scope.translate(0, 0.09, -0.14);
-    return mergeGeometries([body, barrel, mag, scope])!;
+    const parts = [body, barrel, mag, scope];
+    const merged = mergeGeometries(parts)!;
+    for (const part of parts) part.dispose();
+    return merged;
   })();
 
   private head = this.mesh(this.headGeo, this.headTex);
@@ -436,6 +459,8 @@ export class RemotePlayers {
         sampleAt: now,
         flashUntil: 0,
         lastShot: state.shot,
+        lastShotAt: 0,
+        burstShots: 0,
         yaw: state.yaw,
         pitch: state.pitch,
         walk: 0,
@@ -447,8 +472,11 @@ export class RemotePlayers {
       this.models.set(state.id, model);
     } else {
       if (state.shot !== model.lastShot) {
+        const shotDelta = (state.shot - model.lastShot + 256) & 255;
+        model.burstShots = now - model.lastShotAt > 420 ? shotDelta : Math.min(255, model.burstShots + shotDelta);
+        model.lastShotAt = now;
         model.lastShot = state.shot;
-        this.onShot?.(state, model.position);
+        this.onShot?.(state, model.position, model.burstShots);
       }
       model.state = state;
       model.sampleAt = now;
@@ -479,7 +507,7 @@ export class RemotePlayers {
     this.lastUpdate = now;
     if (this.models.size === 0) return;
     const alpha = 1 - Math.exp(-dt * 16);
-    let bodyColorsDirty = false, gunColorsDirty = false;
+    let uniformColorsDirty = false, gunColorsDirty = false;
 
     for (const model of this.models.values()) {
       const state = model.state;
@@ -522,22 +550,23 @@ export class RemotePlayers {
       // Two-handed forward triangular V-shape weapon grip (尖尖双手持枪)
       const isKnife = state.weapon === 6;
       const pistolHold = state.weapon === 0 || state.weapon === 1 || state.weapon === 7;
+      const weaponScale = Math.max(0.42, (WEAPONS[state.weapon]?.length ?? 0.75) / 0.75);
 
       if (isKnife) {
         // Knife stance: Right hand holds blade forward-down, left arm swings with walking
         this.place(this.armR, model.index, model, sin, cos, 0.22, shoulderY, -0.04, Math.PI / 2.6 + model.pitch * 0.8, -0.15, -0.25);
         this.place(this.armL, model.index, model, sin, cos, -0.24, shoulderY, 0, -swing * 0.75, 0, 0);
-        this.place(this.gun, model.index, model, sin, cos, 0.14, bodyY + 0.08, -0.28, model.pitch, 0, 0);
+        this.place(this.gun, model.index, model, sin, cos, 0.14, bodyY + 0.08, -0.28, model.pitch, 0, 0, weaponScale);
       } else if (pistolHold) {
         // Two-handed pistol grip: Both arms angle forward-inward meeting at pistol grip
         this.place(this.armR, model.index, model, sin, cos, 0.24, shoulderY, 0, Math.PI / 2.15 + model.pitch, 0.42, 0);
         this.place(this.armL, model.index, model, sin, cos, -0.24, shoulderY, 0, Math.PI / 2.15 + model.pitch, -0.42, 0);
-        this.place(this.gun, model.index, model, sin, cos, 0.0, bodyY + 0.20, -0.44, model.pitch, 0, 0);
+        this.place(this.gun, model.index, model, sin, cos, 0.0, bodyY + 0.20, -0.44, model.pitch, 0, 0, weaponScale);
       } else {
         // Rifle / SMG / Sniper stance: Both arms angle forward-inward forming sharp V-shape holding rifle
         this.place(this.armR, model.index, model, sin, cos, 0.24, shoulderY, 0, Math.PI / 2.15 + model.pitch, 0.42, 0);
         this.place(this.armL, model.index, model, sin, cos, -0.24, shoulderY, 0, Math.PI / 2.15 + model.pitch, -0.42, 0);
-        this.place(this.gun, model.index, model, sin, cos, 0.0, bodyY + 0.20, -0.48, model.pitch, 0, 0);
+        this.place(this.gun, model.index, model, sin, cos, 0.0, bodyY + 0.20, -0.48, model.pitch, 0, 0, weaponScale);
       }
 
       // Right Leg (Swings forward/backward when walking)
@@ -549,7 +578,9 @@ export class RemotePlayers {
       if (wantedBodyColor !== model.bodyColor) {
         model.bodyColor = wantedBodyColor;
         this.body.setColorAt(model.index, bodyColor.setHex(wantedBodyColor));
-        bodyColorsDirty = true;
+        this.armR.setColorAt(model.index, bodyColor);
+        this.armL.setColorAt(model.index, bodyColor);
+        uniformColorsDirty = true;
       }
       const wantedGunColor = WEAPONS[state.weapon]?.color ?? 0x222225;
       if (wantedGunColor !== model.gunColor) {
@@ -560,7 +591,11 @@ export class RemotePlayers {
     }
 
     for (const layer of this.layers) layer.instanceMatrix.needsUpdate = true;
-    if (bodyColorsDirty && this.body.instanceColor) this.body.instanceColor.needsUpdate = true;
+    if (uniformColorsDirty) {
+      if (this.body.instanceColor) this.body.instanceColor.needsUpdate = true;
+      if (this.armR.instanceColor) this.armR.instanceColor.needsUpdate = true;
+      if (this.armL.instanceColor) this.armL.instanceColor.needsUpdate = true;
+    }
     if (gunColorsDirty && this.gun.instanceColor) this.gun.instanceColor.needsUpdate = true;
   }
 
@@ -633,6 +668,7 @@ export class RemotePlayers {
     pitch: number,
     yawOffset = 0,
     roll = 0,
+    scaleZ = 1,
   ) {
     const yaw = model.yaw + yawOffset;
     this.dummy.position.set(
@@ -641,7 +677,7 @@ export class RemotePlayers {
       model.position.z - lx * sin + lz * cos,
     );
     this.dummy.rotation.set(pitch, yaw, roll, 'YXZ');
-    this.dummy.scale.setScalar(1);
+    this.dummy.scale.set(1, 1, scaleZ);
     this.dummy.updateMatrix();
     mesh.setMatrixAt(index, this.dummy.matrix);
   }

@@ -112,6 +112,7 @@ const remoteShotOrigin = new THREE.Vector3();
 const remoteShotDir = new THREE.Vector3();
 const localShotOrigin = new THREE.Vector3();
 const localShotDir = new THREE.Vector3();
+const localPelletDir = new THREE.Vector3();
 const impactPoint = new THREE.Vector3();
 const impactNormal = new THREE.Vector3(0, 1, 0);
 const eventOrigin = new THREE.Vector3();
@@ -831,14 +832,15 @@ function refreshScoreboard() {
   hud.updateScoreboard([...roster.values()], states, net.yourId);
 }
 
-remotes.onShot = (s, position) => {
+remotes.onShot = (s, position, burstShots) => {
   if (s.weapon === 6) {
     playSpatial('knife_slash', position.x, position.z, 0.55, 22);
     return;
   }
   if (!world) return;
   const o = remoteShotOrigin.set(position.x, position.y + (s.state & 4 ? 1.12 : 1.6), position.z);
-  const d = shotDirection(remoteShotDir, s.yaw, s.pitch, remoteSpread(s), s.shot, s.weapon);
+  const shotSample = (WEAPONS[s.weapon]?.pellets ?? 1) > 1 ? s.shot * 17 : s.shot;
+  const d = shotDirection(remoteShotDir, s.yaw, s.pitch, remoteSpread(s, burstShots), shotSample, s.weapon, s.id);
   const dist = world.raycastDistance(o, d, 180);
   weapons.spawnTracer(o, d, dist);
   playSpatial(fireSound(s.weapon), position.x, position.z, 0.65, 120, 0.97 + Math.random() * 0.06);
@@ -992,9 +994,10 @@ function fire(mode: number, t: number) {
   lastPatternShot = t;
   patternShots++;
   const pellets = Math.max(1, WEAPONS[weapons.weaponId]?.pellets ?? 1);
-  const dir = shotDirection(localShotDir, local.yaw, local.pitch, spread, patternShots, weapons.weaponId);
+  const shotSample = (++shotSeq) & 0xff;
+  const dir = shotDirection(localShotDir, local.yaw, local.pitch, spread, pellets > 1 ? shotSample * 17 : shotSample, weapons.weaponId, net.yourId);
   weapons.onFired(t, origin);
-  net.sendFire(++shotSeq, net.lastServerTick, mode | (aiming ? 0x80 : 0), local.yaw, local.pitch);
+  net.sendFire(shotSeq, net.lastServerTick, mode | (aiming ? 0x80 : 0), local.yaw, local.pitch);
   mag = weapons.ammoLocal;
   if (isSniper(weapons.weaponId)) {
     stopAiming();
@@ -1005,7 +1008,7 @@ function fire(mode: number, t: number) {
   if (weapons.weaponId !== 6) {
     audio.play(fireSound(weapons.weaponId), 1, 0.985 + Math.random() * 0.03, 0, true);
     for (let i = 0; i < pellets; i++) {
-      const pelletDir = pellets === 1 ? dir : shotDirection(localShotDir.clone(), local.yaw, local.pitch, spread, patternShots * 17 + i, weapons.weaponId);
+      const pelletDir = i === 0 ? dir : shotDirection(localPelletDir, local.yaw, local.pitch, spread, shotSample * 17 + i, weapons.weaponId, net.yourId);
       const dist = world?.raycastDistance(origin, pelletDir, 180) ?? 180;
       weapons.spawnTracer(origin, pelletDir, dist);
       if (dist < 180) {
@@ -1059,9 +1062,9 @@ function localSpread(t: number): number {
   return spread;
 }
 
-function remoteSpread(s: PlayerSnap): number {
+function remoteSpread(s: PlayerSnap, burstShots: number): number {
   const def = WEAPONS[s.weapon];
-  let spread = weaponSpread(def, s.vx, s.vz, !!(s.state & 8), !!(s.state & 4), false, !!(s.state & 16), Math.max(0, s.shot - 1));
+  let spread = weaponSpread(def, s.vx, s.vz, !!(s.state & 8), !!(s.state & 4), false, !!(s.state & 16), Math.max(0, burstShots - 1));
   if (isSniper(s.weapon) && !(s.state & 16)) spread = Math.max(spread, def.moveSpread);
   return spread;
 }
@@ -1125,11 +1128,11 @@ function applyRecoil(weapon: number, shot: number, ads: boolean) {
   local.yaw -= yaw * scale;
 }
 
-function shotDirection(out: THREE.Vector3, yaw: number, pitch: number, spread: number, shot: number, weapon: number): THREE.Vector3 {
+function shotDirection(out: THREE.Vector3, yaw: number, pitch: number, spread: number, shot: number, weapon: number, shooter: number): THREE.Vector3 {
   const cp = Math.cos(pitch);
   out.set(-Math.sin(yaw) * cp, Math.sin(pitch), -Math.cos(yaw) * cp);
   if (spread <= 0) return out;
-  let seed = (Math.imul(shot, 747796405) + Math.imul(weapon + 1, 2891336453)) >>> 0;
+  let seed = (Math.imul(shot, 747796405) + Math.imul(weapon + 1, 2891336453) + Math.imul(shooter, 2246822519)) >>> 0;
   seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
   const radius = Math.sqrt(seed / 4294967296) * Math.tan(spread * Math.PI / 180);
   seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;

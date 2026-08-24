@@ -519,10 +519,11 @@ export class Hud {
   }
 
   setCrosshair(spread: number) {
-    const px = Math.round(Math.max(0, spread));
+    const px = Math.round(Math.max(3, Math.min(42, spread)));
     if (px === this.lastCrosshair) return;
     this.lastCrosshair = px;
     this.crosshair.style.setProperty('--spread', `${px}px`);
+    this.crosshair.dataset.accuracy = px < 7 ? 'tight' : px < 14 ? 'warm' : 'wide';
   }
 
 

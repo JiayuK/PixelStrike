@@ -304,6 +304,7 @@ function createHDVoxelTexture(type: number): THREE.Texture {
   tex.wrapT = THREE.RepeatWrapping;
   tex.anisotropy = 4;
   tex.generateMipmaps = true;
+  tex.colorSpace = THREE.SRGBColorSpace;
   return tex;
 }
 

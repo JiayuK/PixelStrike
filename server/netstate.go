@@ -32,7 +32,7 @@ func quantizeState(p *PlayerState, nowUnixNano int64) quantState {
 		x: q16(p.Pos.X * 100), y: q16(p.Pos.Y * 100), z: q16(p.Pos.Z * 100),
 		yaw: angleHalfDeg(p.Yaw), pitch: angleHalfDeg(p.Pitch),
 		vx: q8(p.Vel.X * 10), vz: q8(p.Vel.Z * 10),
-		hp: p.HP, armor: p.Armor, state: state, weapon: p.Weapon, shot: p.ShotCounter,
+		hp: p.HP, armor: p.Armor, state: state, weapon: p.Weapon, shot: uint8(p.LastShotSeq),
 	}
 }
 

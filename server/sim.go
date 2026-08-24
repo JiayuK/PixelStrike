@@ -344,7 +344,7 @@ func (r *Room) TryFire(p *PlayerState, yaw, pitch float64, mode uint8, seenTick 
 	for n := 0; n < pellets; n++ {
 		shotDir := dir
 		if isGun(uint8(weapon)) {
-			shotDir = patternDir(dir, spread, int(p.ShotCounter)*17+n, weapon)
+			shotDir = patternDir(dir, spread, spreadSample(shotSeq, pellets, n), weapon, p.Id)
 		}
 		_, worldDist := r.World.Raycast(origin, shotDir, maxDist)
 		var target *PlayerState
@@ -777,11 +777,19 @@ func weaponSpread(def WeaponDef, vx, vz float64, onGround, crouching, landing, a
 	return spread
 }
 
-func patternDir(dir Vec3, deg float64, shot, weapon int) Vec3 {
+func spreadSample(shotSeq uint16, pellets, pellet int) int {
+	shot := int(uint8(shotSeq))
+	if pellets > 1 {
+		return shot*17 + pellet
+	}
+	return shot
+}
+
+func patternDir(dir Vec3, deg float64, shot, weapon int, shooter uint16) Vec3 {
 	if deg <= 0 {
 		return dir
 	}
-	seed := uint32(shot)*747796405 + uint32(weapon+1)*2891336453
+	seed := uint32(shot)*747796405 + uint32(weapon+1)*2891336453 + uint32(shooter)*2246822519
 	seed = seed*1664525 + 1013904223
 	radius := math.Sqrt(float64(seed)/4294967296) * math.Tan(deg*math.Pi/180)
 	seed = seed*1664525 + 1013904223

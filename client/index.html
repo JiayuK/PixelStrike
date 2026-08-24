@@ -484,23 +484,26 @@
       position: fixed;
       left: 50%;
       top: 50%;
-      width: 24px;
-      height: 24px;
+      width: 2px;
+      height: 2px;
       transform: translate(-50%, -50%);
       pointer-events: none;
       contain: layout style;
-      --spread: 0px;
+      --spread: 3px;
+      --crosshair-color: #f4f1e4;
     }
-    .ch-line, .ch-dot { position: absolute; background: #f4f1e4; box-shadow: 0 0 0 1px rgb(11 13 11 / .85); }
-    .ch-line { will-change: transform; }
-    .ch-top, .ch-bot { width: 2px; height: 6px; left: 11px; }
-    .ch-top { top: 0; }
-    .ch-top { transform: translateY(calc(-1 * var(--spread))); }
-    .ch-bot { bottom: 0; transform: translateY(var(--spread)); }
-    .ch-left, .ch-right { width: 6px; height: 2px; top: 11px; }
-    .ch-left { left: 0; transform: translateX(calc(-1 * var(--spread))); }
-    .ch-right { right: 0; transform: translateX(var(--spread)); }
-    .ch-dot { width: 2px; height: 2px; left: 11px; top: 11px; background: var(--accent-hi); }
+    .ch-line, .ch-dot { position: absolute; left: 0; top: 0; background: var(--crosshair-color); box-shadow: 0 0 0 1px rgb(11 13 11 / .88); }
+    .ch-line { will-change: transform; transition: background-color 90ms linear, opacity 90ms linear; }
+    .ch-top, .ch-bot { width: 2px; height: 7px; }
+    .ch-top { transform: translate3d(0, calc(-100% - var(--spread)), 0); }
+    .ch-bot { transform: translate3d(0, calc(2px + var(--spread)), 0); }
+    .ch-left, .ch-right { width: 7px; height: 2px; }
+    .ch-left { transform: translate3d(calc(-100% - var(--spread)), 0, 0); }
+    .ch-right { transform: translate3d(calc(2px + var(--spread)), 0, 0); }
+    .ch-dot { width: 2px; height: 2px; background: var(--accent-hi); box-shadow: 0 0 0 1px rgb(11 13 11 / .9), 0 0 5px rgb(255 185 46 / .34); }
+    #crosshair[data-accuracy="warm"] { --crosshair-color: #efc464; }
+    #crosshair[data-accuracy="wide"] { --crosshair-color: #df8068; }
+    #crosshair[data-accuracy="wide"] .ch-line { opacity: .86; }
     #crosshair.reloading .ch-line { background: var(--accent-hi); opacity: 0.55; }
     #crosshair.reloading .ch-dot { background: var(--accent-hi); transform: scale(1.6); box-shadow: 0 0 6px var(--accent-hi); }
     #grenade-ready {

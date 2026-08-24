@@ -288,10 +288,33 @@ func TestPatternDirStaysInsideSpread(t *testing.T) {
 	aim := AimDir(.3, -.2)
 	limit := math.Cos(2 * math.Pi / 180)
 	for shot := 1; shot <= 64; shot++ {
-		got := patternDir(aim, 2, shot, 3)
+		got := patternDir(aim, 2, shot, 3, 7)
 		if dot := aim.X*got.X + aim.Y*got.Y + aim.Z*got.Z; dot < limit-1e-12 {
 			t.Fatalf("shot %d left spread cone: cos=%.9f limit=%.9f", shot, dot, limit)
 		}
+	}
+	if patternDir(aim, 2, 1, 3, 7) == patternDir(aim, 2, 1, 3, 8) {
+		t.Fatal("different players received the same spread pattern")
+	}
+}
+
+func TestSpreadSampleKeepsSingleShotsAndSeparatesPellets(t *testing.T) {
+	if got := spreadSample(259, 1, 0); got != 3 {
+		t.Fatalf("single-shot sample = %d, want 3", got)
+	}
+	if a, b := spreadSample(259, 6, 0), spreadSample(259, 6, 1); a != 51 || b != 52 {
+		t.Fatalf("pellet samples = %d,%d, want 51,52", a, b)
+	}
+}
+
+func TestSnapshotShotUsesPersistentSequence(t *testing.T) {
+	p := &PlayerState{ShotCounter: 1, LastShotSeq: 257}
+	first := quantizeState(p, 0).shot
+	p.LastShotSeq++
+	p.ShotCounter = 1
+	second := quantizeState(p, 0).shot
+	if first != 1 || second != 2 {
+		t.Fatalf("shot sequence = %d,%d, want 1,2", first, second)
 	}
 }
 
