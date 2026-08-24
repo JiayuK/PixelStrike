@@ -12,7 +12,7 @@ function createHDVoxelTexture(type: number): THREE.Texture {
 
   switch (type) {
     case 0: { // 0: Tactical Sandstone / Matte Ground Pavement (Clean, soft warm stone)
-      ctx.fillStyle = '#d6cdbd';
+      ctx.fillStyle = '#747b73';
       ctx.fillRect(0, 0, 256, 256);
 
       // Large 2x2 subtle paver slabs with delicate, soft low-contrast seams
@@ -38,7 +38,7 @@ function createHDVoxelTexture(type: number): THREE.Texture {
       break;
     }
     case 1: { // 1: Reinforced Clean Architectural Concrete (Modern matte smooth panels)
-      ctx.fillStyle = '#9aa3ac';
+      ctx.fillStyle = '#7d888c';
       ctx.fillRect(0, 0, 256, 256);
 
       // Two large clean architectural panels
@@ -72,11 +72,11 @@ function createHDVoxelTexture(type: number): THREE.Texture {
       break;
     }
     case 2: { // 2: Tactical Military Wooden Crate (Warm teak with sleek corner reinforcements)
-      ctx.fillStyle = '#845a38';
+      ctx.fillStyle = '#705138';
       ctx.fillRect(0, 0, 256, 256);
 
       // 3 Smooth horizontal wood planks
-      ctx.fillStyle = '#5c381c';
+      ctx.fillStyle = '#493522';
       ctx.fillRect(0, 84, 256, 4);
       ctx.fillRect(0, 168, 256, 4);
 
@@ -112,7 +112,7 @@ function createHDVoxelTexture(type: number): THREE.Texture {
       ctx.closePath();
       ctx.fill();
 
-      ctx.fillStyle = '#845a38';
+      ctx.fillStyle = '#705138';
       ctx.beginPath();
       ctx.moveTo(128, 120);
       ctx.lineTo(140, 144);
@@ -122,13 +122,13 @@ function createHDVoxelTexture(type: number): THREE.Texture {
       break;
     }
     case 3: { // 3: Diamond Steel Plate / Container Slate
-      ctx.fillStyle = '#58606c';
+      ctx.fillStyle = '#465762';
       ctx.fillRect(0, 0, 256, 256);
 
       // Clean recessed industrial panel
       ctx.fillStyle = 'rgba(25, 28, 33, 0.35)';
       ctx.fillRect(8, 8, 240, 240);
-      ctx.fillStyle = '#505863';
+      ctx.fillStyle = '#3f4f59';
       ctx.fillRect(12, 12, 232, 232);
 
       // Subtle panel highlight
@@ -147,11 +147,11 @@ function createHDVoxelTexture(type: number): THREE.Texture {
       break;
     }
     case 4: { // 4: Dark Basalt / Architectural Trim & Curbs
-      ctx.fillStyle = '#32363e';
+      ctx.fillStyle = '#252b30';
       ctx.fillRect(0, 0, 256, 256);
 
       // 2 Large architectural stone slabs
-      ctx.fillStyle = '#1c1e23';
+      ctx.fillStyle = '#161b1f';
       ctx.fillRect(0, 127, 256, 2);
 
       ctx.fillStyle = 'rgba(255, 255, 255, 0.10)';
@@ -160,11 +160,11 @@ function createHDVoxelTexture(type: number): THREE.Texture {
       break;
     }
     case 5: { // 5: Tactical Foliage / Green Hedge
-      ctx.fillStyle = '#3c7932';
+      ctx.fillStyle = '#3c5d3b';
       ctx.fillRect(0, 0, 256, 256);
 
       // Soft stylized leaf clusters
-      const leafColors = ['#2e5f26', '#498e3d', '#5ba84f', '#6bc05e'];
+      const leafColors = ['#29462d', '#466b43', '#587b50', '#6b8a5d'];
       for (let i = 0; i < 90; i++) {
         const x = Math.floor(rnd() * 240);
         const y = Math.floor(rnd() * 240);
@@ -177,30 +177,30 @@ function createHDVoxelTexture(type: number): THREE.Texture {
       break;
     }
     case 6: { // 6: Golden Sandstone / Citadel Course (Clean architectural stone courses)
-      ctx.fillStyle = '#dba76a';
+      ctx.fillStyle = '#9c9078';
       ctx.fillRect(0, 0, 256, 256);
 
       // Horizontal architectural masonry course with soft shadows
-      ctx.fillStyle = '#b38247';
+      ctx.fillStyle = '#6e6658';
       ctx.fillRect(0, 126, 256, 4);
 
       // Elegant top stone bevels
-      ctx.fillStyle = '#fae0b8';
+      ctx.fillStyle = '#bbb095';
       ctx.fillRect(0, 0, 256, 4);
       ctx.fillRect(0, 130, 256, 4);
 
       // Soft warm central architectural recess
-      ctx.fillStyle = 'rgba(179, 130, 71, 0.12)';
+      ctx.fillStyle = 'rgba(69, 64, 55, 0.14)';
       ctx.fillRect(16, 16, 224, 94);
       ctx.fillRect(16, 146, 224, 94);
       break;
     }
     case 7: { // 7: Red Terracotta Brick
-      ctx.fillStyle = '#9e463c';
+      ctx.fillStyle = '#875044';
       ctx.fillRect(0, 0, 256, 256);
 
       // Clean staggered brick joints
-      ctx.fillStyle = '#6b2b24';
+      ctx.fillStyle = '#55312f';
       ctx.fillRect(0, 62, 256, 4);
       ctx.fillRect(0, 126, 256, 4);
       ctx.fillRect(0, 190, 256, 4);
@@ -240,7 +240,7 @@ function createHDVoxelTexture(type: number): THREE.Texture {
       break;
     }
     case 9: { // 9: Obsidian Carbon / Tech Slate
-      ctx.fillStyle = '#252830';
+      ctx.fillStyle = '#20272c';
       ctx.fillRect(0, 0, 256, 256);
 
       ctx.fillStyle = '#1c1e24';
@@ -250,7 +250,7 @@ function createHDVoxelTexture(type: number): THREE.Texture {
       break;
     }
     case 10: { // 10: Tactical Supply Shelf
-      ctx.fillStyle = '#383d34';
+      ctx.fillStyle = '#374039';
       ctx.fillRect(0, 0, 256, 256);
 
       // Steel shelf rack
@@ -271,7 +271,7 @@ function createHDVoxelTexture(type: number): THREE.Texture {
       break;
     }
     case 11: { // 11: Security Glass
-      ctx.fillStyle = 'rgba(34, 178, 222, 0.28)';
+      ctx.fillStyle = 'rgba(48, 139, 156, 0.25)';
       ctx.fillRect(0, 0, 256, 256);
 
       // Subtle edge frame
@@ -291,7 +291,7 @@ function createHDVoxelTexture(type: number): THREE.Texture {
       break;
     }
     case 12: { // 12: Azure Water
-      ctx.fillStyle = '#0ea5e9';
+      ctx.fillStyle = '#287b88';
       ctx.fillRect(0, 0, 256, 256);
 
       // Soft flowing caustics ripples
@@ -308,7 +308,7 @@ function createHDVoxelTexture(type: number): THREE.Texture {
       break;
     }
     default: { // 13: Clean Matte Tactical Asphalt Roadway
-      ctx.fillStyle = '#353941';
+      ctx.fillStyle = '#30373b';
       ctx.fillRect(0, 0, 256, 256);
 
       // Subtle asphalt aggregate texture
@@ -325,6 +325,20 @@ function createHDVoxelTexture(type: number): THREE.Texture {
         ctx.fillRect(x, y, 3, 3);
       }
       break;
+    }
+  }
+  if (type !== 8 && type !== 11 && type !== 12) {
+    for (let i = 0; i < 18; i++) {
+      ctx.fillStyle = `rgba(8, 16, 18, ${0.012 + rnd() * 0.025})`;
+      ctx.beginPath();
+      ctx.ellipse(rnd() * 256, rnd() * 256, 10 + rnd() * 36, 5 + rnd() * 20, rnd() * Math.PI, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    for (let i = 0; i < 360; i++) {
+      const shade = rnd() > 0.48 ? 255 : 0;
+      ctx.fillStyle = `rgba(${shade}, ${shade}, ${shade}, ${0.018 + rnd() * 0.028})`;
+      const size = rnd() > 0.9 ? 2 : 1;
+      ctx.fillRect(Math.floor(rnd() * 256), Math.floor(rnd() * 256), size, size);
     }
   }
   const tex = new THREE.CanvasTexture(canvas as unknown as HTMLCanvasElement);
@@ -389,6 +403,7 @@ export class WorldView {
   sun = new THREE.Group();
   private scene: THREE.Scene;
   private waterTex: THREE.Texture | null = null;
+  private lastAmbientTick = -1;
   private pickupTemplates: THREE.Group[];
   private pickups = new Map<number, THREE.Group>();
   boxes: { x0: number; x1: number; y0: number; y1: number; z0: number; z1: number }[] = [];
@@ -445,6 +460,8 @@ export class WorldView {
 
     // 2. High-Tech Sky with Sun & Volumetric Cloud Slabs
     this.setupSky();
+    this.setupBackdrop();
+    this.setupMarkings();
 
   }
 
@@ -506,48 +523,84 @@ export class WorldView {
 
   private setupSky() {
     // Soft glowing sun disc
-    const sunCanvas = new OffscreenCanvas(128, 128);
+    const sunCanvas = new OffscreenCanvas(96, 96);
     const sctx = sunCanvas.getContext('2d')!;
-    const grad = sctx.createRadialGradient(64, 64, 0, 64, 64, 64);
-    grad.addColorStop(0, 'rgba(255, 255, 240, 1.0)');
-    grad.addColorStop(0.25, 'rgba(255, 242, 190, 0.85)');
-    grad.addColorStop(0.65, 'rgba(255, 225, 140, 0.25)');
-    grad.addColorStop(1, 'rgba(255, 200, 100, 0.0)');
+    const grad = sctx.createRadialGradient(48, 48, 0, 48, 48, 48);
+    grad.addColorStop(0, 'rgba(255, 249, 221, 1.0)');
+    grad.addColorStop(0.24, 'rgba(245, 205, 132, 0.72)');
+    grad.addColorStop(0.66, 'rgba(221, 168, 92, 0.18)');
+    grad.addColorStop(1, 'rgba(190, 130, 70, 0.0)');
     sctx.fillStyle = grad;
-    sctx.fillRect(0, 0, 128, 128);
+    sctx.fillRect(0, 0, 96, 96);
     const sunTex = new THREE.CanvasTexture(sunCanvas as unknown as HTMLCanvasElement);
     sunTex.colorSpace = THREE.SRGBColorSpace;
 
     const sunMesh = new THREE.Mesh(
-      new THREE.PlaneGeometry(64, 64),
+      new THREE.PlaneGeometry(52, 52),
       new THREE.MeshBasicMaterial({ map: sunTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending })
     );
-    sunMesh.position.set(110, 100, -130);
+    sunMesh.position.set(105, 88, -135);
     sunMesh.lookAt(0, 0, 0);
     this.sun.add(sunMesh);
     this.scene.add(this.sun);
 
-    // Soft volumetric layered clouds
-    const cloudMat = new THREE.MeshBasicMaterial({ color: 0xf2f8ff, transparent: true, opacity: 0.55 });
+    // Low-poly cloud banks retain the voxel style without forming a flat ceiling.
+    const cloudMat = new THREE.MeshBasicMaterial({ color: 0xd7e1e2, transparent: true, opacity: 0.24, depthWrite: false });
     const cloudGeos: THREE.BufferGeometry[] = [];
     let cSeed = 42;
     const cRnd = () => (cSeed = (cSeed * 16807) % 2147483647) / 2147483647;
-
-    for (let x = -260; x <= 260; x += 44) {
-      for (let z = -260; z <= 260; z += 44) {
-        if (cRnd() > 0.35) {
-          const cw = 28 + Math.floor(cRnd() * 32);
-          const cd = 28 + Math.floor(cRnd() * 32);
-          const cg = new THREE.BoxGeometry(cw, 3.2, cd);
-          cg.translate(x + cRnd() * 12, 60 + cRnd() * 8, z + cRnd() * 12);
-          cloudGeos.push(cg);
-        }
-      }
+    for (let i = 0; i < 28; i++) {
+      const angle = i / 28 * Math.PI * 2;
+      const distance = 95 + cRnd() * 175;
+      const cloud = new THREE.DodecahedronGeometry(1, 1);
+      cloud.scale(10 + cRnd() * 18, 2.2 + cRnd() * 2.4, 7 + cRnd() * 14);
+      cloud.translate(Math.cos(angle) * distance + (cRnd() - 0.5) * 45, 55 + cRnd() * 15, Math.sin(angle) * distance + (cRnd() - 0.5) * 45);
+      cloudGeos.push(cloud);
     }
     const mergedClouds = mergeGeometries(cloudGeos)!;
-    for (const g of cloudGeos) g.dispose();
+    for (const geo of cloudGeos) geo.dispose();
     this.clouds.add(new THREE.Mesh(mergedClouds, cloudMat));
     this.scene.add(this.clouds);
+  }
+  private setupBackdrop() {
+    const geos: THREE.BufferGeometry[] = [];
+    let seed = 9173;
+    const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    for (let i = 0; i < 36; i++) {
+      const verticalEdge = i % 2 === 0;
+      const side = i % 4 < 2 ? -1 : 1;
+      const along = -210 + ((i * 47) % 420);
+      const distance = 96 + Math.floor(rnd() * 54);
+      const width = 9 + Math.floor(rnd() * 17);
+      const depth = 9 + Math.floor(rnd() * 17);
+      const height = 9 + Math.floor(rnd() * 27);
+      const x = verticalEdge ? side * distance : along;
+      const z = verticalEdge ? along : side * distance;
+      const geo = new THREE.BoxGeometry(width, height, depth);
+      geo.translate(x, height * 0.5 - 1, z);
+      geos.push(geo);
+    }
+    const merged = mergeGeometries(geos)!;
+    for (const geo of geos) geo.dispose();
+    this.group.add(new THREE.Mesh(merged, new THREE.MeshLambertMaterial({ color: 0x46555a })));
+  }
+  private setupMarkings() {
+    const geos: THREE.BufferGeometry[] = [];
+    const add = (x: number, y: number, z: number, w: number, d: number) => {
+      const geo = new THREE.BoxGeometry(w, 0.018, d);
+      geo.translate(x, y, z);
+      geos.push(geo);
+    };
+    for (let z = -64; z <= 64; z += 8) add(0, 0.036, z, 0.18, 3.2);
+    for (let x = -64; x <= 64; x += 8) add(x, 0.037, 2, 3.2, 0.18);
+    add(31, 1.526, -51.5, 22, 0.16);
+    add(53, 1.526, -51.5, 0.16, 21);
+    add(31, 1.526, -30.5, 22, 0.16);
+    add(31, 1.526, -41, 0.16, 21);
+    for (let i = 0; i < 6; i++) add(-13 + i * 2.2, 0.038, 0.5, 1.1, 0.24);
+    const merged = mergeGeometries(geos)!;
+    for (const geo of geos) geo.dispose();
+    this.group.add(new THREE.Mesh(merged, new THREE.MeshBasicMaterial({ color: 0xd2aa55, transparent: true, opacity: 0.78 })));
   }
   raycastDistance(origin: THREE.Vector3, dir: THREE.Vector3, maxDist: number): number {
     let best = maxDist;
@@ -583,10 +636,14 @@ export class WorldView {
   }
 
   animate(t: number) {
-    if (this.clouds.visible) this.clouds.position.x = (t * 0.0018) % 48;
-    if (this.waterTex) {
-      this.waterTex.offset.x = (t * 0.00005) % 1;
-      this.waterTex.offset.y = (t * 0.00008) % 1;
+    const ambientTick = Math.floor(t / 50);
+    if (ambientTick !== this.lastAmbientTick) {
+      this.lastAmbientTick = ambientTick;
+      if (this.clouds.visible) this.clouds.position.x = (t * 0.0018) % 48;
+      if (this.waterTex) {
+        this.waterTex.offset.x = (t * 0.00005) % 1;
+        this.waterTex.offset.y = (t * 0.00008) % 1;
+      }
     }
     for (const [id, pickup] of this.pickups) {
       pickup.rotation.y = t * 0.0018 + id;

@@ -24,7 +24,13 @@ export class AudioEngine {
     this.ctx = new AudioContext();
     this.masterGain = this.ctx.createGain();
     this.masterGain.gain.value = this.volume;
-    this.masterGain.connect(this.ctx.destination);
+    const limiter = this.ctx.createDynamicsCompressor();
+    limiter.threshold.value = -2;
+    limiter.knee.value = 0;
+    limiter.ratio.value = 20;
+    limiter.attack.value = 0.001;
+    limiter.release.value = 0.08;
+    this.masterGain.connect(limiter).connect(this.ctx.destination);
     SFX_NAMES.forEach((name, index) => window.setTimeout(() => void this.load(name), 500 + index * 75));
   }
 

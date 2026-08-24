@@ -13,8 +13,8 @@ const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
 const wsUrl = import.meta.env.VITE_WS_URL || `${proto}//${location.host}/ws`;
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x76b4e6);
-scene.fog = new THREE.Fog(0x8bc0ea, 60, 320);
+scene.background = new THREE.Color(0x78939d);
+scene.fog = new THREE.Fog(0x8ea5a8, 52, 265);
 
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.05, 450);
 camera.rotation.order = 'YXZ';
@@ -22,25 +22,21 @@ camera.layers.enable(0);
 camera.layers.disable(1);
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.12;
+renderer.toneMappingExposure = 1.07;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 document.body.appendChild(renderer.domElement);
 
-const hemiLight = new THREE.HemisphereLight(0xf2f7ff, 0x8a7f70, 1.25);
+const hemiLight = new THREE.HemisphereLight(0xdbe8e7, 0x485247, 1.22);
 scene.add(hemiLight);
 
-const sun = new THREE.DirectionalLight(0xfffaea, 1.40);
+const sun = new THREE.DirectionalLight(0xffe2b0, 1.22);
 sun.position.set(90, 120, -70);
 scene.add(sun);
 scene.add(camera);
 
-const fillLight = new THREE.DirectionalLight(0x8ec2ee, 0.60);
+const fillLight = new THREE.DirectionalLight(0x789fb0, 0.5);
 fillLight.position.set(-70, 50, 70);
 scene.add(fillLight);
-
-const cameraLight = new THREE.DirectionalLight(0xffffff, 0.35);
-cameraLight.position.set(0, 0, 1);
-camera.add(cameraLight);
 const hud = new Hud();
 const audio = new AudioEngine();
 const net = new Net();
@@ -62,6 +58,7 @@ let lastStep = 0;
 let inputSeq = 0;
 let shotSeq = 0;
 let lastInput = 0;
+let lastWheelSwitch = 0;
 const INPUT_INTERVAL = 1000 / 60;
 const SPEED_BOOST_MULTIPLIER = 1.35;
 let fireHeld = false;
@@ -392,7 +389,8 @@ window.addEventListener('mousemove', (e) => {
 
   const mx = Math.max(-80, Math.min(80, e.movementX));
   const my = Math.max(-80, Math.min(80, e.movementY));
-  const sens = aiming && isSniper(weapons.weaponId) ? hud.sensitivity * camera.fov / hud.hipFov : hud.sensitivity;
+  const adsScale = aiming ? Math.tan(camera.fov * Math.PI / 360) / Math.tan(hud.hipFov * Math.PI / 360) : 1;
+  const sens = hud.sensitivity * adsScale;
   local.yaw -= mx * sens;
   local.pitch = Math.max(-1.45, Math.min(1.45, local.pitch - my * sens));
   mouseX = Math.max(-160, Math.min(160, mouseX + mx));
@@ -472,6 +470,9 @@ for (const type of ['selectstart', 'dragstart', 'dragover', 'drop', 'copy', 'cut
 window.addEventListener('wheel', (e) => {
   if (joined && alive && !hud.isSettingsOpen()) {
     e.preventDefault();
+    const now = performance.now();
+    if (now - lastWheelSwitch < 110) return;
+    lastWheelSwitch = now;
     if (e.deltaY > 0) {
       const next = activeSlot === 4 ? 1 : activeSlot + 1;
       selectSlot(next);
@@ -735,7 +736,7 @@ function handleEvent(e: GameEvent) {
       if (hitState) {
         particles.spawnImpact(eventOrigin.set(hitState.x, hitState.y + (headshot ? 1.65 : 1), hitState.z), impactNormal, headshot ? 0xf2c14e : 0xd8574f, headshot ? 10 : 6);
       }
-      screenShake = Math.max(screenShake, headshot ? 0.035 : 0.012);
+      if (headshot) screenShake = Math.max(screenShake, 0.014);
     }
     return;
   }
@@ -856,6 +857,7 @@ function frame(t: number) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.05, (t - prev) / 1000);
   prev = t;
+  if (document.hidden) return;
 
   if (joined && alive) {
     local.speedMultiplier = t < speedBoostUntil ? SPEED_BOOST_MULTIPLIER : 1;
@@ -894,8 +896,10 @@ function frame(t: number) {
       audio.play('step', 0.22, 0.82);
     }
 
-    const moving = !!(local.keys & (KEY.Forward | KEY.Back | KEY.Left | KEY.Right));
-    if (moving && local.onGround && !local.crouch && t - lastStep > 390) {
+    const moveSpeed = Math.hypot(local.vel.x, local.vel.z);
+    const moving = moveSpeed > 0.15;
+    const stepInterval = Math.max(340, 460 - moveSpeed * 11);
+    if (moveSpeed > 0.8 && local.onGround && !local.crouch && t - lastStep > stepInterval) {
       lastStep = t;
       audio.play('step', 0.18, 0.92 + Math.random() * 0.16);
     }
@@ -933,12 +937,14 @@ function frame(t: number) {
       local.pos.y + cameraEyeHeight + cameraCorrection.y + cameraStepOffset - landingKick,
       local.pos.z + cameraCorrection.z,
     );
-    if (screenShake > 0) {
-      const shake = screenShake * 0.18;
-      camera.position.x += Math.sin(t * 0.035) * shake;
-      camera.position.y += Math.sin(t * 0.051) * shake * 0.5;
-      camera.position.z += Math.cos(t * 0.041) * shake;
-      screenShake = Math.max(0, screenShake - dt * 0.7);
+    if (screenShake > 0.0005) {
+      const shake = screenShake * 0.14;
+      camera.position.x += Math.sin(t * 0.031) * shake;
+      camera.position.y += Math.sin(t * 0.047) * shake * 0.42;
+      camera.position.z += Math.cos(t * 0.037) * shake;
+      screenShake *= Math.exp(-dt * 9);
+    } else {
+      screenShake = 0;
     }
     camera.rotation.y = local.yaw;
     camera.rotation.x = local.pitch;
