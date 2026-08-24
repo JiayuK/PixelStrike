@@ -87,6 +87,11 @@ addBox(-ARENA_SIZE / 2, 0, ARENA_SIZE / 2 - W_WALL, ARENA_SIZE, H_WALL, W_WALL, 
 addBox(-ARENA_SIZE / 2, 0, -ARENA_SIZE / 2 + W_WALL, W_WALL, H_WALL, ARENA_SIZE - 2 * W_WALL, T.CONCRETE_MASONRY); // West Wall
 addBox(ARENA_SIZE / 2 - W_WALL, 0, -ARENA_SIZE / 2 + W_WALL, W_WALL, H_WALL, ARENA_SIZE - 2 * W_WALL, T.CONCRETE_MASONRY); // East Wall
 
+// Perimeter Wall Top Architectural Coping Trims (0.35m basalt trim)
+addBox(-ARENA_SIZE / 2, H_WALL, -ARENA_SIZE / 2, ARENA_SIZE, 0.35, W_WALL, T.DARK_BASALT);
+addBox(-ARENA_SIZE / 2, H_WALL, ARENA_SIZE / 2 - W_WALL, ARENA_SIZE, 0.35, W_WALL, T.DARK_BASALT);
+addBox(-ARENA_SIZE / 2, H_WALL, -ARENA_SIZE / 2 + W_WALL, W_WALL, 0.35, ARENA_SIZE - 2 * W_WALL, T.DARK_BASALT);
+addBox(ARENA_SIZE / 2 - W_WALL, H_WALL, -ARENA_SIZE / 2 + W_WALL, W_WALL, 0.35, ARENA_SIZE - 2 * W_WALL, T.DARK_BASALT);
 // 4 Corner Bastion Towers with Luminous Beacons
 const corners = [
   [-ARENA_SIZE / 2, -ARENA_SIZE / 2],
@@ -122,6 +127,7 @@ addStepStairs(28, 0, -34, 6, 2.0, 3, 0.5, 1, 0, T.SANDSTONE); // From Short A
 // Long A Corridor & Palace Arch (X: 44 to 62, Z: -26 to 48)
 // Long A Dividing Wall between Mid and Long
 addBox(38, 0, -24, 2.5, H_WALL, 56, T.CONCRETE_MASONRY);
+addBox(38, H_WALL, -24, 2.5, 0.35, 56, T.DARK_BASALT); // Wall cap
 // Long A Corner Building / Pit (大坑) at Z: 36 to 52
 addBox(44, 0, 38, 18, 0.8, 18, T.DARK_BASALT); // Pit Rim
 addStepStairs(44, 0, 34, 6, 1.5, 2, 0.4, 0, 1, T.CONCRETE_MASONRY);
@@ -188,8 +194,9 @@ addBox(-50, 0, 36, 6, 1.2, 2, T.STEEL_PLATE);
 // Mid Doors Sniper Duel Alley (中路双门对狙中缝, Z: -20 to 16, X: -14 to 14)
 // West Mid Wall
 addBox(-18, 0, -18, 3.0, H_WALL, 34, T.CONCRETE_MASONRY);
-// East Mid Wall
+addBox(-18, H_WALL, -18, 3.0, 0.35, 34, T.DARK_BASALT);
 addBox(14, 0, -18, 3.0, H_WALL, 34, T.CONCRETE_MASONRY);
+addBox(14, H_WALL, -18, 3.0, 0.35, 34, T.DARK_BASALT);
 
 // Mid Doors (中门实体掩体，留出 2 米狭窄对狙缝隙)
 addBox(-15, 0, 2, 6.0, 4.0, 1.2, T.STEEL_PLATE); // Left Door

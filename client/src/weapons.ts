@@ -103,12 +103,15 @@ export class Weapons {
   constructor(_camera: THREE.Camera, scene: THREE.Scene) {
     this.vmCamera.rotation.order = 'YXZ';
     this.vmCamera.layers.set(VIEWMODEL_LAYER);
-    const fill = new THREE.DirectionalLight(0xfff2dd, 1.35);
-    fill.position.set(0.35, 0.8, 0.55);
+    const fill = new THREE.DirectionalLight(0xfffaea, 1.6);
+    fill.position.set(0.5, 1.0, 0.8);
     fill.layers.set(VIEWMODEL_LAYER);
-    const hemi = new THREE.HemisphereLight(0xffd8b0, 0x1c1410, 0.6);
+    const rim = new THREE.DirectionalLight(0x9ec8f0, 1.0);
+    rim.position.set(-0.6, -0.4, 0.5);
+    rim.layers.set(VIEWMODEL_LAYER);
+    const hemi = new THREE.HemisphereLight(0xfff6ec, 0x606a78, 1.1);
     hemi.layers.set(VIEWMODEL_LAYER);
-    this.vmCamera.add(fill, hemi, this.group);
+    this.vmCamera.add(fill, rim, hemi, this.group);
     scene.add(this.vmCamera);
     this.group.scale.setScalar(0.78);
     scene.add(this.tracers);
