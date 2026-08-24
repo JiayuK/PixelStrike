@@ -412,6 +412,7 @@ func (s *Store) AccountForIP(ip string) (string, bool) {
 }
 
 func (s *Store) WeaponProgressForIP(ip string) ([]WeaponProgress, error) {
+	s.Flush()
 	name, ok := s.AccountForIP(ip)
 	if !ok {
 		return []WeaponProgress{}, nil

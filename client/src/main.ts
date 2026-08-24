@@ -300,8 +300,8 @@ function selectSlot(slot: number) {
   weapons.cancelReload();
   if (slot !== reloadPendingSlot) reloadPendingSlot = 0;
   const weapon = slot === 1 ? primaryWeapon : slot === 2 ? secondaryWeapon : 6;
-	const weaponSkin = slot === 1 ? primaryWeaponSkin : slot === 2 ? secondaryWeaponSkin : 0;
-	if (weapon !== weapons.weaponId || weaponSkin !== weapons.weaponSkin) weapons.build(weapon, weaponSkin);
+  const weaponSkin = slot === 1 ? primaryWeaponSkin : slot === 2 ? secondaryWeaponSkin : 0;
+  if (weapon !== weapons.weaponId || weaponSkin !== weapons.weaponSkin) weapons.build(weapon, weaponSkin);
   local.weaponId = weapon;
   mag = slot <= 2 ? slotMags[slot] : 0;
   reserve = slot <= 2 ? slotReserves[slot] : 0;
@@ -522,8 +522,8 @@ hud.onJoin = (name, primary, secondary, skin, primarySkin, secondarySkin) => {
   killStreak = 0;
   userPrimaryChoice = primary;
   userSecondaryChoice = secondary;
-	userPrimaryWeaponSkin = primarySkin;
-	userSecondaryWeaponSkin = secondarySkin;
+  userPrimaryWeaponSkin = primarySkin;
+  userSecondaryWeaponSkin = secondarySkin;
   const resolved = resolveLoadout(primary, secondary);
   primaryWeapon = resolved.primary;
   secondaryWeapon = resolved.secondary;
@@ -650,8 +650,8 @@ net.onSelf = (s) => {
   nades = s.nades;
   if (s.slot === 1) primaryWeapon = s.weapon;
   else if (s.slot === 2) secondaryWeapon = s.weapon;
-	if (s.slot === 1) primaryWeaponSkin = s.weaponSkin;
-	else if (s.slot === 2) secondaryWeaponSkin = s.weaponSkin;
+  if (s.slot === 1) primaryWeaponSkin = s.weaponSkin;
+  else if (s.slot === 2) secondaryWeaponSkin = s.weaponSkin;
   if (s.slot === 1 || s.slot === 2) {
     slotMags[s.slot] = s.mag;
     slotReserves[s.slot] = s.reserve;

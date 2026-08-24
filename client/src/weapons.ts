@@ -215,7 +215,7 @@ export class Weapons {
     this.handRGroup.rotation.set(0, 0, 0);
 
     const assembled = assembleViewWeapon(id, this.handLGroup, this.handRGroup);
-	applyWeaponSkin(assembled.root, skin);
+    applyWeaponSkin(assembled.root, skin);
     this.magazineMesh = assembled.magazine;
     this.boltMesh = assembled.bolt;
     this.muzzleLight.position.copy(assembled.muzzle);

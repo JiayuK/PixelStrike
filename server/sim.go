@@ -444,7 +444,7 @@ func (r *Room) Damage(attacker, victim *PlayerState, dmg float64, headshot bool,
 	victim.Deaths++
 	if !attacker.IsBot {
 		r.Store.Accumulate(attacker.Name, 1, 0)
-		if isGun(weapon) {
+		if !victim.IsBot && isGun(weapon) {
 			r.Store.AccumulateWeaponKill(attacker.Name, weapon)
 		}
 	}

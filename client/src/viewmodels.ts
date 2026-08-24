@@ -12,23 +12,26 @@ export interface AssembledWeapon {
 export type WeaponSkin = 0 | 1 | 2;
 
 export function applyWeaponSkin(root: THREE.Object3D, skin: number) {
-	if (skin !== 1 && skin !== 2) return;
-	const tint = new THREE.Color(skin === 1 ? 0xffc928 : 0x72e7ff);
-	root.traverse((object) => {
-		if (!(object instanceof THREE.Mesh)) return;
-		const materials = Array.isArray(object.material) ? object.material : [object.material];
-		const skinned = materials.map((source) => {
-			const material = source.clone();
-			if (material instanceof THREE.MeshLambertMaterial || material instanceof THREE.MeshBasicMaterial) {
-				material.color.lerp(tint, skin === 1 ? 0.72 : 0.62);
-				if (material instanceof THREE.MeshLambertMaterial) {
-					material.emissive.copy(tint).multiplyScalar(skin === 1 ? 0.08 : 0.16);
-				}
-			}
-			return material;
-		});
-		object.material = Array.isArray(object.material) ? skinned : skinned[0];
-	});
+  if (skin !== 1 && skin !== 2) return;
+  const tint = new THREE.Color(skin === 1 ? 0xffc928 : 0x72e7ff);
+  const skinned = new Map<THREE.Material, THREE.Material>();
+  const materialFor = (source: THREE.Material) => {
+    const cached = skinned.get(source);
+    if (cached) return cached;
+    const material = source.clone();
+    if (material instanceof THREE.MeshLambertMaterial || material instanceof THREE.MeshBasicMaterial) {
+      material.color.lerp(tint, skin === 1 ? 0.72 : 0.62);
+      if (material instanceof THREE.MeshLambertMaterial) {
+        material.emissive.copy(tint).multiplyScalar(skin === 1 ? 0.08 : 0.16);
+      }
+    }
+    skinned.set(source, material);
+    return material;
+  };
+  root.traverse((object) => {
+    if (!(object instanceof THREE.Mesh)) return;
+    object.material = Array.isArray(object.material) ? object.material.map(materialFor) : materialFor(object.material);
+  });
 }
 
 export interface Mats {

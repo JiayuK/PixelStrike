@@ -29,6 +29,13 @@ func TestSnapshotCarriesSkin(t *testing.T) {
 	if len(delta) != 13 || binary.LittleEndian.Uint16(delta[10:]) != 1<<9 || delta[12] != 3 {
 		t.Fatalf("delta skin snapshot = %v", delta)
 	}
+
+	p.WeaponSkin = 1
+	state = quantizeState(&p.PlayerState, 0)
+	delta = p.BuildSnapshot(2, []*Player{p}, []quantState{state})
+	if len(delta) != 13 || binary.LittleEndian.Uint16(delta[10:]) != 1<<10 || delta[12] != 1 {
+		t.Fatalf("delta weapon skin snapshot = %v", delta)
+	}
 }
 
 func TestMaintenanceNotice(t *testing.T) {
@@ -497,6 +504,28 @@ func TestWeaponSkinUnlocks(t *testing.T) {
 	progress, err := s.WeaponProgress(name)
 	if err != nil || len(progress) != 1 || progress[0].Kills != GoldKillRequirement || !progress[0].Gold || progress[0].Diamond {
 		t.Fatalf("weapon progress = %#v, %v", progress, err)
+	}
+}
+
+func TestBotKillsDoNotUnlockWeaponSkins(t *testing.T) {
+	store, err := NewStore(t.TempDir() + "/stats.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	room := &Room{Store: store}
+	attacker := &PlayerState{Name: "Alice"}
+	room.Damage(attacker, &PlayerState{Alive: true, IsBot: true, HP: 1}, 10, false, 3, time.Now())
+	store.Flush()
+	progress, err := store.WeaponProgress(attacker.Name)
+	if err != nil || len(progress) != 0 {
+		t.Fatalf("bot kill changed weapon progress: %#v, %v", progress, err)
+	}
+	room.Damage(attacker, &PlayerState{Alive: true, HP: 1}, 10, false, 3, time.Now())
+	store.Flush()
+	progress, err = store.WeaponProgress(attacker.Name)
+	if err != nil || len(progress) != 1 || progress[0].Kills != 1 {
+		t.Fatalf("human kill did not change weapon progress: %#v, %v", progress, err)
 	}
 }
 

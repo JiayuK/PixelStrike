@@ -87,6 +87,8 @@ const goal = new THREE.Vector3();
 const bodyColor = new THREE.Color();
 const prediction = new THREE.Vector3();
 const gunColor = new THREE.Color();
+const goldGunColor = new THREE.Color(0xffc928);
+const diamondGunColor = new THREE.Color(0x72e7ff);
 // Standing geometry spans 0.04–1.605 m; map it exactly onto the 1.8 m hitbox.
 export const STANDING_VISUAL_SCALE = 1.8 / 1.565;
 export const STANDING_VISUAL_OFFSET = -0.04 * STANDING_VISUAL_SCALE;
@@ -511,11 +513,11 @@ export class RemotePlayers {
         uniformColorsDirty = true;
       }
       const baseGunColor = WEAPONS[state.weapon]?.color ?? 0x222225;
-		const wantedGunColor = state.weaponSkin === 1
-			? gunColor.setHex(baseGunColor).lerp(new THREE.Color(0xffc928), 0.78).getHex()
-			: state.weaponSkin === 2
-				? gunColor.setHex(baseGunColor).lerp(new THREE.Color(0x72e7ff), 0.7).getHex()
-				: baseGunColor;
+      const wantedGunColor = state.weaponSkin === 1
+        ? gunColor.setHex(baseGunColor).lerp(goldGunColor, 0.78).getHex()
+        : state.weaponSkin === 2
+          ? gunColor.setHex(baseGunColor).lerp(diamondGunColor, 0.7).getHex()
+          : baseGunColor;
       if (wantedGunColor !== model.gunColor) {
         model.gunColor = wantedGunColor;
         this.gun.setColorAt(model.index, gunColor.setHex(wantedGunColor));
