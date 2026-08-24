@@ -5,10 +5,10 @@ import "math"
 const maxSnapshotBytes = 2300 // ~69 KB/s at 30 Hz, before small event traffic.
 
 type quantState struct {
-	x, y, z                        int16
-	yaw, pitch                     int16 // half-degrees
-	vx, vz                         int8  // decimetres/second
-	hp, armor, state, weapon, shot uint8
+	x, y, z                              int16
+	yaw, pitch                           int16 // half-degrees
+	vx, vz                               int8  // decimetres/second
+	hp, armor, state, weapon, shot, skin uint8
 }
 
 func quantizeState(p *PlayerState, nowUnixNano int64) quantState {
@@ -35,7 +35,7 @@ func quantizeState(p *PlayerState, nowUnixNano int64) quantState {
 		x: q16(p.Pos.X * 100), y: q16(p.Pos.Y * 100), z: q16(p.Pos.Z * 100),
 		yaw: angleHalfDeg(p.Yaw), pitch: angleHalfDeg(p.Pitch),
 		vx: q8(p.Vel.X * 10), vz: q8(p.Vel.Z * 10),
-		hp: p.HP, armor: p.Armor, state: state, weapon: p.Weapon, shot: uint8(p.LastShotSeq),
+		hp: p.HP, armor: p.Armor, state: state, weapon: p.Weapon, shot: uint8(p.LastShotSeq), skin: p.Skin,
 	}
 }
 
@@ -73,7 +73,7 @@ func (p *Player) BuildSnapshot(tick uint32, players []*Player, states []quantSta
 		clear(p.netCache)
 		clear(p.netFullAt)
 	}
-	w := &Buf{b: p.snapshotBuffer(min(maxSnapshotBytes, 8+len(players)*21))}
+	w := &Buf{b: p.snapshotBuffer(min(maxSnapshotBytes, 8+len(players)*22))}
 	w.b[0] = OpSnapshot
 	w.U32(tick)
 	w.U16(p.LastInputSeq)
@@ -182,6 +182,9 @@ func appendStateDelta(w *Buf, id uint16, prev, cur quantState, full bool) bool {
 		if cur.shot != prev.shot {
 			flag |= 1 << 8
 		}
+		if cur.skin != prev.skin {
+			flag |= 1 << 9
+		}
 	}
 	if full || flag == 0 && (cur.x != prev.x || cur.y != prev.y || cur.z != prev.z || cur.yaw != prev.yaw || cur.pitch != prev.pitch) {
 		flag = 1 << 15
@@ -235,6 +238,9 @@ func appendStateDelta(w *Buf, id uint16, prev, cur quantState, full bool) bool {
 	if flag&(1<<8) != 0 {
 		w.U8(cur.shot)
 	}
+	if flag&(1<<9) != 0 {
+		w.U8(cur.skin)
+	}
 	if len(w.b) > maxSnapshotBytes {
 		w.b = w.b[:start]
 		return false
@@ -255,6 +261,7 @@ func writeFullState(w *Buf, s quantState) {
 	w.U8(s.state)
 	w.U8(s.weapon)
 	w.U8(s.shot)
+	w.U8(s.skin)
 }
 
 func inI8(v int) bool { return v >= -128 && v <= 127 }

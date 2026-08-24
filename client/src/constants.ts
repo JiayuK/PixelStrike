@@ -51,6 +51,7 @@ export interface PlayerSnap {
   state: number;
   weapon: number;
   shot: number;
+  skin: number;
 }
 
 export interface RosterEntry {

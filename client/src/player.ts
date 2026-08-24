@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { KEY, PHYS, WEAPONS, type PlayerSnap } from './constants.js';
+import { getMCSkinAtlas, SKIN_COUNT } from './skins.js';
 import { moveAABB, type Box } from './world.js';
 
 export class LocalPlayer {
@@ -85,8 +86,10 @@ const correction = new THREE.Vector3();
 const goal = new THREE.Vector3();
 const bodyColor = new THREE.Color();
 const prediction = new THREE.Vector3();
-const PLAYER_SKINS = [0x00a8aa, 0xc45f48, 0x5f79c8, 0x79994d, 0xac6aa2, 0xcf963e];
 const gunColor = new THREE.Color();
+// Standing geometry spans 0.04–1.605 m; map it exactly onto the 1.8 m hitbox.
+export const STANDING_VISUAL_SCALE = 1.8 / 1.565;
+export const STANDING_VISUAL_OFFSET = -0.04 * STANDING_VISUAL_SCALE;
 const approach = (value: number, wanted: number, amount: number) => value < wanted ? Math.min(wanted, value + amount) : Math.max(wanted, value - amount);
 const angleLerp = (a: number, b: number, t: number) => a + Math.atan2(Math.sin(b - a), Math.cos(b - a)) * t;
 
@@ -104,6 +107,7 @@ interface RemoteModel {
   walk: number;
   nextStepAt: number;
   bodyColor: number;
+  skin: number;
   gunColor: number;
   visible: boolean;
 }
@@ -124,152 +128,164 @@ interface WorldOccluder {
 
 const MAX_LABELS = 24;
 
-function createSteveHeadTexture(): THREE.Texture {
-  const canvas = new OffscreenCanvas(32, 16);
-  const ctx = canvas.getContext('2d')!;
-
-  const H = '#482b18'; // Dark Brown Hair
-  const H2 = '#381e0f';
-  const S = '#d9a377'; // Skin Tone
-  const N = '#be7e50'; // Nose
-  const W = '#ffffff'; // White Eye Sclera
-  const P = '#2c3577'; // Blue/Purple Pupil
-  const B = '#582f1b'; // Beard/Mouth
-  const B2 = '#42200f';
-
-  // Fill base hair
-  ctx.fillStyle = H;
-  ctx.fillRect(0, 0, 32, 16);
-
-  // Top hair (+Y, x: 8 to 16, y: 0 to 8)
-  for (let y = 0; y < 8; y++) {
-    for (let x = 8; x < 16; x++) {
-      ctx.fillStyle = (x + y) % 3 === 0 ? H2 : H;
-      ctx.fillRect(x, y, 1, 1);
-    }
-  }
-
-  // Front Face (+Z, x: 8 to 16, y: 8 to 16) - Iconic Minecraft Steve Face
-  const face = [
-    [H, H, H, H, H, H, H, H],
-    [H, H, H, H, H, H, H, H],
-    [H, S, S, S, S, S, S, H],
-    [S, S, S, S, S, S, S, S],
-    [S, W, P, S, S, P, W, S], // Iconic Steve Eyes
-    [S, S, S, N, N, S, S, S], // Nose
-    [S, B, B, B, B, B, B, S], // Beard / Smile
-    [H, H, B2, B2, B2, B2, H, H],
-  ];
-  for (let r = 0; r < 8; r++) {
-    for (let c = 0; c < 8; c++) {
-      ctx.fillStyle = face[r][c];
-      ctx.fillRect(8 + c, 8 + r, 1, 1);
-    }
-  }
-
-  // Right Face (+X, x: 0 to 8, y: 8 to 16) & Left Face (-X, x: 16 to 24, y: 8 to 16)
-  for (let r = 0; r < 8; r++) {
-    for (let c = 0; c < 8; c++) {
-      ctx.fillStyle = r < 3 ? H : (r < 5 && (c === 0 || c === 7) ? H : S);
-      ctx.fillRect(0 + c, 8 + r, 1, 1);
-      ctx.fillRect(16 + c, 8 + r, 1, 1);
-    }
-  }
-
-  const tex = new THREE.CanvasTexture(canvas as unknown as HTMLCanvasElement);
-  tex.magFilter = THREE.NearestFilter;
-  tex.minFilter = THREE.NearestMipmapNearestFilter;
-  tex.colorSpace = THREE.SRGBColorSpace;
-  return tex;
+function solidUV(geometry: THREE.BufferGeometry, u = 0.02, v = 0.02) {
+  const uv = geometry.attributes.uv;
+  for (let i = 0; i < uv.count; i++) uv.setXY(i, u, v);
+  return geometry;
 }
 
-function createSteveTorsoTexture(): THREE.Texture {
-  const canvas = new OffscreenCanvas(16, 16);
-  const ctx = canvas.getContext('2d')!;
-
-  const C = '#d4d8ca';
-  const C2 = '#a7ae9f';
-  const R = '#626b5f';
-  const D = '#343a34';
-
-  ctx.fillStyle = C;
-  ctx.fillRect(0, 0, 16, 16);
-
-  // Neutral tactical fabric keeps per-player instance tinting coherent.
-  for (let y = 0; y < 16; y++) {
-    for (let x = 4; x < 12; x++) {
-      ctx.fillStyle = (x + y) % 5 === 0 ? C2 : C;
-      ctx.fillRect(x, y, 1, 1);
+export function createPlayerHeadGeometry() {
+    const geo = new THREE.BoxGeometry(0.36, 0.36, 0.36);
+    const uvs = geo.attributes.uv;
+    const faceUVs = [
+      [0.00, 0.25, 0.00, 0.50], // +X (Right side)
+      [0.50, 0.75, 0.00, 0.50], // -X (Left side)
+      [0.25, 0.50, 0.50, 1.00], // +Y (Top helmet)
+      [0.50, 0.75, 0.50, 1.00], // -Y (Bottom neck)
+      [0.75, 1.00, 0.00, 0.50], // +Z (Back helmet)
+      [0.25, 0.50, 0.00, 0.50], // -Z (Front face with Steve eyes & mask)
+    ];
+    for (let f = 0; f < 6; f++) {
+      const [u0, u1, v0, v1] = faceUVs[f];
+      const base = f * 4;
+      uvs.setXY(base + 0, u0, v1);
+      uvs.setXY(base + 1, u1, v1);
+      uvs.setXY(base + 2, u0, v0);
+      uvs.setXY(base + 3, u1, v0);
     }
-  }
-  ctx.fillStyle = D;
-  ctx.fillRect(7, 0, 2, 3);
-  ctx.fillStyle = R;
-  ctx.fillRect(5, 3, 1, 10);
-  ctx.fillRect(10, 3, 1, 10);
-  ctx.fillRect(5, 10, 6, 1);
-  ctx.fillStyle = D;
-  ctx.fillRect(5, 11, 3, 3);
-  ctx.fillRect(9, 11, 2, 3);
+    uvs.needsUpdate = true;
+    geo.translate(0, 0.18, 0); // Pivot at neck
 
-  const tex = new THREE.CanvasTexture(canvas as unknown as HTMLCanvasElement);
-  tex.magFilter = THREE.NearestFilter;
-  tex.minFilter = THREE.NearestMipmapNearestFilter;
-  tex.colorSpace = THREE.SRGBColorSpace;
-  return tex;
+    // FAST Helmet Brim, NVG Shroud & Comms Headset Earcups
+    const brim = solidUV(new THREE.BoxGeometry(0.38, 0.05, 0.12));
+    brim.translate(0, 0.34, -0.15);
+    const nvg = solidUV(new THREE.BoxGeometry(0.08, 0.08, 0.04));
+    nvg.translate(0, 0.27, -0.19);
+    const earcupR = solidUV(new THREE.BoxGeometry(0.05, 0.12, 0.12));
+    earcupR.translate(0.19, 0.18, 0);
+    const earcupL = solidUV(new THREE.BoxGeometry(0.05, 0.12, 0.12));
+    earcupL.translate(-0.19, 0.18, 0);
+
+    const parts = [geo, brim, nvg, earcupR, earcupL];
+    const merged = mergeGeometries(parts)!;
+    for (const p of parts) p.dispose();
+    return merged;
 }
 
-function createSteveArmTexture(): THREE.Texture {
-  const canvas = new OffscreenCanvas(16, 16);
-  const ctx = canvas.getContext('2d')!;
+export function createPlayerTorsoGeometry() {
+    const geo = new THREE.BoxGeometry(0.44, 0.60, 0.24);
+    const uvs = geo.attributes.uv;
+    const faceUVs = [
+      [0.00, 0.25, 0.00, 1.00], // +X
+      [0.75, 1.00, 0.00, 1.00], // -X
+      [0.25, 0.75, 0.75, 1.00], // +Y
+      [0.25, 0.75, 0.00, 0.25], // -Y
+      [0.25, 0.75, 0.00, 1.00], // +Z
+      [0.25, 0.75, 0.00, 1.00], // -Z
+    ];
+    for (let f = 0; f < 6; f++) {
+      const [u0, u1, v0, v1] = faceUVs[f];
+      const base = f * 4;
+      uvs.setXY(base + 0, u0, v1);
+      uvs.setXY(base + 1, u1, v1);
+      uvs.setXY(base + 2, u0, v0);
+      uvs.setXY(base + 3, u1, v0);
+    }
+    uvs.needsUpdate = true;
 
-  const C = '#d4d8ca';
-  const C2 = '#a7ae9f';
-  const G = '#303630';
+    // Tactical Plate Carrier, Mag Pouches, Shoulder Straps & Radio Unit
+    const vest = solidUV(new THREE.BoxGeometry(0.48, 0.38, 0.29));
+    vest.translate(0, 0.03, 0);
+    const strapR = solidUV(new THREE.BoxGeometry(0.08, 0.12, 0.30));
+    strapR.translate(0.16, 0.24, 0);
+    const strapL = solidUV(new THREE.BoxGeometry(0.08, 0.12, 0.30));
+    strapL.translate(-0.16, 0.24, 0);
+    const magPouches = solidUV(new THREE.BoxGeometry(0.32, 0.16, 0.06));
+    magPouches.translate(0, -0.04, -0.16);
+    const belt = solidUV(new THREE.BoxGeometry(0.46, 0.08, 0.27));
+    belt.translate(0, -0.26, 0);
+    const radio = solidUV(new THREE.BoxGeometry(0.08, 0.14, 0.08));
+    radio.translate(-0.24, 0.06, 0);
+    const antenna = solidUV(new THREE.BoxGeometry(0.015, 0.24, 0.015));
+    antenna.translate(-0.24, 0.22, 0);
 
-  ctx.fillStyle = C;
-  ctx.fillRect(0, 0, 16, 16);
-  ctx.fillStyle = C2;
-  ctx.fillRect(0, 6, 16, 2);
-  ctx.fillStyle = G;
-  ctx.fillRect(0, 12, 16, 4);
-
-  const tex = new THREE.CanvasTexture(canvas as unknown as HTMLCanvasElement);
-  tex.magFilter = THREE.NearestFilter;
-  tex.minFilter = THREE.NearestMipmapNearestFilter;
-  tex.colorSpace = THREE.SRGBColorSpace;
-  return tex;
+    const parts = [geo, vest, strapR, strapL, magPouches, belt, radio, antenna];
+    const merged = mergeGeometries(parts)!;
+    for (const p of parts) p.dispose();
+    return merged;
 }
 
-function createSteveLegTexture(): THREE.Texture {
-  const canvas = new OffscreenCanvas(16, 16);
-  const ctx = canvas.getContext('2d')!;
-
-  const J = '#46505f';
-  const J2 = '#333b48';
-  const B = '#202522';
-
-  ctx.fillStyle = J;
-  ctx.fillRect(0, 0, 16, 16);
-
-  // Texture details
-  for (let y = 0; y < 12; y++) {
-    for (let x = 0; x < 16; x++) {
-      ctx.fillStyle = (x + y) % 4 === 0 ? J2 : J;
-      ctx.fillRect(x, y, 1, 1);
+export function createPlayerArmGeometry() {
+    const geo = new THREE.BoxGeometry(0.16, 0.60, 0.16);
+    const uvs = geo.attributes.uv;
+    for (let f = 0; f < 6; f++) {
+      const base = f * 4;
+      uvs.setXY(base + 0, 0, 1);
+      uvs.setXY(base + 1, 1, 1);
+      uvs.setXY(base + 2, 0, 0);
+      uvs.setXY(base + 3, 1, 0);
     }
-  }
-  ctx.fillStyle = '#252c34';
-  ctx.fillRect(0, 7, 16, 3);
-  // Shoes on bottom
-  ctx.fillStyle = B;
-  ctx.fillRect(0, 12, 16, 4);
+    uvs.needsUpdate = true;
+    const shoulderPad = solidUV(new THREE.BoxGeometry(0.18, 0.14, 0.18));
+    shoulderPad.translate(0, 0.16, 0);
+    const elbowPad = solidUV(new THREE.BoxGeometry(0.18, 0.12, 0.18));
+    elbowPad.translate(0, -0.02, 0);
 
-  const tex = new THREE.CanvasTexture(canvas as unknown as HTMLCanvasElement);
-  tex.magFilter = THREE.NearestFilter;
-  tex.minFilter = THREE.NearestMipmapNearestFilter;
-  tex.colorSpace = THREE.SRGBColorSpace;
-  return tex;
+    const parts = [geo, shoulderPad, elbowPad];
+    const merged = mergeGeometries(parts)!;
+    for (const p of parts) p.dispose();
+    merged.translate(0, -0.30, 0); // Pivot at right shoulder
+    return merged;
+}
+
+
+export function createPlayerLegGeometry(right: boolean) {
+    const geo = new THREE.BoxGeometry(0.18, 0.60, 0.18);
+    const uvs = geo.attributes.uv;
+    for (let f = 0; f < 6; f++) {
+      const base = f * 4;
+      uvs.setXY(base + 0, 0, 1);
+      uvs.setXY(base + 1, 1, 1);
+      uvs.setXY(base + 2, 0, 0);
+      uvs.setXY(base + 3, 1, 0);
+    }
+    uvs.needsUpdate = true;
+    const kneePad = solidUV(new THREE.BoxGeometry(0.20, 0.14, 0.20));
+    kneePad.translate(0, -0.02, 0);
+    const bootToe = solidUV(new THREE.BoxGeometry(0.19, 0.12, 0.08));
+    bootToe.translate(0, -0.24, -0.07);
+    const parts = [geo, kneePad, bootToe];
+    if (right) {
+      const holster = solidUV(new THREE.BoxGeometry(0.06, 0.16, 0.12));
+      holster.translate(0.10, 0.10, 0);
+      parts.push(holster);
+    }
+    const merged = mergeGeometries(parts)!;
+    for (const p of parts) p.dispose();
+    merged.translate(0, -0.30, 0);
+    return merged;
+}
+
+function createPlayerGunGeometry() {
+    const body = new THREE.BoxGeometry(0.08, 0.12, 0.52);
+    body.translate(0, 0, -0.16);
+    const barrel = new THREE.BoxGeometry(0.03, 0.03, 0.42);
+    barrel.translate(0, 0.03, -0.58);
+    const flashHider = new THREE.BoxGeometry(0.045, 0.045, 0.08);
+    flashHider.translate(0, 0.03, -0.80);
+    const mag = new THREE.BoxGeometry(0.055, 0.22, 0.12);
+    mag.translate(0, -0.12, -0.14);
+    const rail = new THREE.BoxGeometry(0.05, 0.02, 0.42);
+    rail.translate(0, 0.07, -0.16);
+    const scope = new THREE.BoxGeometry(0.055, 0.06, 0.18);
+    scope.translate(0, 0.11, -0.16);
+    const stock = new THREE.BoxGeometry(0.06, 0.12, 0.20);
+    stock.translate(0, -0.01, 0.18);
+
+    const parts = [body, barrel, flashHider, mag, rail, scope, stock];
+    const merged = mergeGeometries(parts)!;
+    for (const p of parts) p.dispose();
+    return merged;
 }
 export class RemotePlayers {
   group = new THREE.Group();
@@ -285,149 +301,15 @@ export class RemotePlayers {
   private labelRay = new THREE.Vector3();
   private viewDir = new THREE.Vector3();
   private lastUpdate = performance.now();
-  private headTex = createSteveHeadTexture();
-  private torsoTex = createSteveTorsoTexture();
-  private armTex = createSteveArmTexture();
-  private legTex = createSteveLegTexture();
-
-  private headGeo = (() => {
-    const geo = new THREE.BoxGeometry(0.36, 0.36, 0.36);
-    const uvs = geo.attributes.uv;
-    const faceUVs = [
-      [0.00, 0.25, 0.00, 0.50], // +X (Right side)
-      [0.50, 0.75, 0.00, 0.50], // -X (Left side)
-      [0.25, 0.50, 0.50, 1.00], // +Y (Top hair)
-      [0.50, 0.75, 0.50, 1.00], // -Y (Bottom neck)
-      [0.75, 1.00, 0.00, 0.50], // +Z (Back hair)
-      [0.25, 0.50, 0.00, 0.50], // -Z (Front face with Steve eyes!)
-    ];
-    for (let f = 0; f < 6; f++) {
-      const [u0, u1, v0, v1] = faceUVs[f];
-      const base = f * 4;
-      uvs.setXY(base + 0, u0, v1);
-      uvs.setXY(base + 1, u1, v1);
-      uvs.setXY(base + 2, u0, v0);
-      uvs.setXY(base + 3, u1, v0);
-    }
-    uvs.needsUpdate = true;
-    geo.translate(0, 0.18, 0); // Pivot at neck
-    return geo;
-  })();
-
-  private bodyGeo = (() => {
-    const geo = new THREE.BoxGeometry(0.44, 0.60, 0.24);
-    const uvs = geo.attributes.uv;
-    const faceUVs = [
-      [0.00, 0.25, 0.00, 1.00], // +X
-      [0.75, 1.00, 0.00, 1.00], // -X
-      [0.25, 0.75, 0.75, 1.00], // +Y
-      [0.25, 0.75, 0.00, 0.25], // -Y
-      [0.25, 0.75, 0.00, 1.00], // +Z (Front with V-neck)
-      [0.25, 0.75, 0.00, 1.00], // -Z
-    ];
-    for (let f = 0; f < 6; f++) {
-      const [u0, u1, v0, v1] = faceUVs[f];
-      const base = f * 4;
-      uvs.setXY(base + 0, u0, v1);
-      uvs.setXY(base + 1, u1, v1);
-      uvs.setXY(base + 2, u0, v0);
-      uvs.setXY(base + 3, u1, v0);
-    }
-    uvs.needsUpdate = true;
-    const vest = new THREE.BoxGeometry(0.48, 0.34, 0.29);
-    vest.translate(0, 0.02, 0);
-    const belt = new THREE.BoxGeometry(0.46, 0.08, 0.27);
-    belt.translate(0, -0.26, 0);
-    const merged = mergeGeometries([geo, vest, belt])!;
-    geo.dispose();
-    vest.dispose();
-    belt.dispose();
-    return merged;
-  })();
-
-  private armRGeo = (() => {
-    const geo = new THREE.BoxGeometry(0.16, 0.60, 0.16);
-    const uvs = geo.attributes.uv;
-    for (let f = 0; f < 6; f++) {
-      const base = f * 4;
-      uvs.setXY(base + 0, 0, 1);
-      uvs.setXY(base + 1, 1, 1);
-      uvs.setXY(base + 2, 0, 0);
-      uvs.setXY(base + 3, 1, 0);
-    }
-    uvs.needsUpdate = true;
-    geo.translate(0, -0.30, 0); // Pivot at right shoulder
-    return geo;
-  })();
-
-  private armLGeo = (() => {
-    const geo = new THREE.BoxGeometry(0.16, 0.60, 0.16);
-    const uvs = geo.attributes.uv;
-    for (let f = 0; f < 6; f++) {
-      const base = f * 4;
-      uvs.setXY(base + 0, 0, 1);
-      uvs.setXY(base + 1, 1, 1);
-      uvs.setXY(base + 2, 0, 0);
-      uvs.setXY(base + 3, 1, 0);
-    }
-    uvs.needsUpdate = true;
-    geo.translate(0, -0.30, 0); // Pivot at left shoulder
-    return geo;
-  })();
-
-  private legRGeo = (() => {
-    const geo = new THREE.BoxGeometry(0.18, 0.60, 0.18);
-    const uvs = geo.attributes.uv;
-    for (let f = 0; f < 6; f++) {
-      const base = f * 4;
-      uvs.setXY(base + 0, 0, 1);
-      uvs.setXY(base + 1, 1, 1);
-      uvs.setXY(base + 2, 0, 0);
-      uvs.setXY(base + 3, 1, 0);
-    }
-    uvs.needsUpdate = true;
-    geo.translate(0, -0.30, 0); // Pivot at right hip
-    return geo;
-  })();
-
-  private legLGeo = (() => {
-    const geo = new THREE.BoxGeometry(0.18, 0.60, 0.18);
-    const uvs = geo.attributes.uv;
-    for (let f = 0; f < 6; f++) {
-      const base = f * 4;
-      uvs.setXY(base + 0, 0, 1);
-      uvs.setXY(base + 1, 1, 1);
-      uvs.setXY(base + 2, 0, 0);
-      uvs.setXY(base + 3, 1, 0);
-    }
-    uvs.needsUpdate = true;
-    geo.translate(0, -0.30, 0); // Pivot at left hip
-    return geo;
-  })();
-
-  private gunGeo = (() => {
-    const body = new THREE.BoxGeometry(0.08, 0.14, 0.58);
-    body.translate(0, 0, -0.18);
-    const barrel = new THREE.BoxGeometry(0.035, 0.035, 0.35);
-    barrel.translate(0, 0.04, -0.56);
-    const mag = new THREE.BoxGeometry(0.055, 0.22, 0.11);
-    mag.translate(0, -0.12, -0.15);
-    const scope = new THREE.BoxGeometry(0.05, 0.04, 0.22);
-    scope.translate(0, 0.09, -0.14);
-    const parts = [body, barrel, mag, scope];
-    const merged = mergeGeometries(parts)!;
-    for (const part of parts) part.dispose();
-    return merged;
-  })();
-
-  private head = this.mesh(this.headGeo, this.headTex);
-  private body = this.mesh(this.bodyGeo, this.torsoTex);
-  private armR = this.mesh(this.armRGeo, this.armTex);
-  private armL = this.mesh(this.armLGeo, this.armTex);
-  private legR = this.mesh(this.legRGeo, this.legTex);
-  private legL = this.mesh(this.legLGeo, this.legTex);
-  private gun = this.mesh(this.gunGeo, null, 0xffffff);
-  private layers = [this.body, this.head, this.armR, this.armL, this.legR, this.legL, this.gun];
+  private head = this.mesh(createPlayerHeadGeometry(), getMCSkinAtlas('head'));
+  private body = this.mesh(createPlayerTorsoGeometry(), getMCSkinAtlas('torso'));
+  private armR = this.mesh(createPlayerArmGeometry(), getMCSkinAtlas('arm'));
+  private armL = this.mesh(createPlayerArmGeometry(), getMCSkinAtlas('arm'));
+  private legR = this.mesh(createPlayerLegGeometry(true), getMCSkinAtlas('leg'));
+  private legL = this.mesh(createPlayerLegGeometry(false), getMCSkinAtlas('leg'));
+  private gun = this.mesh(createPlayerGunGeometry(), null, 0xffffff);
+  private skinLayers = [this.body, this.head, this.armR, this.armL, this.legR, this.legL];
+  private layers = [...this.skinLayers, this.gun];
   nameOf: (id: number) => string = (id) => `特战队员${id}`;
 
   constructor(scene: THREE.Scene) {
@@ -446,10 +328,23 @@ export class RemotePlayers {
   }
 
   private mesh(geometry: THREE.BufferGeometry, texture: THREE.Texture | null = null, color = 0xffffff) {
-    const mat = texture
-      ? new THREE.MeshLambertMaterial({ map: texture })
-      : new THREE.MeshLambertMaterial({ color });
-    const mesh = new THREE.InstancedMesh(geometry, mat, MAX_PLAYERS);
+    let material: THREE.MeshLambertMaterial;
+    if (texture) {
+      const atlas = texture.userData.skinAtlas as { tileWidth: number; atlasWidth: number; stride: number };
+      const skinIndex = new THREE.InstancedBufferAttribute(new Float32Array(MAX_PLAYERS), 1);
+      skinIndex.setUsage(THREE.DynamicDrawUsage);
+      geometry.setAttribute('skinIndex', skinIndex);
+      material = new THREE.MeshLambertMaterial({ map: texture });
+      material.onBeforeCompile = (shader) => {
+        shader.vertexShader = shader.vertexShader
+          .replace('#include <common>', '#include <common>\nattribute float skinIndex;')
+          .replace('#include <uv_vertex>', `#include <uv_vertex>\n#ifdef USE_MAP\nvMapUv.x = skinIndex * ${atlas.stride / atlas.atlasWidth} + ${1 / atlas.atlasWidth} + vMapUv.x * ${atlas.tileWidth / atlas.atlasWidth};\n#endif`);
+      };
+      material.customProgramCacheKey = () => `skin-atlas-${atlas.atlasWidth}`;
+    } else {
+      material = new THREE.MeshLambertMaterial({ color });
+    }
+    const mesh = new THREE.InstancedMesh(geometry, material, MAX_PLAYERS);
     mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     mesh.frustumCulled = false;
     return mesh;
@@ -473,6 +368,7 @@ export class RemotePlayers {
         walk: 0,
         nextStepAt: now,
         bodyColor: -1,
+        skin: -1,
         gunColor: -1,
         visible: false,
       };
@@ -581,12 +477,20 @@ export class RemotePlayers {
 
       // Left Leg (Swings opposite)
       this.place(this.legL, model.index, model, sin, cos, -0.12, hipY, 0, -swing, 0, 0);
-      const wantedBodyColor = now < model.flashUntil ? 0xf43f5e : state.state & 2 ? 0xb89a61 : PLAYER_SKINS[state.id % PLAYER_SKINS.length];
+      const wantedSkin = state.skin % SKIN_COUNT;
+      if (wantedSkin !== model.skin) {
+        model.skin = wantedSkin;
+        for (const layer of this.skinLayers) {
+          const skinIndex = layer.geometry.getAttribute('skinIndex') as THREE.InstancedBufferAttribute;
+          skinIndex.setX(model.index, wantedSkin);
+          skinIndex.needsUpdate = true;
+        }
+      }
+      const wantedBodyColor = now < model.flashUntil ? 0xf43f5e : state.state & 2 ? 0xb89a61 : 0xffffff;
       if (wantedBodyColor !== model.bodyColor) {
         model.bodyColor = wantedBodyColor;
-        this.body.setColorAt(model.index, bodyColor.setHex(wantedBodyColor));
-        this.armR.setColorAt(model.index, bodyColor);
-        this.armL.setColorAt(model.index, bodyColor);
+        bodyColor.setHex(wantedBodyColor);
+        for (const layer of this.skinLayers) layer.setColorAt(model.index, bodyColor);
         uniformColorsDirty = true;
       }
       const wantedGunColor = WEAPONS[state.weapon]?.color ?? 0x222225;
@@ -599,9 +503,9 @@ export class RemotePlayers {
 
     for (const layer of this.layers) layer.instanceMatrix.needsUpdate = true;
     if (uniformColorsDirty) {
-      if (this.body.instanceColor) this.body.instanceColor.needsUpdate = true;
-      if (this.armR.instanceColor) this.armR.instanceColor.needsUpdate = true;
-      if (this.armL.instanceColor) this.armL.instanceColor.needsUpdate = true;
+      for (const layer of this.skinLayers) {
+        if (layer.instanceColor) layer.instanceColor.needsUpdate = true;
+      }
     }
     if (gunColorsDirty && this.gun.instanceColor) this.gun.instanceColor.needsUpdate = true;
   }
@@ -678,13 +582,15 @@ export class RemotePlayers {
     scaleZ = 1,
   ) {
     const yaw = model.yaw + yawOffset;
+    const standing = !(model.state.state & 4);
+    const scaleY = standing ? STANDING_VISUAL_SCALE : 1;
     this.dummy.position.set(
       model.position.x + lx * cos + lz * sin,
-      model.position.y + ly,
+      model.position.y + ly * scaleY + (standing ? STANDING_VISUAL_OFFSET : 0),
       model.position.z - lx * sin + lz * cos,
     );
     this.dummy.rotation.set(pitch, yaw, roll, 'YXZ');
-    this.dummy.scale.set(1, 1, scaleZ);
+    this.dummy.scale.set(1, scaleY, scaleZ);
     this.dummy.updateMatrix();
     mesh.setMatrixAt(index, this.dummy.matrix);
   }

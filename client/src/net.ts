@@ -12,9 +12,9 @@ export class Net {
   onSelf:((state:SelfState)=>void)|null=null;
   onLatency:((ms:number,outboundBps:number)=>void)|null=null;
   onDisconnect:((upgrading:boolean)=>void)|null=null; onReject:((reason:string)=>void)|null=null; onMaintenance:((retryAfter:number)=>void)|null=null;
-  private name=''; private primary=3; private secondary=0; private url=''; private retry=0; private closedByUser=false; private heartbeat=0; private lastPing=0; private maintenanceUntil=0; private states=new Map<number,PlayerSnap>(); private input=new Uint8Array(12); private inputView=new DataView(this.input.buffer);
+  private name=''; private primary=3; private secondary=0; private skin=0; private url=''; private retry=0; private closedByUser=false; private heartbeat=0; private lastPing=0; private maintenanceUntil=0; private states=new Map<number,PlayerSnap>(); private input=new Uint8Array(12); private inputView=new DataView(this.input.buffer);
 
-  connect(url:string,name:string,primary:number,secondary:number){ this.disconnect(); this.url=url;this.name=name;this.primary=primary;this.secondary=secondary;this.closedByUser=false;this.open();this.heartbeat=window.setInterval(()=>{if(this.connected){this.lastPing=performance.now();this.raw(new Uint8Array([OP.Ping]))}},5000) }
+  connect(url:string,name:string,primary:number,secondary:number,skin:number){ this.disconnect();this.url=url;this.name=name;this.primary=primary;this.secondary=secondary;this.skin=skin;this.closedByUser=false;this.open();this.heartbeat=window.setInterval(()=>{if(this.connected){this.lastPing=performance.now();this.raw(new Uint8Array([OP.Ping]))}},5000) }
   private open() {
     const ws = new WebSocket(this.url);
     this.ws = ws;
@@ -24,14 +24,15 @@ export class Net {
       this.states.clear();
       const nb = new TextEncoder().encode([...this.name].slice(0, 16).join(''));
       const fp = new TextEncoder().encode(fingerprint());
-      const b = new Uint8Array(5 + nb.length + fp.length);
+      const b = new Uint8Array(6 + nb.length + fp.length);
       b[0] = OP.Join;
       b[1] = PROTOCOL_VERSION;
       b[2] = nb.length;
       b.set(nb, 3);
       b[3 + nb.length] = this.primary;
       b[4 + nb.length] = this.secondary;
-      b.set(fp, 5 + nb.length);
+      b[5 + nb.length] = this.skin;
+      b.set(fp, 6 + nb.length);
       ws.send(b);
     };
     ws.onmessage = (e) => {
@@ -72,7 +73,7 @@ export class Net {
       this.onRoster?.(rows);
     }
   }
-  private decodeSnapshot(v:DataView){const tick=v.getUint32(1,true),ack=v.getUint16(5,true),n=v.getUint8(7);this.lastServerTick=tick;let o=8;const updated:PlayerSnap[]=[];for(let i=0;i<n;i++){const id=v.getUint16(o,true),mask=v.getUint16(o+2,true);o+=4;let s=this.states.get(id);if(mask===0x8000){s={id,x:v.getInt16(o,true)/100,y:v.getInt16(o+2,true)/100,z:v.getInt16(o+4,true)/100,yaw:half(v.getInt16(o+6,true)),pitch:half(v.getInt16(o+8,true)),vx:v.getInt8(o+10)/10,vz:v.getInt8(o+11)/10,hp:v.getUint8(o+12),armor:v.getUint8(o+13),state:v.getUint8(o+14),weapon:v.getUint8(o+15),shot:v.getUint8(o+16)};o+=17}else{if(!s)throw new Error(`delta without baseline ${id}`);if(mask&1){s.x+=v.getInt8(o++)/100;s.y+=v.getInt8(o++)/100;s.z+=v.getInt8(o++)/100}else if(mask&2){s.x=v.getInt16(o,true)/100;s.y=v.getInt16(o+2,true)/100;s.z=v.getInt16(o+4,true)/100;o+=6}if(mask&4){s.yaw=wrap(s.yaw+half(v.getInt8(o++)));s.pitch+=half(v.getInt8(o++))}else if(mask&8){s.yaw=half(v.getInt16(o,true));s.pitch=half(v.getInt16(o+2,true));o+=4}if(mask&16){s.vx=v.getInt8(o++)/10;s.vz=v.getInt8(o++)/10}if(mask&32){s.hp=v.getUint8(o++);s.armor=v.getUint8(o++)}if(mask&64)s.state=v.getUint8(o++);if(mask&128)s.weapon=v.getUint8(o++);if(mask&256)s.shot=v.getUint8(o++)}this.states.set(id,s);updated.push(s)}this.onSnapshot(tick,ack,updated)}
+  private decodeSnapshot(v:DataView){const tick=v.getUint32(1,true),ack=v.getUint16(5,true),n=v.getUint8(7);this.lastServerTick=tick;let o=8;const updated:PlayerSnap[]=[];for(let i=0;i<n;i++){const id=v.getUint16(o,true),mask=v.getUint16(o+2,true);o+=4;let s=this.states.get(id);if(mask===0x8000){s={id,x:v.getInt16(o,true)/100,y:v.getInt16(o+2,true)/100,z:v.getInt16(o+4,true)/100,yaw:half(v.getInt16(o+6,true)),pitch:half(v.getInt16(o+8,true)),vx:v.getInt8(o+10)/10,vz:v.getInt8(o+11)/10,hp:v.getUint8(o+12),armor:v.getUint8(o+13),state:v.getUint8(o+14),weapon:v.getUint8(o+15),shot:v.getUint8(o+16),skin:v.getUint8(o+17)};o+=18}else{if(!s)throw new Error(`delta without baseline ${id}`);if(mask&1){s.x+=v.getInt8(o++)/100;s.y+=v.getInt8(o++)/100;s.z+=v.getInt8(o++)/100}else if(mask&2){s.x=v.getInt16(o,true)/100;s.y=v.getInt16(o+2,true)/100;s.z=v.getInt16(o+4,true)/100;o+=6}if(mask&4){s.yaw=wrap(s.yaw+half(v.getInt8(o++)));s.pitch+=half(v.getInt8(o++))}else if(mask&8){s.yaw=half(v.getInt16(o,true));s.pitch=half(v.getInt16(o+2,true));o+=4}if(mask&16){s.vx=v.getInt8(o++)/10;s.vz=v.getInt8(o++)/10}if(mask&32){s.hp=v.getUint8(o++);s.armor=v.getUint8(o++)}if(mask&64)s.state=v.getUint8(o++);if(mask&128)s.weapon=v.getUint8(o++);if(mask&256)s.shot=v.getUint8(o++);if(mask&512)s.skin=v.getUint8(o++)}this.states.set(id,s);updated.push(s)}this.onSnapshot(tick,ack,updated)}
   private decodeEvents(v: DataView) {
     const rows: GameEvent[] = [];
     let o = 2;

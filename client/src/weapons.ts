@@ -15,7 +15,7 @@ interface Shell {
 }
 
 interface Tracer {
-  mesh: THREE.Mesh;
+  matrix: THREE.Matrix4;
   born: number;
 }
 
@@ -27,6 +27,31 @@ interface SoundCue {
 }
 
 const RELOAD_PITCH: Record<number, number> = { 0: 1.12, 1: 0.82, 2: 1.18, 3: 0.92, 4: 1, 5: 0.72, 7: 1.08, 8: 1.05, 9: 0.95, 10: 0.9, 11: 0.7, 12: 0.85 };
+function createMuzzleFlashTexture(): THREE.Texture {
+  const canvas = new OffscreenCanvas(64, 64);
+  const ctx = canvas.getContext('2d')!;
+  const glow = ctx.createRadialGradient(32, 32, 1, 32, 32, 31);
+  glow.addColorStop(0, 'rgba(255, 255, 238, 1)');
+  glow.addColorStop(0.18, 'rgba(255, 226, 122, .95)');
+  glow.addColorStop(0.55, 'rgba(255, 151, 45, .38)');
+  glow.addColorStop(1, 'rgba(255, 108, 28, 0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, 64, 64);
+  ctx.fillStyle = 'rgba(255, 249, 210, .92)';
+  ctx.beginPath();
+  for (let i = 0; i < 16; i++) {
+    const angle = -Math.PI / 2 + i * Math.PI / 8;
+    const radius = i % 2 ? 7 : i % 4 ? 21 : 29;
+    const x = 32 + Math.cos(angle) * radius;
+    const y = 32 + Math.sin(angle) * radius;
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  ctx.fill();
+  const texture = new THREE.CanvasTexture(canvas as unknown as HTMLCanvasElement);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
 
 export type SoundCallback = (name: SfxName, volume?: number, pitch?: number) => void;
 
@@ -63,15 +88,30 @@ export class Weapons {
   private boltCycleUntil = 0;
   private shells: Shell[] = [];
   private shellPool: THREE.Mesh[] = [];
-  private shellGeo = new THREE.BoxGeometry(0.02, 0.02, 0.05);
-  private brassMat = new THREE.MeshLambertMaterial({ color: 0xd4af37 });
+  private shellGeo = (() => {
+    const caseTube = new THREE.CylinderGeometry(0.012, 0.012, 0.045, 8);
+    caseTube.rotateX(Math.PI / 2);
+    const rim = new THREE.CylinderGeometry(0.014, 0.014, 0.008, 8);
+    rim.rotateX(Math.PI / 2);
+    rim.translate(0, 0, 0.024);
+    const primer = new THREE.CylinderGeometry(0.006, 0.006, 0.002, 8);
+    primer.rotateX(Math.PI / 2);
+    primer.translate(0, 0, 0.028);
+    const parts = [caseTube, rim, primer];
+    const merged = mergeGeometries(parts)!;
+    for (const p of parts) p.dispose();
+    return merged;
+  })();
+  private brassMat = new THREE.MeshLambertMaterial({ color: 0xdfb445 });
   private shellOffset = new THREE.Vector3(0.1, -0.05, -0.2);
   private shellSide = new THREE.Vector3();
   private activeTracers: Tracer[] = [];
-  private tracerPool: THREE.Mesh[] = [];
+  private tracerMatrixPool: THREE.Matrix4[] = [];
   private tracerGeo = new THREE.BoxGeometry(0.035, 0.035, 1);
   private tracerMat = new THREE.MeshBasicMaterial({ color: 0xffc14a, transparent: true, opacity: 0.92, depthWrite: false, blending: THREE.AdditiveBlending });
   private tracerTarget = new THREE.Vector3();
+  private tracerObject = new THREE.Object3D();
+  private tracerMesh = new THREE.InstancedMesh(this.tracerGeo, this.tracerMat, 64);
 
   // Aim Down Sights (ADS)
   adsProgress = 0;
@@ -90,33 +130,44 @@ export class Weapons {
   constructor(_camera: THREE.Camera, scene: THREE.Scene) {
     this.vmCamera.rotation.order = 'YXZ';
     this.vmCamera.layers.set(VIEWMODEL_LAYER);
-    const fill = new THREE.DirectionalLight(0xfff2dd, 1.35);
-    fill.position.set(0.35, 0.8, 0.55);
+    const fill = new THREE.DirectionalLight(0xfffaea, 1.9);
+    fill.position.set(0.5, 1.0, 0.8);
     fill.layers.set(VIEWMODEL_LAYER);
-    const hemi = new THREE.HemisphereLight(0xffd8b0, 0x1c1410, 0.6);
+    const rim = new THREE.DirectionalLight(0x9ec8f0, 1.15);
+    rim.position.set(-0.6, -0.4, 0.5);
+    rim.layers.set(VIEWMODEL_LAYER);
+    const hemi = new THREE.HemisphereLight(0xfff6ec, 0x606a78, 1.25);
     hemi.layers.set(VIEWMODEL_LAYER);
-    this.vmCamera.add(fill, hemi, this.group);
+    this.vmCamera.add(fill, rim, hemi, this.group);
     scene.add(this.vmCamera);
     this.group.scale.setScalar(0.78);
     scene.add(this.tracers);
     scene.add(this.shellsGroup);
+    this.tracerMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    this.tracerMesh.frustumCulled = false;
+    this.tracerMesh.count = 0;
+    this.tracers.add(this.tracerMesh);
 
     const flashMat = new THREE.MeshBasicMaterial({
-      color: 0xffea78,
+      map: createMuzzleFlashTexture(),
+      color: 0xffffff,
       transparent: true,
-      opacity: 0.95,
+      opacity: 0.96,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
       side: THREE.DoubleSide,
     });
-    const flashA = new THREE.Mesh(new THREE.PlaneGeometry(0.28, 0.28), flashMat);
-    const flashB = new THREE.Mesh(new THREE.PlaneGeometry(0.28, 0.28), flashMat.clone());
-    flashB.rotation.y = Math.PI / 2;
+    const flashGeos = [
+      new THREE.PlaneGeometry(0.34, 0.34),
+      new THREE.PlaneGeometry(0.34, 0.34).rotateY(Math.PI / 2),
+    ];
+    const flash = new THREE.Mesh(mergeGeometries(flashGeos)!, flashMat);
+    for (const geo of flashGeos) geo.dispose();
     const flashCore = new THREE.Mesh(
-      new THREE.PlaneGeometry(0.12, 0.12),
-      new THREE.MeshBasicMaterial({ color: 0xfff6c8, transparent: true, opacity: 1, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }),
+      new THREE.SphereGeometry(0.045, 8, 6),
+      new THREE.MeshBasicMaterial({ color: 0xfff3b0, transparent: true, opacity: 0.9, depthWrite: false, blending: THREE.AdditiveBlending }),
     );
-    this.muzzleFlash.add(flashA, flashB, flashCore);
+    this.muzzleFlash.add(flash, flashCore);
     this.muzzleFlash.visible = false;
     this.group.add(this.muzzleFlash);
     this.group.add(this.muzzleLight);
@@ -169,6 +220,8 @@ export class Weapons {
     if (this.magazineMesh) mergeMeshesByMaterial(this.magazineMesh);
     if (this.boltMesh) mergeMeshesByMaterial(this.boltMesh);
     mergeMeshesByMaterial(assembled.root, [this.magazineMesh, this.boltMesh]);
+    mergeMeshesByMaterial(this.handLGroup);
+    mergeMeshesByMaterial(this.handRGroup);
     markViewLayer(assembled.root);
     markViewLayer(this.handLGroup);
     markViewLayer(this.handRGroup);
@@ -257,11 +310,12 @@ export class Weapons {
     this.ammoLocal = Math.max(0, this.ammoLocal - 1);
     const kick = isSniper(this.weaponId) ? 0.55 : this.weaponId === 1 || this.weaponId === 12 ? 0.5 : 0.38;
     this.recoil = Math.min(1.05, this.recoil + kick);
+    const flashScale = isSniper(this.weaponId) ? 1.35 : this.weaponId === 12 ? 1.18 : this.weaponId === 2 || this.weaponId === 7 ? 0.58 : isPistol(this.weaponId) ? 0.76 : 0.94;
     this.muzzleFlash.visible = true;
     this.muzzleFlash.rotation.z = Math.random() * Math.PI;
-    this.muzzleFlash.scale.setScalar(0.9 + Math.random() * 0.35);
-    this.muzzleLight.intensity = isSniper(this.weaponId) || this.weaponId === 12 ? 4.2 : 2.8;
-    this.muzzleUntil = t + 48;
+    this.muzzleFlash.scale.setScalar(flashScale * (0.9 + Math.random() * 0.25));
+    this.muzzleLight.intensity = (isSniper(this.weaponId) || this.weaponId === 12 ? 4.2 : 2.8) * flashScale;
+    this.muzzleUntil = t + (this.weaponId === 2 || this.weaponId === 7 ? 30 : 42);
     this.ejectShell(origin);
   }
 
@@ -334,7 +388,7 @@ export class Weapons {
     this.curBobX += (targetBobX - this.curBobX) * Math.min(1, dt * 16);
     this.curBobY += (targetBobY - this.curBobY) * Math.min(1, dt * 16);
 
-    this.recoil = Math.max(0, this.recoil - dt * 11);
+    this.recoil *= Math.exp(-dt * 14);
 
     // Keep reload motion inside the viewmodel-safe area; animate parts, not the whole gun across the camera.
     const rlTilt = reloading ? Math.sin(Math.PI * rlProgress) : 0;
@@ -474,24 +528,27 @@ export class Weapons {
 
     let aliveTracers = 0;
     for (const tracer of this.activeTracers) {
-      if (now - tracer.born > 130) {
-        this.tracers.remove(tracer.mesh);
-        this.tracerPool.push(tracer.mesh);
+      if (now - tracer.born > 110) {
+        this.tracerMatrixPool.push(tracer.matrix);
         continue;
       }
+      this.tracerMesh.setMatrixAt(aliveTracers, tracer.matrix);
       this.activeTracers[aliveTracers++] = tracer;
     }
     this.activeTracers.length = aliveTracers;
+    this.tracerMesh.count = aliveTracers;
+    if (aliveTracers > 0) this.tracerMesh.instanceMatrix.needsUpdate = true;
   }
 
   spawnTracer(origin: THREE.Vector3, dir: THREE.Vector3, dist: number) {
     if (this.activeTracers.length >= 64) return;
-    const mesh = this.tracerPool.pop() ?? new THREE.Mesh(this.tracerGeo, this.tracerMat);
-    mesh.position.copy(origin).addScaledVector(dir, dist / 2);
-    mesh.scale.set(1, 1, dist);
-    mesh.lookAt(this.tracerTarget.copy(origin).addScaledVector(dir, dist));
-    this.tracers.add(mesh);
-    this.activeTracers.push({ mesh, born: performance.now() });
+    this.tracerObject.position.copy(origin).addScaledVector(dir, dist / 2);
+    this.tracerObject.scale.set(1, 1, dist);
+    this.tracerObject.lookAt(this.tracerTarget.copy(origin).addScaledVector(dir, dist));
+    this.tracerObject.updateMatrix();
+    const matrix = this.tracerMatrixPool.pop() ?? new THREE.Matrix4();
+    matrix.copy(this.tracerObject.matrix);
+    this.activeTracers.push({ matrix, born: performance.now() });
   }
 
   setAspect(aspect: number) {
@@ -521,7 +578,7 @@ export class Weapons {
   }
 }
 
-function mergeMeshesByMaterial(root: THREE.Object3D, excludedRoots: (THREE.Object3D | null)[] = []) {
+export function mergeMeshesByMaterial(root: THREE.Object3D, excludedRoots: (THREE.Object3D | null)[] = []) {
   const excluded = new Set<THREE.Object3D>();
   for (const excludedRoot of excludedRoots) excludedRoot?.traverse((obj) => excluded.add(obj));
   root.updateWorldMatrix(true, true);
@@ -552,7 +609,7 @@ function mergeMeshesByMaterial(root: THREE.Object3D, excludedRoots: (THREE.Objec
   }
 }
 
-function disposeObject(root: THREE.Object3D) {
+export function disposeObject(root: THREE.Object3D) {
   root.traverse((obj) => {
     if (!(obj instanceof THREE.Mesh)) return;
     obj.geometry.dispose();

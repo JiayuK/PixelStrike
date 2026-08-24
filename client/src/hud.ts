@@ -1,4 +1,5 @@
 import { WEAPONS, type MapData, type PlayerSnap, type RosterEntry } from './constants.js';
+import { CharacterPreview } from './preview.js';
 
 function el(id: string): HTMLElement {
   return document.getElementById(id)!;
@@ -77,7 +78,8 @@ export class Hud {
   quality: 'low' | 'medium' | 'high' = 'medium';
   private loadoutPrimary = -1;
   private loadoutSecondary = -1;
-  onJoin: ((name: string, primary: number, secondary: number) => void) | null = null;
+  characterPreview: CharacterPreview | null = null;
+  onJoin: ((name: string, primary: number, secondary: number, skin: number) => void) | null = null;
   onVolumeChange: ((v: number) => void) | null = null;
   onFovChange: ((fov: number) => void) | null = null;
   onQualityChange: ((q: 'low' | 'medium' | 'high') => void) | null = null;
@@ -192,9 +194,33 @@ export class Hud {
       localStorage.setItem('pixel_strike_secondary', secondary.value);
       this.loadoutSecondary = +secondary.value;
       this.onLoadoutChange?.(this.loadoutPrimary, this.loadoutSecondary);
+      if (+primary.value === -1 && +secondary.value !== -1) {
+        this.characterPreview?.setWeapon(+secondary.value);
+      }
     });
 
-    el('join-btn').addEventListener('click', () => {
+    const previewCanvas = el('character-preview-canvas') as HTMLCanvasElement;
+    if (previewCanvas) {
+      this.characterPreview = new CharacterPreview(previewCanvas);
+      const initialWeapon = this.loadoutPrimary === -1 ? 3 : this.loadoutPrimary;
+      this.characterPreview.setWeapon(initialWeapon);
+
+      primary?.addEventListener('change', () => {
+        const weaponId = +primary.value === -1 ? 3 : +primary.value;
+        this.characterPreview?.setWeapon(weaponId);
+      });
+      el('random-skin-btn')?.addEventListener('click', () => {
+        this.characterPreview?.randomizeSkin();
+      });
+    }
+    const deployOverlay = el('deploy-loader-overlay');
+    const progressBar = el('deploy-progress-bar');
+    const statusText = el('deploy-status-text');
+    const pctText = el('deploy-pct-text');
+
+    let deploying = false;
+    const startDeploy = () => {
+      if (deploying) return;
       const trimmed = name.value.trim();
       const n = [...trimmed].slice(0, 16).join('') || `特战队员-${Math.floor(100 + Math.random() * 900)}`;
       if (trimmed) {
@@ -203,13 +229,57 @@ export class Hud {
       }
       this.loadoutPrimary = +primary.value;
       this.loadoutSecondary = +secondary.value;
-      this.menu.style.display = 'none';
-      this.root.style.display = 'block';
-      this.onJoin?.(n, this.loadoutPrimary, this.loadoutSecondary);
-    });
 
+      if (deployOverlay && progressBar && statusText && pctText) {
+        deploying = true;
+        deployOverlay.style.display = 'flex';
+        let progress = 0;
+        progressBar.style.width = '0%';
+        pctText.textContent = '0%';
+        statusText.textContent = '[1/4] 连接 60Hz 权威物理服务器...';
+
+        const steps = [
+          { at: 25, text: '[1/4] 连接 60Hz 权威物理服务器...' },
+          { at: 55, text: '[2/4] 加载 512x512 非对称要塞地图...' },
+          { at: 82, text: '[3/4] 装配 3D 战术武器与皮肤...' },
+          { at: 100, text: '[4/4] 部署完成 · 准备交火!' },
+        ];
+        let stepIdx = 0;
+
+        const timer = setInterval(() => {
+          progress += Math.floor(7 + Math.random() * 12);
+          if (progress > 100) progress = 100;
+          progressBar.style.width = `${progress}%`;
+          pctText.textContent = `${progress}%`;
+
+          while (stepIdx < steps.length && progress >= steps[stepIdx].at) {
+            statusText.textContent = steps[stepIdx].text;
+            stepIdx++;
+          }
+
+          if (progress >= 100) {
+            clearInterval(timer);
+            setTimeout(() => {
+              deployOverlay.style.display = 'none';
+              this.menu.style.display = 'none';
+              this.characterPreview?.setVisible(false);
+              this.root.style.display = 'block';
+              deploying = false;
+              this.onJoin?.(n, this.loadoutPrimary, this.loadoutSecondary, this.characterPreview?.getSkin() ?? 0);
+            }, 140);
+          }
+        }, 32);
+      } else {
+        this.menu.style.display = 'none';
+        this.characterPreview?.setVisible(false);
+        this.root.style.display = 'block';
+        this.onJoin?.(n, this.loadoutPrimary, this.loadoutSecondary, this.characterPreview?.getSkin() ?? 0);
+      }
+    };
+
+    el('join-btn').addEventListener('click', startDeploy);
     name.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') el('join-btn').click();
+      if (e.key === 'Enter') startDeploy();
     });
 
     el('lb-refresh-btn')?.addEventListener('click', () => this.loadLeaderboard());
@@ -685,6 +755,7 @@ export class Hud {
     this.root.style.display = 'none';
     this.root.classList.remove('low-hp');
     this.menu.style.display = 'block';
+    this.characterPreview?.setVisible(true);
     if (this.pause) this.pause.style.display = 'none';
     if (this.settings) this.settings.style.display = 'none';
     if (this.scoreboard) this.scoreboard.style.display = 'none';

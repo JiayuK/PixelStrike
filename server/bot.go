@@ -90,6 +90,7 @@ func (r *Room) SetBotCount(count int) {
 					Secondary:  0,
 					ActiveSlot: 1,
 					Weapon:     3,
+					Skin:       uint8(i % int(SkinCount)),
 					Mags:       [2]int{Weapons[3].Mag, Weapons[0].Mag},
 					Reserves:   [2]int{Weapons[3].Reserve, Weapons[0].Reserve},
 					Grenades:   1,
