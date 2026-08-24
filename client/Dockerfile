@@ -3,6 +3,7 @@ WORKDIR /app/client
 COPY client/package.json client/package-lock.json ./
 RUN npm ci
 COPY client ./
+COPY map.json /app/map.json
 RUN npm run build
 
 FROM nginx:alpine

@@ -43,18 +43,14 @@ jobs:
           wait "$client_pid"
           wait "$server_pid"
 
-      - name: Build production images
+      - name: Package production source
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p release
-          (cd server && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags='-s -w' -o ../release/pixelstrike .)
-          docker build -f deploy/server.Dockerfile -t pixel-strike-server:latest .
-          docker build -f client/Dockerfile.remote -t pixel-strike-client:latest .
-          docker save pixel-strike-server:latest pixel-strike-client:latest | gzip -1 > release/images.tar.gz
-          cp docker-compose.prod.yml release/docker-compose.yml
-          cp deploy/1panel-root.conf deploy/remote.sh release/
+          git archive --format=tar.gz -o release/source.tar.gz HEAD
+          cp deploy/remote.sh release/
 
       - name: Upload production release
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
@@ -63,7 +59,7 @@ jobs:
           name: production-${{ github.sha }}
           path: release/
           compression-level: 0
-          retention-days: 1
+          retention-days: 3
           if-no-files-found: error
 
   deploy:

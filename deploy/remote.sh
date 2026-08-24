@@ -7,9 +7,12 @@ proxy=${3:?proxy path required}
 openresty=${4:?openresty container required}
 origin_host=${5:?origin host required}
 
-[ -s "$release_dir/images.tar.gz" ]
-[ -s "$release_dir/docker-compose.yml" ]
-[ -s "$release_dir/1panel-root.conf" ]
+source_dir="$release_dir/source"
+[ -s "$release_dir/source.tar.gz" ]
+mkdir -p "$source_dir"
+tar -xzf "$release_dir/source.tar.gz" -C "$source_dir"
+[ -s "$source_dir/docker-compose.prod.yml" ]
+[ -s "$source_dir/deploy/1panel-root.conf" ]
 cd "$app_dir"
 
 cp docker-compose.yml docker-compose.yml.ci-rollback
@@ -41,12 +44,14 @@ rollback() {
 }
 trap rollback EXIT HUP INT TERM
 
-docker load -i "$release_dir/images.tar.gz"
-cp "$release_dir/docker-compose.yml" docker-compose.yml
-cp "$release_dir/1panel-root.conf" "$proxy"
+docker build -f "$source_dir/server/Dockerfile" -t pixel-strike-server:latest "$source_dir"
+docker build -f "$source_dir/client/Dockerfile" -t pixel-strike-client:latest "$source_dir"
+tar -xzf "$release_dir/source.tar.gz" -C "$app_dir"
+cp docker-compose.prod.yml docker-compose.yml
+cp deploy/1panel-root.conf "$proxy"
 docker exec "$openresty" openresty -t
 docker exec "$openresty" openresty -s reload
-docker compose up -d --no-build --remove-orphans
+docker compose up -d --no-build --remove-orphans --force-recreate
 
 i=0
 until curl -fsS http://127.0.0.1:12888/api/stats >/dev/null; do
