@@ -459,20 +459,20 @@ export class WorldView {
   private setupSky() {
     const sunBox = new THREE.Mesh(
       new THREE.BoxGeometry(28, 28, 6),
-      new THREE.MeshBasicMaterial({ color: 0xffb060 })
+      new THREE.MeshBasicMaterial({ color: 0xfff1ba })
     );
     sunBox.position.set(90, 42, -130);
     sunBox.lookAt(0, 0, 0);
     const halo = new THREE.Mesh(
       new THREE.BoxGeometry(48, 48, 4),
-      new THREE.MeshBasicMaterial({ color: 0xff7a3a, transparent: true, opacity: 0.28, depthWrite: false })
+      new THREE.MeshBasicMaterial({ color: 0xffdf87, transparent: true, opacity: 0.16, depthWrite: false })
     );
     halo.position.copy(sunBox.position);
     halo.lookAt(0, 0, 0);
     this.sun.add(halo, sunBox);
     this.scene.add(this.sun);
 
-    const cloudMat = new THREE.MeshBasicMaterial({ color: 0xffd2a8, transparent: true, opacity: 0.62 });
+    const cloudMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.72 });
     const cloudGeos: THREE.BufferGeometry[] = [];
     let cSeed = 42;
     const cRnd = () => (cSeed = (cSeed * 16807) % 2147483647) / 2147483647;
