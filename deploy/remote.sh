@@ -39,6 +39,7 @@ rollback() {
     docker exec "$openresty" openresty -t && docker exec "$openresty" openresty -s reload || true
     docker compose up -d --no-build --remove-orphans || true
   fi
+  rm -f docker-compose.yml.ci-rollback "$proxy.ci-rollback"
   rm -rf "$release_dir"
   exit "$status"
 }
@@ -65,5 +66,6 @@ curl -kfsS -H "Host: $origin_host" "https://127.0.0.1:4443/assets/$asset" >/dev/
 
 trap - EXIT HUP INT TERM
 rm -rf "$release_dir"
+rm -f docker-compose.yml.ci-rollback "$proxy.ci-rollback"
 docker image rm pixel-strike-server:ci-rollback pixel-strike-client:ci-rollback >/dev/null 2>&1 || true
 docker image prune -f >/dev/null

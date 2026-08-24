@@ -99,9 +99,10 @@ jobs:
           DEPLOY_ORIGIN_HOST: ${{ secrets.DEPLOY_ORIGIN_HOST }}
         run: |
           set -euo pipefail
-          remote_release="/tmp/pixel-strike-${GITHUB_SHA}"
+          remote_root="/tmp/pixel-strike-releases"
+          remote_release="$remote_root/${GITHUB_SHA}"
           ssh_args=(-i ~/.ssh/pixel-strike -o IdentitiesOnly=yes -p "$DEPLOY_PORT")
           scp_args=(-i ~/.ssh/pixel-strike -o IdentitiesOnly=yes -P "$DEPLOY_PORT")
-          ssh "${ssh_args[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "rm -rf '$remote_release' && mkdir -p '$remote_release'"
+          ssh "${ssh_args[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "rm -rf '$remote_root' && mkdir -p '$remote_release'"
           scp "${scp_args[@]}" release/* "$DEPLOY_USER@$DEPLOY_HOST:$remote_release/"
           ssh "${ssh_args[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "sh '$remote_release/remote.sh' '$remote_release' '$DEPLOY_PATH' '$DEPLOY_PROXY_PATH' '$DEPLOY_OPENRESTY' '$DEPLOY_ORIGIN_HOST'"
