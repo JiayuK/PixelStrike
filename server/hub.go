@@ -32,6 +32,24 @@ type AdminPlayer struct {
 
 func NewHub(w *World, s *Store) *Hub { return &Hub{World: w, Store: s, botCount: 6} }
 
+func (h *Hub) Broadcast(msg []byte) {
+	h.mu.Lock()
+	players := make([]*Player, 0, OnlinePlayers.Load())
+	for _, room := range h.rooms {
+		room.mu.Lock()
+		for _, p := range room.Players {
+			if !p.IsBot && p.ready {
+				players = append(players, p)
+			}
+		}
+		room.mu.Unlock()
+	}
+	h.mu.Unlock()
+	for _, p := range players {
+		p.Send(msg)
+	}
+}
+
 func (h *Hub) BotStatus() (count, rooms int) {
 	h.mu.Lock()
 	defer h.mu.Unlock()

@@ -119,6 +119,7 @@ export class Hud {
   private lastAmmo = '';
   private hurtTimer = 0;
   private toastTimer = 0;
+  private reconnectTimer = 0;
 
   constructor() {
     const name = el('name-input') as HTMLInputElement;
@@ -385,7 +386,8 @@ export class Hud {
       magEl.classList.toggle('low', Number.isFinite(n) && n > 0 && n <= 5);
     }
     const reserveEl = el('ammo-reserve');
-    if (reserveEl) reserveEl.textContent = reserve ? `/ ${reserve}` : '';
+    if (reserveEl) reserveEl.textContent = reserve;
+    el('ammo-divider').style.display = reserve ? '' : 'none';
   }
 
   showHurtDir(radians: number) {
@@ -553,13 +555,15 @@ export class Hud {
     setTimeout(() => row.remove(), 4200);
   }
 
-  showPickupNotice(message: string) {
+  showPickupNotice(message: string, kind: 'ammo' | 'health' | 'speed') {
     const toast = el('pickup-toast');
-    if (!toast) return;
     toast.textContent = message;
+    toast.dataset.kind = kind;
+    toast.classList.remove('show');
+    void toast.offsetWidth;
     toast.classList.add('show');
     clearTimeout(this.toastTimer);
-    this.toastTimer = window.setTimeout(() => toast.classList.remove('show'), 2200);
+    this.toastTimer = window.setTimeout(() => toast.classList.remove('show'), 1200);
   }
 
 
@@ -618,14 +622,39 @@ export class Hud {
   }
 
   showDisconnect(message = '正在重新连接…') {
-    const msgEl = el('disconnect-message');
-    if (msgEl) msgEl.textContent = message;
-    if (this.disconnect) this.disconnect.style.display = 'flex';
+    clearInterval(this.reconnectTimer);
+    this.disconnect.classList.remove('upgrade');
+    el('disconnect-label').textContent = 'NETWORK STATUS';
+    el('disconnect-message').textContent = message;
+    el('disconnect-detail').textContent = '正在重新连接并同步世界状态，请稍候。';
+    this.disconnect.style.display = 'flex';
+  }
+
+  showUpgrade(seconds: number) {
+    clearInterval(this.reconnectTimer);
+    this.disconnect.classList.add('upgrade');
+    el('disconnect-label').textContent = 'LIVE UPDATE';
+    el('disconnect-message').textContent = '服务器正在升级';
+    const detail = el('disconnect-detail');
+    let remaining = Math.max(1, seconds);
+    const update = () => { detail.textContent = `保留当前战局，预计 ${remaining} 秒后自动重连。`; };
+    update();
+    this.reconnectTimer = window.setInterval(() => {
+      remaining = Math.max(0, remaining - 1);
+      if (remaining === 0) {
+        clearInterval(this.reconnectTimer);
+        detail.textContent = '升级已完成，正在恢复连接…';
+      } else update();
+    }, 1000);
+    this.disconnect.style.setProperty('--upgrade-duration', `${remaining}s`);
+    this.disconnect.style.display = 'flex';
   }
 
   hideDisconnect() {
-    if (this.disconnect) this.disconnect.style.display = 'none';
+    clearInterval(this.reconnectTimer);
+    this.disconnect.style.display = 'none';
   }
+
 
   exitMatch() {
     document.exitPointerLock?.();

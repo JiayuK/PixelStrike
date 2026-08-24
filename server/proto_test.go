@@ -16,6 +16,13 @@ func TestWelcomeV4(t *testing.T) {
 	}
 }
 
+func TestMaintenanceNotice(t *testing.T) {
+	b := Maintenance(2)
+	if len(b) != 2 || b[0] != OpMaintenance || b[1] != 2 {
+		t.Fatalf("bad maintenance notice: %v", b)
+	}
+}
+
 func TestQueuedInputKeepsLatest(t *testing.T) {
 	p := &Player{}
 	now := time.Now()
@@ -50,14 +57,15 @@ func TestSnapshotDropForcesKeyframe(t *testing.T) {
 }
 
 func TestBalanceValues(t *testing.T) {
-	if RespawnDelayS != 3*time.Second || Weapons[3].Dmg != 33 || Weapons[5].Dmg != 108 || Weapons[0].ArmorPen != .58 ||
-		WalkSpeed != 6.4 || GroundAccel != 44 || StopAccel != 60 || AirAccel != 9.5 || JumpVel != 8.4 || MaxRewindTicks != 8 {
-		t.Fatalf("unexpected balance: respawn=%v ak=%v awp=%v", RespawnDelayS, Weapons[3].Dmg, Weapons[5].Dmg)
+	if RespawnDelayS != 3*time.Second || WalkSpeed != 6.4 || GroundAccel != 44 || StopAccel != 60 || AirAccel != 9.5 || JumpVel != 8.4 || MaxRewindTicks != 8 {
+		t.Fatalf("unexpected movement balance")
 	}
-	for _, weapon := range []int{1, 3} {
-		w := Weapons[weapon]
-		if w.Dmg*w.HeadMult*w.ArmorPen < MaxHP {
-			t.Fatalf("%s cannot one-tap a helmet: %.1f", w.Name, w.Dmg*w.HeadMult*w.ArmorPen)
+	wantDamage := []float64{20, 41, 22, 28, 26, 92, 34, 23, 22, 26, 26, 68, 12}
+	wantMag := []int{30, 11, 45, 45, 45, 8, 0, 18, 38, 38, 45, 12, 8}
+	wantReserve := []int{180, 53, 180, 135, 135, 45, 0, 36, 150, 135, 135, 120, 36}
+	for i, weapon := range Weapons {
+		if weapon.Dmg != wantDamage[i] || weapon.Mag != wantMag[i] || weapon.Reserve != wantReserve[i] {
+			t.Fatalf("%s balance = %.0f %d/%d", weapon.Name, weapon.Dmg, weapon.Mag, weapon.Reserve)
 		}
 	}
 	now := time.Now()

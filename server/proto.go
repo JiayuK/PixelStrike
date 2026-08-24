@@ -18,14 +18,15 @@ const (
 	OpLoadout       = 0x09
 	OpRosterRequest = 0x0A
 
-	OpWelcome  = 0x81
-	OpSnapshot = 0x82
-	OpEvents   = 0x83
-	OpPong     = 0x84
-	OpSelf     = 0x86
-	OpRoster   = 0x87
-	OpReject   = 0x88
-	OpPing     = 0xF0
+	OpWelcome     = 0x81
+	OpSnapshot    = 0x82
+	OpEvents      = 0x83
+	OpPong        = 0x84
+	OpSelf        = 0x86
+	OpRoster      = 0x87
+	OpReject      = 0x88
+	OpMaintenance = 0x89
+	OpPing        = 0xF0
 )
 
 const (
@@ -86,6 +87,10 @@ func Reject(reason string) []byte {
 	w.U8(uint8(len(b)))
 	w.b = append(w.b, b...)
 	return w.Bytes()
+}
+
+func Maintenance(retryAfter uint8) []byte {
+	return []byte{OpMaintenance, retryAfter}
 }
 
 type compactSelfState struct {

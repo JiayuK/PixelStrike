@@ -11,8 +11,8 @@ export class Net {
   onRoster:((rows:RosterEntry[])=>void)|null=null;
   onSelf:((state:SelfState)=>void)|null=null;
   onLatency:((ms:number,outboundBps:number)=>void)|null=null;
-  onDisconnect:(()=>void)|null=null; onReject:((reason:string)=>void)|null=null;
-  private name=''; private primary=3; private secondary=0; private url=''; private retry=0; private closedByUser=false; private heartbeat=0; private lastPing=0; private states=new Map<number,PlayerSnap>(); private input=new Uint8Array(12); private inputView=new DataView(this.input.buffer);
+  onDisconnect:((upgrading:boolean)=>void)|null=null; onReject:((reason:string)=>void)|null=null; onMaintenance:((retryAfter:number)=>void)|null=null;
+  private name=''; private primary=3; private secondary=0; private url=''; private retry=0; private closedByUser=false; private heartbeat=0; private lastPing=0; private maintenanceUntil=0; private states=new Map<number,PlayerSnap>(); private input=new Uint8Array(12); private inputView=new DataView(this.input.buffer);
 
   connect(url:string,name:string,primary:number,secondary:number){ this.disconnect(); this.url=url;this.name=name;this.primary=primary;this.secondary=secondary;this.closedByUser=false;this.open();this.heartbeat=window.setInterval(()=>{if(this.connected){this.lastPing=performance.now();this.raw(new Uint8Array([OP.Ping]))}},5000) }
   private open() {
@@ -41,14 +41,37 @@ export class Net {
       if (this.ws !== ws) return;
       this.connected = false;
       if (this.closedByUser) return;
-      this.onDisconnect?.();
-      const delay = Math.min(5000, 500 * 2 ** this.retry++);
+      const upgrading = this.maintenanceUntil > performance.now();
+      this.onDisconnect?.(upgrading);
+      const delay = Math.max(Math.min(5000, 500 * 2 ** this.retry++), this.maintenanceUntil - performance.now());
       setTimeout(() => {
         if (!this.closedByUser && this.ws === ws) this.open();
       }, delay);
     };
   }
-  private handle(v:DataView){const op=v.getUint8(0);if(op===OP.Welcome){if(v.getUint8(1)!==PROTOCOL_VERSION){this.onReject?.('协议版本不一致');return}this.yourId=v.getUint16(2,true);this.connected=true;this.retry=0;this.onWelcome(this.yourId, v.getUint32(4, true));return}if(op===OP.Pong){if(this.lastPing)this.onLatency?.(performance.now()-this.lastPing,v.byteLength>=5?v.getUint32(1,true):0);return}if(op===OP.Reject){const n=v.getUint8(1),reason=new TextDecoder().decode(new Uint8Array(v.buffer,v.byteOffset+2,n));this.closedByUser=true;this.onReject?.(reason);this.ws.close();return}if(op===OP.Snapshot){this.decodeSnapshot(v);return}if(op===OP.Events){this.decodeEvents(v);return}if(op===OP.Self){this.onSelf?.({ack:v.getUint16(1,true),slot:v.getUint8(3),weapon:v.getUint8(4),mag:v.getUint8(5),reserve:v.getUint16(6,true),nades:v.getUint8(8)});return}if(op===OP.Roster){let o=2;const rows:RosterEntry[]=[];for(let i=0,n=v.getUint8(1);i<n;i++){const id=v.getUint16(o,true),kills=v.getUint16(o+2,true),deaths=v.getUint16(o+4,true),len=v.getUint8(o+6);o+=7;const name=new TextDecoder().decode(new Uint8Array(v.buffer,v.byteOffset+o,len));o+=len;rows.push({id,name,kills,deaths})}this.onRoster?.(rows)}}
+  private handle(v:DataView) {
+    const op = v.getUint8(0);
+    if (op === OP.Welcome) {
+      if (v.getUint8(1) !== PROTOCOL_VERSION) { this.onReject?.('协议版本不一致'); return; }
+      this.yourId = v.getUint16(2, true); this.connected = true; this.retry = 0; this.maintenanceUntil = 0;
+      this.onWelcome(this.yourId, v.getUint32(4, true)); return;
+    }
+    if (op === OP.Maintenance) {
+      const retryAfter = v.byteLength >= 2 ? v.getUint8(1) : 2;
+      this.maintenanceUntil = performance.now() + retryAfter * 1000;
+      this.onMaintenance?.(retryAfter); return;
+    }
+    if (op === OP.Pong) { if (this.lastPing) this.onLatency?.(performance.now() - this.lastPing, v.byteLength >= 5 ? v.getUint32(1, true) : 0); return; }
+    if (op === OP.Reject) { const n=v.getUint8(1),reason=new TextDecoder().decode(new Uint8Array(v.buffer,v.byteOffset+2,n));this.closedByUser=true;this.onReject?.(reason);this.ws.close();return; }
+    if (op === OP.Snapshot) { this.decodeSnapshot(v); return; }
+    if (op === OP.Events) { this.decodeEvents(v); return; }
+    if (op === OP.Self) { this.onSelf?.({ack:v.getUint16(1,true),slot:v.getUint8(3),weapon:v.getUint8(4),mag:v.getUint8(5),reserve:v.getUint16(6,true),nades:v.getUint8(8)}); return; }
+    if (op === OP.Roster) {
+      let o=2; const rows:RosterEntry[]=[];
+      for(let i=0,n=v.getUint8(1);i<n;i++){const id=v.getUint16(o,true),kills=v.getUint16(o+2,true),deaths=v.getUint16(o+4,true),len=v.getUint8(o+6);o+=7;const name=new TextDecoder().decode(new Uint8Array(v.buffer,v.byteOffset+o,len));o+=len;rows.push({id,name,kills,deaths})}
+      this.onRoster?.(rows);
+    }
+  }
   private decodeSnapshot(v:DataView){const tick=v.getUint32(1,true),ack=v.getUint16(5,true),n=v.getUint8(7);this.lastServerTick=tick;let o=8;const updated:PlayerSnap[]=[];for(let i=0;i<n;i++){const id=v.getUint16(o,true),mask=v.getUint16(o+2,true);o+=4;let s=this.states.get(id);if(mask===0x8000){s={id,x:v.getInt16(o,true)/100,y:v.getInt16(o+2,true)/100,z:v.getInt16(o+4,true)/100,yaw:half(v.getInt16(o+6,true)),pitch:half(v.getInt16(o+8,true)),vx:v.getInt8(o+10)/10,vz:v.getInt8(o+11)/10,hp:v.getUint8(o+12),armor:v.getUint8(o+13),state:v.getUint8(o+14),weapon:v.getUint8(o+15),shot:v.getUint8(o+16)};o+=17}else{if(!s)throw new Error(`delta without baseline ${id}`);if(mask&1){s.x+=v.getInt8(o++)/100;s.y+=v.getInt8(o++)/100;s.z+=v.getInt8(o++)/100}else if(mask&2){s.x=v.getInt16(o,true)/100;s.y=v.getInt16(o+2,true)/100;s.z=v.getInt16(o+4,true)/100;o+=6}if(mask&4){s.yaw=wrap(s.yaw+half(v.getInt8(o++)));s.pitch+=half(v.getInt8(o++))}else if(mask&8){s.yaw=half(v.getInt16(o,true));s.pitch=half(v.getInt16(o+2,true));o+=4}if(mask&16){s.vx=v.getInt8(o++)/10;s.vz=v.getInt8(o++)/10}if(mask&32){s.hp=v.getUint8(o++);s.armor=v.getUint8(o++)}if(mask&64)s.state=v.getUint8(o++);if(mask&128)s.weapon=v.getUint8(o++);if(mask&256)s.shot=v.getUint8(o++)}this.states.set(id,s);updated.push(s)}this.onSnapshot(tick,ack,updated)}
   private decodeEvents(v: DataView) {
     const rows: GameEvent[] = [];

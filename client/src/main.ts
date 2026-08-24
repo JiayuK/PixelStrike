@@ -578,14 +578,22 @@ net.onReject = (reason) => {
   releaseMatchHistory();
   hud.showDisconnect(reason);
 };
-net.onDisconnect = () => {
+net.onMaintenance = (retryAfter) => {
+  alive = false;
+  respawnAt = 0;
+  reloadPendingSlot = 0;
+  weapons.cancelReload();
+  clearCombatInput();
+  hud.showUpgrade(retryAfter);
+};
+net.onDisconnect = (upgrading) => {
   if (!joined) releaseMatchHistory();
   alive = false;
   respawnAt = 0;
   reloadPendingSlot = 0;
   weapons.cancelReload();
   clearCombatInput();
-  hud.showDisconnect();
+  if (!upgrading) hud.showDisconnect();
 };
 net.onLatency = (ms, outboundBps) => {
   latencyMs = ms;
@@ -801,14 +809,14 @@ function handleEvent(e: GameEvent) {
         reloadPendingSlot = 0;
         weapons.cancelReload();
         audio.play('mag_in', 0.9);
-        hud.showPickupNotice('弹药补给 · 弹药已补满');
+        hud.showPickupNotice('弹药已补满', 'ammo');
       } else if (e.kind === 1) {
         audio.play('hitmarker', 0.55);
-        hud.showPickupNotice('医疗补给 · 生命恢复');
+        hud.showPickupNotice('生命恢复', 'health');
       } else if (e.kind === 2) {
         speedBoostUntil = performance.now() + (e.ms ?? 8000);
         audio.play('weapon_switch', 0.7, 1.2);
-        hud.showPickupNotice(`速度提升 · ${(e.ms ?? 8000) / 1000} 秒`);
+        hud.showPickupNotice(`速度提升 ${(e.ms ?? 8000) / 1000} 秒`, 'speed');
       }
     }
     return;

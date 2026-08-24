@@ -1,8 +1,6 @@
 services:
   server:
-    build:
-      context: .
-      dockerfile: server/Dockerfile
+    image: pixel-strike-server:latest
     container_name: pixelstrike-prod-server
     restart: unless-stopped
     mem_limit: 512m
@@ -17,9 +15,7 @@ services:
       - ./data:/data
 
   client:
-    build:
-      context: .
-      dockerfile: client/Dockerfile
+    image: pixel-strike-client:latest
     container_name: pixelstrike-prod-client
     restart: unless-stopped
     mem_limit: 128m
