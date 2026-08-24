@@ -54,7 +54,7 @@ jobs:
           docker build -f client/Dockerfile.remote -t pixel-strike-client:latest .
           docker save pixel-strike-server:latest pixel-strike-client:latest | gzip -1 > release/images.tar.gz
           cp docker-compose.prod.yml release/docker-compose.yml
-          cp deploy/1panel-root.conf deploy/known_hosts deploy/remote.sh release/
+          cp deploy/1panel-root.conf deploy/remote.sh release/
 
       - name: Upload production release
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
@@ -73,12 +73,6 @@ jobs:
     timeout-minutes: 10
     environment:
       name: production
-      url: https://game.incrafttime.top
-    env:
-      DEPLOY_HOST: 183.92.11.135
-      DEPLOY_PORT: "5173"
-      DEPLOY_USER: root
-      DEPLOY_PATH: /mnt/nvme0n1-6/Configs/1Panel/1panel/docker/compose/pixel-strike
     steps:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -89,16 +83,24 @@ jobs:
         shell: bash
         env:
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
         run: |
           set -euo pipefail
           install -d -m 700 ~/.ssh
           printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/pixel-strike
-          chmod 600 ~/.ssh/pixel-strike
-          cp release/known_hosts ~/.ssh/known_hosts
-          chmod 600 ~/.ssh/known_hosts
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/pixel-strike ~/.ssh/known_hosts
 
       - name: Deploy and verify
         shell: bash
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          DEPLOY_PROXY_PATH: ${{ secrets.DEPLOY_PROXY_PATH }}
+          DEPLOY_OPENRESTY: ${{ secrets.DEPLOY_OPENRESTY }}
+          DEPLOY_ORIGIN_HOST: ${{ secrets.DEPLOY_ORIGIN_HOST }}
         run: |
           set -euo pipefail
           remote_release="/tmp/pixel-strike-${GITHUB_SHA}"
@@ -106,4 +108,4 @@ jobs:
           scp_args=(-i ~/.ssh/pixel-strike -o IdentitiesOnly=yes -P "$DEPLOY_PORT")
           ssh "${ssh_args[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "rm -rf '$remote_release' && mkdir -p '$remote_release'"
           scp "${scp_args[@]}" release/* "$DEPLOY_USER@$DEPLOY_HOST:$remote_release/"
-          ssh "${ssh_args[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "sh '$remote_release/remote.sh' '$remote_release' '$DEPLOY_PATH'"
+          ssh "${ssh_args[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "sh '$remote_release/remote.sh' '$remote_release' '$DEPLOY_PATH' '$DEPLOY_PROXY_PATH' '$DEPLOY_OPENRESTY' '$DEPLOY_ORIGIN_HOST'"

@@ -117,7 +117,7 @@ export class Net {
   sendGrenade(yaw:number,pitch:number){const b=new Uint8Array(9),v=new DataView(b.buffer);b[0]=OP.Grenade;v.setFloat32(1,yaw,true);v.setFloat32(5,pitch,true);this.raw(b)}
   forget(id:number){this.states.delete(id)}
   disconnect(){this.closedByUser=true;if(this.heartbeat){clearInterval(this.heartbeat);this.heartbeat=0}const ws=this.ws;if(ws){ws.onopen=null;ws.onmessage=null;ws.onclose=null;if(ws.readyState<2)ws.close()}this.connected=false;this.states.clear()}
-  private raw(b:Uint8Array){if(this.ws?.readyState===WebSocket.OPEN)this.ws.send(b)}
+  private raw(b:Uint8Array<ArrayBuffer>){if(this.ws?.readyState===WebSocket.OPEN)this.ws.send(b)}
 }
 const half=(v:number)=>v*.5*Math.PI/180,wrap=(v:number)=>Math.atan2(Math.sin(v),Math.cos(v)),vec=(v:DataView,o:number):[number,number,number]=>[v.getFloat32(o,true),v.getFloat32(o+4,true),v.getFloat32(o+8,true)];
 function fingerprint(){let fp=localStorage.getItem('pixel_strike_fp');if(!fp){fp='fp_'+crypto.getRandomValues(new Uint32Array(2)).join('_');localStorage.setItem('pixel_strike_fp',fp)}return fp}

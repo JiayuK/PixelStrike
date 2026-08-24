@@ -3,8 +3,9 @@ set -eu
 
 release_dir=${1:?release directory required}
 app_dir=${2:?application directory required}
-proxy=/mnt/nvme0n1-6/Configs/1Panel/1panel/apps/openresty/openresty/www/sites/game.mcland.vip/proxy/root.conf
-openresty=1Panel-openresty-fEPN
+proxy=${3:?proxy path required}
+openresty=${4:?openresty container required}
+origin_host=${5:?origin host required}
 
 [ -s "$release_dir/images.tar.gz" ]
 [ -s "$release_dir/docker-compose.yml" ]
@@ -55,7 +56,7 @@ until curl -fsS http://127.0.0.1:12888/api/stats >/dev/null; do
 done
 curl -fsS http://127.0.0.1:12888/map.json | grep -q '"size"'
 asset=$(docker exec pixelstrike-prod-client sh -c 'basename /usr/share/nginx/html/assets/game-*.js')
-curl -kfsS -H 'Host: game.incrafttime.top' "https://127.0.0.1:4443/assets/$asset" >/dev/null
+curl -kfsS -H "Host: $origin_host" "https://127.0.0.1:4443/assets/$asset" >/dev/null
 
 trap - EXIT HUP INT TERM
 rm -rf "$release_dir"
