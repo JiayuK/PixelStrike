@@ -23,17 +23,37 @@ type WeaponDef struct {
 	Dmg, HeadMult, Rpm, SpreadDeg, MoveSpreadDeg, BloomDeg, SpeedMult, ArmorPen float64
 	Mag, Reserve, ReloadMs                                                      int
 	Automatic                                                                   bool
+	Pellets                                                                     int
 }
 
-var Weapons = [7]WeaponDef{
-	{0, "Glock-18", 20, 3.0, 400, .42, 1.3, .14, 1.0, .58, 20, 120, 1400, false},
-	{1, "Desert Eagle", 48, 2.3, 267, .22, 2.2, .36, .98, .93, 7, 35, 1800, false},
-	{2, "MP5-SD", 25, 3.0, 800, .72, 1.6, .07, .98, .63, 30, 120, 1800, true},
-	{3, "AK-47", 33, 4.0, 600, .38, 2.0, .17, .92, .78, 30, 90, 2200, true},
-	{4, "M4A4", 31, 3.6, 666, .32, 1.75, .12, .92, .70, 30, 90, 2100, true},
-	{5, "AWP", 108, 2.5, 32, .03, 4.8, 0, .75, .98, 5, 30, 2800, false},
-	{6, "Knife", 34, 1, 150, 0, 0, 0, 1.08, 1, 0, 0, 0, false},
+var Weapons = []WeaponDef{
+	{0, "Glock-18", 24, 3.0, 450, .36, 1.2, .12, 1.0, .58, 20, 120, 1400, false, 1},
+	{1, "Desert Eagle", 48, 2.3, 267, .22, 2.2, .36, .98, .93, 7, 35, 1800, false, 1},
+	{2, "MP5-SD", 26, 3.0, 800, .50, 1.45, .06, 1.0, .65, 30, 120, 1800, true, 1},
+	{3, "AK-47", 33, 4.0, 600, .38, 2.0, .17, .92, .78, 30, 90, 2200, true, 1},
+	{4, "M4A4", 31, 3.6, 666, .28, 1.65, .11, .93, .70, 30, 90, 2100, true, 1},
+	{5, "AWP", 108, 2.5, 32, .03, 4.8, 0, .76, .98, 5, 30, 2800, false, 1},
+	{6, "Knife", 34, 1, 150, 0, 0, 0, 1.08, 1, 0, 0, 0, false, 1},
+	{7, "USP-S", 27, 2.4, 352, .16, 1.4, .22, 1.0, .50, 12, 24, 1700, false, 1},
+	{8, "UMP-45", 26, 2.6, 600, .68, 1.55, .10, .97, .63, 25, 100, 2100, true, 1},
+	{9, "FAMAS", 30, 3.2, 700, .36, 1.75, .14, .94, .67, 25, 90, 2200, true, 1},
+	{10, "AUG", 31, 3.4, 600, .27, 1.6, .12, .88, .70, 30, 90, 2300, true, 1},
+	{11, "SSG 08", 80, 2.4, 40, .05, 3.8, 0, .80, .82, 8, 80, 2600, false, 1},
+	{12, "XM1014", 14, 1.2, 150, 3.2, 4.2, .40, .93, .62, 5, 24, 2600, false, 6},
 }
+
+func isGun(id uint8) bool { return int(id) < len(Weapons) && id != 6 }
+func isSniper(id uint8) bool { return id == 5 || id == 11 }
+func isPrimary(id uint8) bool {
+	switch id {
+	case 2, 3, 4, 5, 8, 9, 10, 11, 12:
+		return true
+	}
+	return false
+}
+func isSecondary(id uint8) bool { return id == 0 || id == 1 || id == 7 }
+
+const WeaponHE uint8 = 13
 
 const (
 	TickRate        = 60
@@ -48,7 +68,7 @@ const (
 	MaxRewindTicks  = 8
 	MaxHP           = 100
 	SpawnProtectS   = 2 * time.Second
-	AWPScopeTime    = 450 * time.Millisecond
+	AWPScopeTime    = 320 * time.Millisecond
 	RespawnDelayS   = 3 * time.Second
 	EyeHeight       = 1.6
 	CrouchEyeH      = 1.12
@@ -106,7 +126,7 @@ func (p *PlayerState) setActiveAmmo(mag, reserve int) {
 	}
 }
 func validLoadout(primary, secondary uint8) bool {
-	return primary >= 2 && primary <= 5 && secondary <= 1
+	return isPrimary(primary) && isSecondary(secondary)
 }
 func (p *PlayerState) ApplyLoadout(primary, secondary uint8) {
 	if !validLoadout(primary, secondary) {
@@ -263,10 +283,10 @@ func (r *Room) TryFire(p *PlayerState, yaw, pitch float64, mode uint8, seenTick 
 	weapon := min(int(p.Weapon), len(Weapons)-1)
 	def := Weapons[weapon]
 	mag, reserve := p.ActiveAmmo()
-	if weapon < 6 && mag <= 0 {
+	if isGun(uint8(weapon)) && mag <= 0 {
 		return false
 	}
-	if weapon < 6 {
+	if isGun(uint8(weapon)) {
 		p.setActiveAmmo(mag-1, reserve)
 	}
 	gap := time.Duration(60 / def.Rpm * float64(time.Second))
@@ -278,7 +298,7 @@ func (r *Room) TryFire(p *PlayerState, yaw, pitch float64, mode uint8, seenTick 
 	} else {
 		p.NextFire = p.NextFire.Add(gap)
 	}
-	if weapon < 6 && mag == 1 && reserve > 0 {
+	if isGun(uint8(weapon)) && mag == 1 && reserve > 0 {
 		r.StartReload(p, now)
 	}
 	if now.Sub(p.LastShotAt) > 420*time.Millisecond {
@@ -299,56 +319,74 @@ func (r *Room) TryFire(p *PlayerState, yaw, pitch float64, mode uint8, seenTick 
 	if weapon == 6 {
 		maxDist = 1.65
 	}
-	if weapon < 6 {
-		spread := weaponSpread(def, p.Vel.X, p.Vel.Z, p.OnGround, p.Crouch, now.Before(p.LandingUntil), max(0, int(p.ShotCounter)-1))
-		if weapon == 5 && (mode&0x80 == 0 || p.AimStarted.IsZero() || now.Sub(p.AimStarted) < AWPScopeTime) {
+	ads := mode&0x80 != 0
+	spread := 0.0
+	if isGun(uint8(weapon)) {
+		spread = weaponSpread(def, p.Vel.X, p.Vel.Z, p.OnGround, p.Crouch, now.Before(p.LandingUntil), ads, max(0, int(p.ShotCounter)-1))
+		settle := AWPScopeTime
+		if weapon == 11 {
+			settle = 240 * time.Millisecond
+		}
+		if isSniper(uint8(weapon)) && (!ads || p.AimStarted.IsZero() || now.Sub(p.AimStarted) < settle) {
 			spread = math.Max(spread, def.MoveSpreadDeg)
 		}
-		dir = patternDir(dir, spread, int(p.ShotCounter), weapon)
 	}
-	_, worldDist := r.World.Raycast(origin, dir, maxDist)
 	if seenTick > r.tick {
 		seenTick = r.tick
 	}
 	if r.tick-seenTick > MaxRewindTicks {
 		seenTick = r.tick - MaxRewindTicks
 	}
-	var target *PlayerState
-	targetDist, hitY, hitHeight := maxDist, 0.0, StandingHeight
-	for _, other := range r.Players {
-		o := &other.PlayerState
-		if o == p || !o.Alive || o.ProtectedAt(now) {
+	pellets := 1
+	if isGun(uint8(weapon)) && def.Pellets > 1 {
+		pellets = def.Pellets
+	}
+	for n := 0; n < pellets; n++ {
+		shotDir := dir
+		if isGun(uint8(weapon)) {
+			shotDir = patternDir(dir, spread, int(p.ShotCounter)*17+n, weapon)
+		}
+		_, worldDist := r.World.Raycast(origin, shotDir, maxDist)
+		var target *PlayerState
+		targetDist, hitY, hitHeight := maxDist, 0.0, StandingHeight
+		for _, other := range r.Players {
+			o := &other.PlayerState
+			if o == p || !o.Alive || o.ProtectedAt(now) {
+				continue
+			}
+			pose := r.poseAt(o.Id, seenTick, o.Pos, o.Crouch)
+			height := StandingHeight
+			if pose.Crouch {
+				height = CrouchingHeight
+			}
+			if d, ok := RayPlayerAABBHeight(origin, shotDir, pose.Pos, height, math.Min(worldDist, maxDist)); ok && d < targetDist {
+				target, targetDist, hitY, hitHeight = o, d, origin.Y+shotDir.Y*d-pose.Pos.Y, height
+			}
+		}
+		if target == nil {
 			continue
 		}
-		pose := r.poseAt(o.Id, seenTick, o.Pos, o.Crouch)
-		height := StandingHeight
-		if pose.Crouch {
-			height = CrouchingHeight
+		headshot := isGun(uint8(weapon)) && hitY >= hitHeight-.4
+		dmg := def.Dmg
+		if weapon == 6 {
+			if mode&1 != 0 {
+				dmg = 55
+			}
+			toAttacker := norm(Vec3{p.Pos.X - target.Pos.X, 0, p.Pos.Z - target.Pos.Z})
+			forward := Vec3{-math.Sin(target.Yaw), 0, -math.Cos(target.Yaw)}
+			if toAttacker.X*forward.X+toAttacker.Z*forward.Z < -.5 {
+				dmg *= 2
+			}
+		} else if headshot {
+			dmg *= def.HeadMult
+		} else if hitY <= .65 {
+			dmg *= .75
 		}
-		if d, ok := RayPlayerAABBHeight(origin, dir, pose.Pos, height, math.Min(worldDist, maxDist)); ok && d < targetDist {
-			target, targetDist, hitY, hitHeight = o, d, origin.Y+dir.Y*d-pose.Pos.Y, height
+		r.Damage(p, target, dmg, headshot, uint8(weapon), now)
+		if !target.Alive && pellets == 1 {
+			break
 		}
 	}
-	if target == nil {
-		return true
-	}
-	headshot := weapon < 6 && hitY >= hitHeight-.4
-	dmg := def.Dmg
-	if weapon == 6 {
-		if mode&1 != 0 {
-			dmg = 55
-		}
-		toAttacker := norm(Vec3{p.Pos.X - target.Pos.X, 0, p.Pos.Z - target.Pos.Z})
-		forward := Vec3{-math.Sin(target.Yaw), 0, -math.Cos(target.Yaw)}
-		if toAttacker.X*forward.X+toAttacker.Z*forward.Z < -.5 {
-			dmg *= 2
-		}
-	} else if headshot {
-		dmg *= def.HeadMult
-	} else if hitY <= .65 {
-		dmg *= .75
-	}
-	r.Damage(p, target, dmg, headshot, uint8(weapon), now)
 	return true
 }
 
@@ -357,7 +395,7 @@ func (r *Room) Damage(attacker, victim *PlayerState, dmg float64, headshot bool,
 		return
 	}
 	actual := dmg
-	if victim.Armor > 0 && weapon < 6 {
+	if victim.Armor > 0 && isGun(weapon) {
 		actual = dmg * Weapons[weapon].ArmorPen
 		lost := uint8(math.Min(float64(victim.Armor), math.Ceil((dmg-actual)*.5)))
 		victim.Armor -= lost
@@ -640,7 +678,7 @@ func (r *Room) StepGrenades(now time.Time) {
 					if hit, hd := r.World.Raycast(g.Pos, dir, d); hit && hd < d-.5 {
 						continue
 					}
-					r.Damage(thrower, v, 85*(1-d/7.5), false, 6, now)
+					r.Damage(thrower, v, 85*(1-d/7.5), false, WeaponHE, now)
 				}
 			}
 			continue
@@ -718,18 +756,23 @@ func AimDir(yaw, pitch float64) Vec3 {
 	cp := math.Cos(pitch)
 	return Vec3{-math.Sin(yaw) * cp, math.Sin(pitch), -math.Cos(yaw) * cp}
 }
-func weaponSpread(def WeaponDef, vx, vz float64, onGround, crouching, landing bool, burstShots int) float64 {
+func weaponSpread(def WeaponDef, vx, vz float64, onGround, crouching, landing, aiming bool, burstShots int) float64 {
 	moveFactor := math.Min(1, math.Hypot(vx, vz)/3)
 	spread := def.SpreadDeg + (def.MoveSpreadDeg-def.SpreadDeg)*moveFactor
-	spread += math.Min(def.MoveSpreadDeg-def.SpreadDeg, float64(burstShots)*def.BloomDeg)
+	// Bloom used to dump the whole spray into a random cone, which made
+	// recoil unreadable. Keep a tiny residual so long sprays aren't lasers.
+	spread += math.Min(.22, float64(burstShots)*def.BloomDeg*.12)
 	if !onGround {
-		spread = math.Max(spread, def.MoveSpreadDeg*2.2+1)
+		spread = math.Max(spread, def.MoveSpreadDeg*1.55+.45)
 	}
 	if crouching {
-		spread *= .6
+		spread *= .55
+	}
+	if aiming && !isSniper(def.Id) {
+		spread *= .48
 	}
 	if landing {
-		spread = math.Max(spread, def.MoveSpreadDeg*1.35)
+		spread = math.Max(spread, def.MoveSpreadDeg*1.12)
 	}
 	return spread
 }

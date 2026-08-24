@@ -2,6 +2,7 @@
 
 const SFX_NAMES = [
   'fire_glock', 'fire_deagle', 'fire_mp5', 'fire_ak47', 'fire_m4a4', 'fire_awp',
+  'fire_usp', 'fire_ump', 'fire_famas', 'fire_aug', 'fire_scout', 'fire_xm',
   'headshot_ding', 'hitmarker', 'death', 'hurt', 'grenade_explode',
   'step', 'reload_click', 'bolt_rack',
   'mag_out', 'mag_in', 'bolt_cycle', 'empty_click',
@@ -130,6 +131,32 @@ export class AudioEngine {
         noise(0.65, 1600);
         osc('sine', 75, 25, 0.6);
         osc('sawtooth', 140, 35, 0.35);
+        break;
+      case 'fire_usp':
+        noise(0.16, 3400);
+        osc('sine', 170, 50, 0.1);
+        break;
+      case 'fire_ump':
+        noise(0.2, 2400);
+        osc('triangle', 150, 55, 0.12);
+        break;
+      case 'fire_famas':
+        noise(0.22, 3000);
+        osc('triangle', 240, 50, 0.16);
+        break;
+      case 'fire_aug':
+        noise(0.23, 2800);
+        osc('sine', 200, 48, 0.17);
+        break;
+      case 'fire_scout':
+        noise(0.45, 1800);
+        osc('sine', 90, 28, 0.4);
+        osc('triangle', 160, 40, 0.22);
+        break;
+      case 'fire_xm':
+        noise(0.4, 1400);
+        osc('sine', 70, 22, 0.32);
+        osc('sawtooth', 110, 30, 0.2);
         break;
       case 'headshot_ding':
         // CS:GO iconic metallic DINK (twin crystal sine ringing)

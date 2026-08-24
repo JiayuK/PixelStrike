@@ -521,14 +521,14 @@ export class RemotePlayers {
       this.place(this.head, model.index, model, sin, cos, 0, headY, 0, model.pitch);
       // Two-handed forward triangular V-shape weapon grip (尖尖双手持枪)
       const isKnife = state.weapon === 6;
-      const isPistol = state.weapon === 0 || state.weapon === 1;
+      const pistolHold = state.weapon === 0 || state.weapon === 1 || state.weapon === 7;
 
       if (isKnife) {
         // Knife stance: Right hand holds blade forward-down, left arm swings with walking
         this.place(this.armR, model.index, model, sin, cos, 0.22, shoulderY, -0.04, Math.PI / 2.6 + model.pitch * 0.8, -0.15, -0.25);
         this.place(this.armL, model.index, model, sin, cos, -0.24, shoulderY, 0, -swing * 0.75, 0, 0);
         this.place(this.gun, model.index, model, sin, cos, 0.14, bodyY + 0.08, -0.28, model.pitch, 0, 0);
-      } else if (isPistol) {
+      } else if (pistolHold) {
         // Two-handed pistol grip: Both arms angle forward-inward meeting at pistol grip
         this.place(this.armR, model.index, model, sin, cos, 0.24, shoulderY, 0, Math.PI / 2.15 + model.pitch, 0.42, 0);
         this.place(this.armL, model.index, model, sin, cos, -0.24, shoulderY, 0, Math.PI / 2.15 + model.pitch, -0.42, 0);
