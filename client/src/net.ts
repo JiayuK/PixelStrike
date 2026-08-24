@@ -107,6 +107,12 @@ export class Net {
         case 11:
           e.pickup = v.getUint16(o, true); e.victim = v.getUint16(o + 2, true);
           e.kind = v.getUint8(o + 4); e.ms = v.getUint16(o + 5, true); o += 7; break;
+        case 12: {
+          e.player = v.getUint16(o, true); e.kind = v.getUint8(o + 2);
+          const len = v.getUint8(o + 3);
+          e.name = new TextDecoder().decode(new Uint8Array(v.buffer, v.byteOffset + o + 4, len));
+          o += 4 + len; break;
+        }
       }
       rows.push(e);
     }
@@ -114,7 +120,7 @@ export class Net {
   }
   sendInput(seq:number,keys:number,yaw:number,pitch:number){const b=this.input,v=this.inputView;b[0]=OP.Input;v.setUint16(1,seq,true);b[3]=keys;v.setFloat32(4,yaw,true);v.setFloat32(8,pitch,true);this.raw(b)}
   sendFire(seq:number,tick:number,mode:number,yaw:number,pitch:number){const b=new Uint8Array(16),v=new DataView(b.buffer);b[0]=OP.Fire;v.setUint16(1,seq,true);v.setUint32(3,tick,true);b[7]=mode;v.setFloat32(8,yaw,true);v.setFloat32(12,pitch,true);this.raw(b)}
-  sendReload(){this.raw(new Uint8Array([OP.Reload]))} switchSlot(slot:number){this.raw(new Uint8Array([OP.Switch,slot]))} setLoadout(primary:number,secondary:number){this.raw(new Uint8Array([OP.Loadout,primary,secondary]))} requestRoster(){this.raw(new Uint8Array([OP.RosterRequest]))}
+  sendReload(){this.raw(new Uint8Array([OP.Reload]))} switchSlot(slot:number){this.raw(new Uint8Array([OP.Switch,slot]))} setLoadout(primary:number,secondary:number){this.raw(new Uint8Array([OP.Loadout,primary,secondary]))} requestRoster(){this.raw(new Uint8Array([OP.RosterRequest]))} toggleFlight(){this.raw(new Uint8Array([OP.ToggleFlight]))}
   sendGrenade(yaw:number,pitch:number){const b=new Uint8Array(9),v=new DataView(b.buffer);b[0]=OP.Grenade;v.setFloat32(1,yaw,true);v.setFloat32(5,pitch,true);this.raw(b)}
   forget(id:number){this.states.delete(id)}
   disconnect(){this.closedByUser=true;if(this.heartbeat){clearInterval(this.heartbeat);this.heartbeat=0}const ws=this.ws;if(ws){ws.onopen=null;ws.onmessage=null;ws.onclose=null;if(ws.readyState<2)ws.close()}this.connected=false;this.states.clear()}

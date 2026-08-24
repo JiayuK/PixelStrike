@@ -28,6 +28,9 @@ func quantizeState(p *PlayerState, nowUnixNano int64) quantState {
 	if p.CmdKeys&KeyAim != 0 {
 		state |= 16
 	}
+	if p.Flying {
+		state |= 32
+	}
 	return quantState{
 		x: q16(p.Pos.X * 100), y: q16(p.Pos.Y * 100), z: q16(p.Pos.Z * 100),
 		yaw: angleHalfDeg(p.Yaw), pitch: angleHalfDeg(p.Pitch),

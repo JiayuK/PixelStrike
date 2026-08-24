@@ -11,6 +11,7 @@ import bundledMap from '../../map.json';
 
 const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
 const wsUrl = import.meta.env.VITE_WS_URL || `${proto}//${location.host}/ws`;
+const mapSize = (bundledMap as MapData).size;
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x78939d);
@@ -160,6 +161,7 @@ function keyMask(): number {
   if (keys.has('KeyD')) k |= KEY.Right;
   if (keys.has('Space')) k |= KEY.Jump;
   if (keys.has('KeyC') || keys.has('ControlLeft') || keys.has('ControlRight')) k |= KEY.Crouch;
+  if (keys.has('ShiftLeft') || keys.has('ShiftRight')) k |= KEY.Descend;
   return k;
 }
 
@@ -506,6 +508,9 @@ document.addEventListener('pointerlockchange', () => {
 hud.onPauseClick(() => {
   if (joined && !hud.isSettingsOpen()) void captureGame();
 });
+hud.onFlightToggle = () => {
+  if (joined && alive) net.toggleFlight();
+};
 
 hud.onJoin = (name, primary, secondary, skin) => {
   myName = name;
@@ -613,6 +618,8 @@ net.onSnapshot = (_tick, _ack, updates) => {
     if (p.id === net.yourId) {
       const wasAlive = alive;
       alive = !!(p.state & 1);
+      local.flying = alive && !!(p.state & 32);
+      hud.setFlightState(local.flying, alive);
       if (wasAlive && !alive) {
         if (!respawnAt) respawnAt = now + 3000;
         weapons.group.visible = false;
@@ -699,6 +706,8 @@ function handleEvent(e: GameEvent) {
       reloadPendingSlot = 0;
       weapons.cancelReload();
       speedBoostUntil = 0;
+      local.flying = false;
+      hud.setFlightState(false, false);
       clearCombatInput();
       killerId = e.killer ?? -1;
       const next = resolveLoadout(userPrimaryChoice, userSecondaryChoice);
@@ -746,6 +755,8 @@ function handleEvent(e: GameEvent) {
     local.pos.set(...e.origin);
     local.vel.set(0, 0, 0);
     local.onGround = true;
+    local.flying = false;
+    hud.setFlightState(false, true);
     cameraEyeHeight = PHYS.eyeHeight;
     landingPenaltyUntil = 0;
     speedBoostUntil = 0;
@@ -826,10 +837,15 @@ function handleEvent(e: GameEvent) {
     }
     return;
   }
+  if (e.type === 12 && e.player !== undefined) {
+    if (e.kind === 1) hud.showFlightAnnouncement(e.name || nameOf(e.player));
+    return;
+  }
 }
 
 function nameOf(id?: number): string {
-  return id === net.yourId ? myName : names.get(id ?? -1) ?? `特战队员${id ?? '?'}`;
+  const known = id === net.yourId ? myName : names.get(id ?? -1);
+  return known?.trim() || `特战队员${id ?? '?'}`;
 }
 
 function refreshScoreboard() {
@@ -875,6 +891,14 @@ function frame(t: number) {
       let grounded = false;
       if (world) grounded = moveAABB(local.pos, local.vel, step, world.boxes, local.height(), local.onGround);
       else local.pos.addScaledVector(local.vel, step);
+      if (local.flying) {
+        const halfX = mapSize[0] / 2 - 0.3;
+        const halfZ = mapSize[1] / 2 - 0.3;
+        local.pos.x = Math.max(-halfX, Math.min(halfX, local.pos.x));
+        local.pos.z = Math.max(-halfZ, Math.min(halfZ, local.pos.z));
+        local.pos.y = Math.max(0, Math.min(PHYS.maxFlightHeight, local.pos.y));
+        if (local.pos.y === 0 && local.vel.y < 0 || local.pos.y === PHYS.maxFlightHeight && local.vel.y > 0) local.vel.y = 0;
+      }
       if (local.pos.y < 0) {
         local.pos.y = 0;
         local.vel.y = 0;

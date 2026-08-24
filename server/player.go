@@ -233,7 +233,7 @@ func (p *Player) readPump(hub *Hub) {
 				continue
 			}
 			seq := binary.LittleEndian.Uint16(payload)
-			keys := payload[2] & 0x7f
+			keys := payload[2]
 			yaw := float64(math.Float32frombits(binary.LittleEndian.Uint32(payload[3:])))
 			pitch := float64(math.Float32frombits(binary.LittleEndian.Uint32(payload[7:])))
 			if !finite(yaw) || !finite(pitch) {
@@ -303,6 +303,17 @@ func (p *Player) readPump(hub *Hub) {
 				p.rosterRequested = true
 				room.mu.Unlock()
 			}
+		case OpToggleFlight:
+			if room := p.Room; room != nil {
+				room.mu.Lock()
+				if p.Alive {
+					p.Flying = !p.Flying
+					p.Crouch = false
+					p.Vel.Y = 0
+					room.Emit(Event{Type: EvFlightToggle, Player: p.Id, Kind: boolByte(p.Flying), Name: p.Name})
+				}
+				room.mu.Unlock()
+			}
 		case OpPing:
 			out := make([]byte, 5)
 			out[0] = OpPong
@@ -310,6 +321,13 @@ func (p *Player) readPump(hub *Hub) {
 			p.Send(out)
 		}
 	}
+}
+
+func boolByte(value bool) uint8 {
+	if value {
+		return 1
+	}
+	return 0
 }
 
 func (p *Player) queueInput(seq uint16, keys uint8, yaw, pitch float64, at time.Time) {
