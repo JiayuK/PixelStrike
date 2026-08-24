@@ -77,6 +77,25 @@ func main() {
 		}
 		json.NewEncoder(w).Encode(rows)
 	})
+	mux.HandleFunc("/api/progression", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "no-store")
+		ip := trustedProxies.ClientIP(r)
+		if ip == "" {
+			http.Error(w, `{"error":"invalid client address"}`, http.StatusBadRequest)
+			return
+		}
+		progress, err := store.WeaponProgressForIP(ip)
+		if err != nil {
+			http.Error(w, `{"error":"db"}`, http.StatusInternalServerError)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"weapons":      progress,
+			"goldKills":    GoldKillRequirement,
+			"diamondKills": DiamondKillRequirement,
+		})
+	})
 	mux.HandleFunc("/api/stats", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(runtimeStats(hub, store))

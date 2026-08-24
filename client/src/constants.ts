@@ -1,4 +1,4 @@
-export const PROTOCOL_VERSION = 5;
+export const PROTOCOL_VERSION = 6;
 
 export const OP = {
   Join: 0x01,
@@ -51,6 +51,7 @@ export interface PlayerSnap {
   weapon: number;
   shot: number;
   skin: number;
+  weaponSkin: number;
 }
 
 export interface RosterEntry {

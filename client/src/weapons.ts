@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { WEAPONS, isPistol, isSniper } from './constants.js';
 import type { SfxName } from './audio.js';
-import { assembleViewWeapon, markViewLayer, VIEWMODEL_LAYER } from './viewmodels.js';
+import { applyWeaponSkin, assembleViewWeapon, markViewLayer, VIEWMODEL_LAYER } from './viewmodels.js';
 
 interface Shell {
   mesh: THREE.Mesh;
@@ -122,6 +122,7 @@ export class Weapons {
   reloadStartedAt = 0;
   reloadingUntil = 0;
   weaponId = 3;
+  weaponSkin = 0;
 
   // Idle breath & sway
   swayX = 0;
@@ -179,8 +180,9 @@ export class Weapons {
     this.build(3);
   }
 
-  build(id: number) {
+  build(id: number, skin = this.weaponSkin) {
     this.weaponId = id;
+    this.weaponSkin = skin;
     this.drawProgress = 0;
     this.slashProgress = 0;
     this.boltCycleStartedAt = 0;
@@ -213,6 +215,7 @@ export class Weapons {
     this.handRGroup.rotation.set(0, 0, 0);
 
     const assembled = assembleViewWeapon(id, this.handLGroup, this.handRGroup);
+	applyWeaponSkin(assembled.root, skin);
     this.magazineMesh = assembled.magazine;
     this.boltMesh = assembled.bolt;
     this.muzzleLight.position.copy(assembled.muzzle);

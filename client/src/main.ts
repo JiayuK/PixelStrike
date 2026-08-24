@@ -88,6 +88,8 @@ let lastWeaponSlot = 1;
 let grenadePrimed = false;
 let userPrimaryChoice = -1;
 let userSecondaryChoice = -1;
+let userPrimaryWeaponSkin = 3;
+let userSecondaryWeaponSkin = 3;
 const PRIMARY_IDS = [3, 4, 2, 5, 8, 9, 10, 11, 12];
 const SECONDARY_IDS = [0, 1, 7];
 
@@ -99,6 +101,8 @@ function resolveLoadout(p: number, s: number): { primary: number; secondary: num
 
 let primaryWeapon = 3;
 let secondaryWeapon = 0;
+let primaryWeaponSkin = 0;
+let secondaryWeaponSkin = 0;
 const slotMags = [0, WEAPONS[3].mag, WEAPONS[0].mag, 0];
 const slotReserves = [0, WEAPONS[3].reserve, WEAPONS[0].reserve, 0];
 let cameraStepOffset = 0;
@@ -294,7 +298,8 @@ function selectSlot(slot: number) {
   weapons.cancelReload();
   if (slot !== reloadPendingSlot) reloadPendingSlot = 0;
   const weapon = slot === 1 ? primaryWeapon : slot === 2 ? secondaryWeapon : 6;
-  if (weapon !== weapons.weaponId) weapons.build(weapon);
+	const weaponSkin = slot === 1 ? primaryWeaponSkin : slot === 2 ? secondaryWeaponSkin : 0;
+	if (weapon !== weapons.weaponId || weaponSkin !== weapons.weaponSkin) weapons.build(weapon, weaponSkin);
   local.weaponId = weapon;
   mag = slot <= 2 ? slotMags[slot] : 0;
   reserve = slot <= 2 ? slotReserves[slot] : 0;
@@ -507,11 +512,13 @@ hud.onPauseClick(() => {
   if (joined && !hud.isSettingsOpen()) void captureGame();
 });
 
-hud.onJoin = (name, primary, secondary, skin) => {
+hud.onJoin = (name, primary, secondary, skin, primarySkin, secondarySkin) => {
   myName = name;
   killStreak = 0;
   userPrimaryChoice = primary;
   userSecondaryChoice = secondary;
+	userPrimaryWeaponSkin = primarySkin;
+	userSecondaryWeaponSkin = secondarySkin;
   const resolved = resolveLoadout(primary, secondary);
   primaryWeapon = resolved.primary;
   secondaryWeapon = resolved.secondary;
@@ -526,7 +533,7 @@ hud.onJoin = (name, primary, secondary, skin) => {
   weapons.group.visible = true;
   refreshWeaponHud();
   guardMatchHistory();
-  net.connect(wsUrl, name, primaryWeapon, secondaryWeapon, skin);
+  net.connect(wsUrl, name, primaryWeapon, secondaryWeapon, skin, primarySkin, secondarySkin);
   void captureGame(); // Fullscreen and pointer lock
   audio.init();
 };
@@ -535,7 +542,7 @@ hud.onLoadoutChange = (p, s) => {
   userPrimaryChoice = p;
   userSecondaryChoice = s;
   const next = resolveLoadout(p, s);
-  net.setLoadout(next.primary, next.secondary);
+  net.setLoadout(next.primary, next.secondary, userPrimaryWeaponSkin, userSecondaryWeaponSkin);
 };
 hud.onExit = () => {
   joined = false;
@@ -636,6 +643,8 @@ net.onSelf = (s) => {
   nades = s.nades;
   if (s.slot === 1) primaryWeapon = s.weapon;
   else if (s.slot === 2) secondaryWeapon = s.weapon;
+	if (s.slot === 1) primaryWeaponSkin = s.weaponSkin;
+	else if (s.slot === 2) secondaryWeaponSkin = s.weaponSkin;
   if (s.slot === 1 || s.slot === 2) {
     slotMags[s.slot] = s.mag;
     slotReserves[s.slot] = s.reserve;
@@ -647,9 +656,9 @@ net.onSelf = (s) => {
   }
   mag = s.mag;
   reserve = s.reserve;
-  if (s.weapon !== weapons.weaponId) {
+  if (s.weapon !== weapons.weaponId || s.weaponSkin !== weapons.weaponSkin) {
     weapons.cancelReload();
-    weapons.build(s.weapon);
+    weapons.build(s.weapon, s.weaponSkin);
     local.weaponId = s.weapon;
     stopAiming();
   }
@@ -704,7 +713,7 @@ function handleEvent(e: GameEvent) {
       const next = resolveLoadout(userPrimaryChoice, userSecondaryChoice);
       primaryWeapon = next.primary;
       secondaryWeapon = next.secondary;
-      net.setLoadout(next.primary, next.secondary);
+      net.setLoadout(next.primary, next.secondary, userPrimaryWeaponSkin, userSecondaryWeaponSkin);
     }
     return;
   }

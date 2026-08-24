@@ -79,7 +79,7 @@ export class Hud {
   private loadoutPrimary = -1;
   private loadoutSecondary = -1;
   characterPreview: CharacterPreview | null = null;
-  onJoin: ((name: string, primary: number, secondary: number, skin: number) => void) | null = null;
+  onJoin: ((name: string, primary: number, secondary: number, skin: number, primaryWeaponSkin: number, secondaryWeaponSkin: number) => void) | null = null;
   onVolumeChange: ((v: number) => void) | null = null;
   onFovChange: ((fov: number) => void) | null = null;
   onQualityChange: ((q: 'low' | 'medium' | 'high') => void) | null = null;
@@ -127,6 +127,26 @@ export class Hud {
     const name = el('name-input') as HTMLInputElement;
     const primary = el('primary-select') as HTMLSelectElement;
     const secondary = el('secondary-select') as HTMLSelectElement;
+	const primaryWeaponSkin = el('primary-weapon-skin') as HTMLSelectElement;
+	const secondaryWeaponSkin = el('secondary-weapon-skin') as HTMLSelectElement;
+	const weaponKills = new Map<number, number>();
+	const refreshSkinOptions = (weaponSelect: HTMLSelectElement, skinSelect: HTMLSelectElement) => {
+		const weapon = +weaponSelect.value;
+		const kills = weaponKills.get(weapon) ?? 0;
+		for (const option of [...skinSelect.options]) {
+			if (option.value === '1') option.disabled = weapon >= 0 && kills < 100;
+			if (option.value === '2') option.disabled = weapon >= 0 && kills < 500;
+		}
+		if (skinSelect.selectedOptions[0]?.disabled) skinSelect.value = '3';
+	};
+	void fetch('/api/progression', { cache: 'no-store' }).then((response) => response.ok ? response.json() : Promise.reject()).then((data: { weapons?: { weapon: number; kills: number }[] }) => {
+		for (const row of data.weapons ?? []) weaponKills.set(row.weapon, row.kills);
+		const progress = el('weapon-skin-progress');
+		const selected = +primary.value;
+		progress.textContent = selected < 0 ? '随机武器会先抽取枪械，再从该枪已解锁的皮肤中随机。' : `${WEAPONS[selected].name}：${weaponKills.get(selected) ?? 0} 杀敌 · 黄金 100 / 钻石 500`;
+		refreshSkinOptions(primary, primaryWeaponSkin);
+		refreshSkinOptions(secondary, secondaryWeaponSkin);
+	}).catch(() => { el('weapon-skin-progress').textContent = '进度暂时无法读取，服务器仍会校验已解锁皮肤。'; });
     // Restore username and loadout.
     const savedName = localStorage.getItem('pixel_strike_name') || getCookie('ps_name');
     if (savedName && name) {
@@ -186,12 +206,16 @@ export class Hud {
         this.loadoutPrimary = +primary.value;
         updateWeaponSpecs(this.loadoutPrimary);
         this.onLoadoutChange?.(this.loadoutPrimary, this.loadoutSecondary);
+		refreshSkinOptions(primary, primaryWeaponSkin);
+		const progress = el('weapon-skin-progress');
+		progress.textContent = this.loadoutPrimary < 0 ? '随机武器会先抽取枪械，再从该枪已解锁的皮肤中随机。' : `${WEAPONS[this.loadoutPrimary].name}：${weaponKills.get(this.loadoutPrimary) ?? 0} 杀敌 · 黄金 100 / 钻石 500`;
       });
     }
     secondary?.addEventListener('change', () => {
       localStorage.setItem('pixel_strike_secondary', secondary.value);
       this.loadoutSecondary = +secondary.value;
       this.onLoadoutChange?.(this.loadoutPrimary, this.loadoutSecondary);
+		refreshSkinOptions(secondary, secondaryWeaponSkin);
       if (+primary.value === -1 && +secondary.value !== -1) {
         this.characterPreview?.setWeapon(+secondary.value);
       }
@@ -263,7 +287,7 @@ export class Hud {
               this.characterPreview?.setVisible(false);
               this.root.style.display = 'block';
               deploying = false;
-              this.onJoin?.(n, this.loadoutPrimary, this.loadoutSecondary, this.characterPreview?.getSkin() ?? 0);
+              this.onJoin?.(n, this.loadoutPrimary, this.loadoutSecondary, this.characterPreview?.getSkin() ?? 0, +primaryWeaponSkin.value, +secondaryWeaponSkin.value);
             }, 140);
           }
         }, 32);
@@ -271,7 +295,7 @@ export class Hud {
         this.menu.style.display = 'none';
         this.characterPreview?.setVisible(false);
         this.root.style.display = 'block';
-        this.onJoin?.(n, this.loadoutPrimary, this.loadoutSecondary, this.characterPreview?.getSkin() ?? 0);
+        this.onJoin?.(n, this.loadoutPrimary, this.loadoutSecondary, this.characterPreview?.getSkin() ?? 0, +primaryWeaponSkin.value, +secondaryWeaponSkin.value);
       }
     };
 

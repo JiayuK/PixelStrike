@@ -486,7 +486,12 @@ export class RemotePlayers {
         for (const layer of this.skinLayers) layer.setColorAt(model.index, bodyColor);
         uniformColorsDirty = true;
       }
-      const wantedGunColor = WEAPONS[state.weapon]?.color ?? 0x222225;
+      const baseGunColor = WEAPONS[state.weapon]?.color ?? 0x222225;
+		const wantedGunColor = state.weaponSkin === 1
+			? gunColor.setHex(baseGunColor).lerp(new THREE.Color(0xffc928), 0.78).getHex()
+			: state.weaponSkin === 2
+				? gunColor.setHex(baseGunColor).lerp(new THREE.Color(0x72e7ff), 0.7).getHex()
+				: baseGunColor;
       if (wantedGunColor !== model.gunColor) {
         model.gunColor = wantedGunColor;
         this.gun.setColorAt(model.index, gunColor.setHex(wantedGunColor));

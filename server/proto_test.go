@@ -9,17 +9,17 @@ import (
 	"unicode/utf8"
 )
 
-func TestWelcomeV5(t *testing.T) {
+func TestWelcomeV6(t *testing.T) {
 	b := Welcome(42, 0x12345678)
 	if len(b) != 8 || b[0] != OpWelcome || b[1] != ProtocolVersion || binary.LittleEndian.Uint16(b[2:]) != 42 {
 		t.Fatalf("bad welcome: %v", b)
 	}
 }
 func TestSnapshotCarriesSkin(t *testing.T) {
-	p := &Player{PlayerState: PlayerState{Id: 1, Alive: true, Skin: 7}}
+	p := &Player{PlayerState: PlayerState{Id: 1, Alive: true, Skin: 7, WeaponSkin: 2}}
 	state := quantizeState(&p.PlayerState, 0)
 	full := p.BuildSnapshot(0, []*Player{p}, []quantState{state})
-	if len(full) != 30 || full[7] != 1 || binary.LittleEndian.Uint16(full[10:]) != 0x8000 || full[29] != 7 {
+	if len(full) != 31 || full[7] != 1 || binary.LittleEndian.Uint16(full[10:]) != 0x8000 || full[29] != 7 || full[30] != 2 {
 		t.Fatalf("full skin snapshot = %v", full)
 	}
 
@@ -444,7 +444,7 @@ func TestSanitizeNameUTF8(t *testing.T) {
 	}
 }
 
-func TestFingerprintsDoNotMergePlayersBehindOneIP(t *testing.T) {
+func TestIPIsTheProgressionAccount(t *testing.T) {
 	s, err := NewStore(t.TempDir() + "/stats.db")
 	if err != nil {
 		t.Fatal(err)
@@ -452,8 +452,31 @@ func TestFingerprintsDoNotMergePlayersBehindOneIP(t *testing.T) {
 	defer s.Close()
 	a := s.GetOrCreatePlayer("203.0.113.10", "browser-a", "Alice")
 	b := s.GetOrCreatePlayer("203.0.113.10", "browser-b", "Bob")
-	if a != "Alice" || b != "Bob" {
-		t.Fatalf("shared IP merged distinct browsers: %q %q", a, b)
+	if a != "Alice" || b != "Alice" {
+		t.Fatalf("same IP did not resolve to one account: %q %q", a, b)
+	}
+}
+
+func TestWeaponSkinUnlocks(t *testing.T) {
+	s, err := NewStore(t.TempDir() + "/stats.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	name := s.GetOrCreatePlayer("203.0.113.11", "ignored", "Alice")
+	for range GoldKillRequirement {
+		s.AccumulateWeaponKill(name, 3)
+	}
+	s.Flush()
+	if got := s.UnlockedWeaponSkin(name, 3, 1); got != 1 {
+		t.Fatalf("gold skin = %d", got)
+	}
+	if got := s.UnlockedWeaponSkin(name, 3, 2); got != 0 {
+		t.Fatalf("diamond unlocked early = %d", got)
+	}
+	progress, err := s.WeaponProgress(name)
+	if err != nil || len(progress) != 1 || progress[0].Kills != GoldKillRequirement || !progress[0].Gold || progress[0].Diamond {
+		t.Fatalf("weapon progress = %#v, %v", progress, err)
 	}
 }
 
