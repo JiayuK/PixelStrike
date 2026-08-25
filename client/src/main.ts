@@ -1525,7 +1525,7 @@ function fire(mode: number, t: number) {
   const pellets = Math.max(1, WEAPONS[weapons.weaponId]?.pellets ?? 1);
   const shotSample = (++shotSeq) & 0xff;
   const dir = shotDirection(localShotDir, local.yaw, local.pitch, spread, pellets > 1 ? shotSample * 17 : shotSample, weapons.weaponId, net.yourId);
-  weapons.onFired(t, origin);
+  weapons.onFired(t);
   if (!practice) net.sendFire(shotSeq, net.lastServerTick, mode | (aiming ? 0x80 : 0), local.yaw, local.pitch);
   mag = weapons.ammoLocal;
   if (isSniper(weapons.weaponId)) {

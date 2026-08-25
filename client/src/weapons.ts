@@ -76,6 +76,7 @@ export class Weapons {
   private handsGroup = new THREE.Group();
   private muzzleFlash = new THREE.Group();
   private muzzleLight = new THREE.PointLight(0xffdf88, 0, 8);
+  private ejectionPort = new THREE.Object3D();
   private muzzleUntil = 0;
 
   // Animated sub-components for dynamic viewmodel reload
@@ -114,8 +115,8 @@ export class Weapons {
     return merged;
   })();
   private brassMat = new THREE.MeshLambertMaterial({ color: 0xdfb445 });
-  private shellOffset = new THREE.Vector3(0.1, -0.05, -0.2);
   private shellSide = new THREE.Vector3();
+  private shellQuaternion = new THREE.Quaternion();
   private activeTracers: Tracer[] = [];
   private tracerMatrixPool: THREE.Matrix4[] = [];
   private tracerGeo = new THREE.BoxGeometry(1, 1, 1);
@@ -123,7 +124,6 @@ export class Weapons {
   private tracerTarget = new THREE.Vector3();
   private tracerObject = new THREE.Object3D();
   private tracerSide = new THREE.Vector3();
-  private tracerVert = new THREE.Vector3();
   private tracerColor = new THREE.Color();
   private tracerMesh = new THREE.InstancedMesh(this.tracerGeo, this.tracerMat, 96);
 
@@ -142,7 +142,7 @@ export class Weapons {
   swayX = 0;
   swayY = 0;
 
-  constructor(_camera: THREE.Camera, scene: THREE.Scene) {
+  constructor(private camera: THREE.PerspectiveCamera, scene: THREE.Scene) {
     this.vmCamera.rotation.order = 'YXZ';
     this.vmCamera.layers.set(VIEWMODEL_LAYER);
     const fill = new THREE.DirectionalLight(0xfffaea, 1.9);
@@ -186,6 +186,7 @@ export class Weapons {
     this.muzzleFlash.visible = false;
     this.group.add(this.muzzleFlash);
     this.group.add(this.muzzleLight);
+    this.group.add(this.ejectionPort);
 
     this.handsGroup.add(this.handLGroup);
     this.handsGroup.add(this.handRGroup);
@@ -234,6 +235,7 @@ export class Weapons {
     this.boltMesh = assembled.bolt;
     this.muzzleLight.position.copy(assembled.muzzle);
     this.muzzleFlash.position.copy(assembled.muzzle);
+    this.ejectionPort.position.set(isPistol(id) ? 0.065 : 0.09, isPistol(id) ? 0.055 : 0.075, -0.08);
     if (this.magazineMesh) mergeMeshesByMaterial(this.magazineMesh);
     if (this.boltMesh) mergeMeshesByMaterial(this.boltMesh);
     mergeMeshesByMaterial(assembled.root, [this.magazineMesh, this.boltMesh]);
@@ -314,7 +316,7 @@ export class Weapons {
     this.curBobY = 0;
   }
 
-  onFired(t: number, origin: THREE.Vector3) {
+  onFired(t: number) {
     const def = WEAPONS[this.weaponId] ?? WEAPONS[0];
     const interval = 60000 / def.rpm;
     this.nextFireAt = this.nextFireAt > 0 && t - this.nextFireAt < interval ? this.nextFireAt + interval : t + interval;
@@ -333,18 +335,27 @@ export class Weapons {
     this.muzzleFlash.scale.setScalar(flashScale * (0.9 + Math.random() * 0.25));
     this.muzzleLight.intensity = (isSniper(this.weaponId) || this.weaponId === 12 ? 4.2 : 2.8) * flashScale;
     this.muzzleUntil = t + (this.weaponId === 2 || this.weaponId === 7 ? 30 : 42);
-    this.ejectShell(origin);
+    this.ejectShell();
   }
 
-  private ejectShell(origin: THREE.Vector3) {
+  private viewmodelPointToWorld(marker: THREE.Object3D, out: THREE.Vector3, distance: number) {
+    this.camera.updateMatrixWorld();
+    this.vmCamera.updateMatrixWorld(true);
+    marker.getWorldPosition(out).project(this.vmCamera);
+    out.z = 0;
+    return out.unproject(this.camera).sub(this.camera.position).normalize().multiplyScalar(distance).add(this.camera.position);
+  }
+
+  private ejectShell() {
     if (this.shells.length >= 24) return;
     const mesh = this.shellPool.pop() ?? new THREE.Mesh(this.shellGeo, this.brassMat);
-    mesh.position.copy(origin).add(this.shellOffset);
-    mesh.rotation.set(0, 0, 0);
+    this.viewmodelPointToWorld(this.ejectionPort, mesh.position, 0.42);
+    this.ejectionPort.getWorldQuaternion(this.shellQuaternion);
+    mesh.quaternion.copy(this.shellQuaternion);
     mesh.scale.setScalar(1);
     this.shellsGroup.add(mesh);
 
-    const side = this.shellSide.set(1, 0.8, -0.2).normalize().applyQuaternion(this.group.quaternion);
+    const side = this.shellSide.set(1, 0.75, 0.15).normalize().applyQuaternion(this.shellQuaternion);
     const speed = 2.0 + Math.random() * 1.5;
 
     this.shells.push({
@@ -571,16 +582,19 @@ export class Weapons {
 
   spawnTracer(origin: THREE.Vector3, dir: THREE.Vector3, dist: number, local = true) {
     if (this.activeTracers.length >= 96) return;
-    const start = local ? 1.15 : 0.35;
-    if (dist - start <= 0.1) return;
-    this.tracerObject.position.copy(origin);
+    let tracerDir = dir;
     if (local) {
-      this.tracerSide.set(-dir.z, 0, dir.x);
-      if (this.tracerSide.lengthSq() < 0.0001) this.tracerSide.set(0, 0, 1);
-      this.tracerSide.normalize();
-      this.tracerVert.crossVectors(dir, this.tracerSide).normalize();
-      this.tracerObject.position.addScaledVector(this.tracerSide, 0.15).addScaledVector(this.tracerVert, 0.09);
+      this.tracerTarget.copy(origin).addScaledVector(dir, dist);
+      this.viewmodelPointToWorld(this.muzzleFlash, this.tracerObject.position, 0.45);
+      tracerDir = this.tracerSide.subVectors(this.tracerTarget, this.tracerObject.position);
+      dist = tracerDir.length();
+      if (dist <= 0.1) return;
+      tracerDir.multiplyScalar(1 / dist);
+    } else {
+      this.tracerObject.position.copy(origin);
     }
+    const start = local ? 0.02 : 0.35;
+    if (dist - start <= 0.1) return;
     const matrix = this.tracerMatrixPool.pop() ?? new THREE.Matrix4();
     this.activeTracers.push({
       matrix,
@@ -589,9 +603,9 @@ export class Weapons {
       ox: this.tracerObject.position.x,
       oy: this.tracerObject.position.y,
       oz: this.tracerObject.position.z,
-      dx: dir.x,
-      dy: dir.y,
-      dz: dir.z,
+      dx: tracerDir.x,
+      dy: tracerDir.y,
+      dz: tracerDir.z,
       start,
       end: dist,
     });
