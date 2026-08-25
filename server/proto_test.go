@@ -38,6 +38,18 @@ func TestSnapshotCarriesSkin(t *testing.T) {
 	}
 }
 
+func TestUnchangedSnapshotIsSkipped(t *testing.T) {
+	p := &Player{PlayerState: PlayerState{Id: 1, Alive: true}}
+	players := []*Player{p}
+	states := []quantState{quantizeState(&p.PlayerState, 0)}
+	if first := p.BuildSnapshot(0, players, states); first == nil {
+		t.Fatal("initial snapshot was skipped")
+	}
+	if unchanged := p.BuildSnapshot(1, players, states); unchanged != nil {
+		t.Fatalf("unchanged snapshot = %v, want nil", unchanged)
+	}
+}
+
 func TestMaintenanceNotice(t *testing.T) {
 	b := Maintenance(2)
 	if len(b) != 2 || b[0] != OpMaintenance || b[1] != 2 {

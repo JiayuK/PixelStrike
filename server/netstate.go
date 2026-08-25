@@ -120,6 +120,10 @@ func (p *Player) BuildSnapshot(tick uint32, players []*Player, states []quantSta
 		count++
 	}
 	w.b[countAt] = byte(count)
+	if count == 0 {
+		p.releaseSnapshot(w.b)
+		return nil
+	}
 	return w.Bytes()
 }
 

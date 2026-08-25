@@ -18,6 +18,14 @@ interface Tracer {
   matrix: THREE.Matrix4;
   color: number;
   born: number;
+  ox: number;
+  oy: number;
+  oz: number;
+  dx: number;
+  dy: number;
+  dz: number;
+  start: number;
+  end: number;
 }
 
 interface SoundCue {
@@ -110,8 +118,8 @@ export class Weapons {
   private shellSide = new THREE.Vector3();
   private activeTracers: Tracer[] = [];
   private tracerMatrixPool: THREE.Matrix4[] = [];
-  private tracerGeo = new THREE.BoxGeometry(0.1, 0.1, 1);
-  private tracerMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.95, depthWrite: false, blending: THREE.AdditiveBlending });
+  private tracerGeo = new THREE.BoxGeometry(1, 1, 1);
+  private tracerMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.82, depthWrite: false, blending: THREE.AdditiveBlending });
   private tracerTarget = new THREE.Vector3();
   private tracerObject = new THREE.Object3D();
   private tracerSide = new THREE.Vector3();
@@ -537,10 +545,20 @@ export class Weapons {
 
     let aliveTracers = 0;
     for (const tracer of this.activeTracers) {
-      if (now - tracer.born > 180) {
+      const ageMs = now - tracer.born;
+      const reachedAt = (tracer.end - tracer.start) / 900 * 1000;
+      if (ageMs > reachedAt + 45) {
         this.tracerMatrixPool.push(tracer.matrix);
         continue;
       }
+      const head = Math.min(tracer.end, tracer.start + ageMs * 0.9);
+      const tail = Math.max(tracer.start, head - 0.55);
+      const middle = (head + tail) * 0.5;
+      this.tracerObject.position.set(tracer.ox + tracer.dx * middle, tracer.oy + tracer.dy * middle, tracer.oz + tracer.dz * middle);
+      this.tracerObject.scale.set(0.035, 0.035, head - tail);
+      this.tracerObject.lookAt(this.tracerTarget.set(tracer.ox + tracer.dx * head, tracer.oy + tracer.dy * head, tracer.oz + tracer.dz * head));
+      this.tracerObject.updateMatrix();
+      tracer.matrix.copy(this.tracerObject.matrix);
       this.tracerMesh.setMatrixAt(aliveTracers, tracer.matrix);
       this.tracerMesh.setColorAt(aliveTracers, this.tracerColor.setHex(tracer.color));
       this.activeTracers[aliveTracers++] = tracer;
@@ -554,9 +572,8 @@ export class Weapons {
   spawnTracer(origin: THREE.Vector3, dir: THREE.Vector3, dist: number, local = true) {
     if (this.activeTracers.length >= 96) return;
     const start = local ? 1.15 : 0.35;
-    const length = dist - start;
-    if (length <= 0.1) return;
-    this.tracerObject.position.copy(origin).addScaledVector(dir, start + length / 2);
+    if (dist - start <= 0.1) return;
+    this.tracerObject.position.copy(origin);
     if (local) {
       this.tracerSide.set(-dir.z, 0, dir.x);
       if (this.tracerSide.lengthSq() < 0.0001) this.tracerSide.set(0, 0, 1);
@@ -564,12 +581,20 @@ export class Weapons {
       this.tracerVert.crossVectors(dir, this.tracerSide).normalize();
       this.tracerObject.position.addScaledVector(this.tracerSide, 0.15).addScaledVector(this.tracerVert, 0.09);
     }
-    this.tracerObject.scale.set(1, 1, length);
-    this.tracerObject.lookAt(this.tracerTarget.copy(origin).addScaledVector(dir, dist));
-    this.tracerObject.updateMatrix();
     const matrix = this.tracerMatrixPool.pop() ?? new THREE.Matrix4();
-    matrix.copy(this.tracerObject.matrix);
-    this.activeTracers.push({ matrix, color: local ? 0x53e8ff : 0xff7326, born: performance.now() });
+    this.activeTracers.push({
+      matrix,
+      color: local ? 0xffd36a : 0xff8a35,
+      born: performance.now(),
+      ox: this.tracerObject.position.x,
+      oy: this.tracerObject.position.y,
+      oz: this.tracerObject.position.z,
+      dx: dir.x,
+      dy: dir.y,
+      dz: dir.z,
+      start,
+      end: dist,
+    });
   }
 
   setAspect(aspect: number) {

@@ -61,6 +61,9 @@ let lastStep = 0;
 let inputSeq = 0;
 let shotSeq = 0;
 let lastInput = 0;
+let lastSentInputKeys = -1;
+let lastSentInputYaw = NaN;
+let lastSentInputPitch = NaN;
 let lastWheelSwitch = 0;
 const INPUT_INTERVAL = 1000 / 60;
 const SPEED_BOOST_MULTIPLIER = 1.35;
@@ -721,6 +724,7 @@ hud.onExit = () => {
   hud.exitMatch();
   for (const id of [...remotes.ids()]) remotes.remove(id);
   removeDummies();
+  particles.clearBulletHoles();
   states.clear();
   roster.clear();
   names.clear();
@@ -740,6 +744,7 @@ net.onWelcome = (id, _revision) => {
   for (const pickupId of pickupStates.keys()) world?.removePickup(pickupId);
   pickupStates.clear();
   joined = true;
+  lastSentInputKeys = -1;
   hud.hideDisconnect();
   if (!world) {
     const map = bundledMap as MapData;
@@ -1063,8 +1068,13 @@ remotes.onShot = (s, position, burstShots) => {
   const shotgun = isShotgun(s.weapon);
   const shotSample = shotgun ? s.shot : ((WEAPONS[s.weapon]?.pellets ?? 1) > 1 ? s.shot * 17 : s.shot);
   const d = shotDirection(remoteShotDir, s.yaw, s.pitch, remoteSpread(s, burstShots), shotSample, s.weapon, s.id, shotgun ? 0 : undefined);
-  const dist = world.raycastDistance(o, d, 180);
+  const dist = world.raycastDistance(o, d, 180, impactNormal);
   weapons.spawnTracer(o, d, dist, false);
+  if (dist < 180) {
+    impactPoint.copy(o).addScaledVector(d, dist);
+    particles.spawnImpact(impactPoint, impactNormal, 0xd6b36e, 3);
+    particles.spawnBulletHole(impactPoint, impactNormal);
+  }
   playSpatial(fireSound(s.weapon), position.x, position.z, 0.65, 120, 0.97 + Math.random() * 0.06);
 };
 
@@ -1135,9 +1145,15 @@ function frame(t: number) {
       aiming = true;
       aimStartedAt = t;
     }
-    if (t - lastInput >= INPUT_INTERVAL) {
+    const inputKeys = local.keys | (aiming ? KEY.Aim : 0);
+    if (t - lastInput >= INPUT_INTERVAL && (inputKeys !== lastSentInputKeys || local.yaw !== lastSentInputYaw || local.pitch !== lastSentInputPitch)) {
       lastInput = t - ((t - lastInput) % INPUT_INTERVAL);
-      if (!practice) net.sendInput(inputSeq++, local.keys | (aiming ? KEY.Aim : 0), local.yaw, local.pitch);
+      if (!practice) {
+        lastSentInputKeys = inputKeys;
+        lastSentInputYaw = local.yaw;
+        lastSentInputPitch = local.pitch;
+        net.sendInput(inputSeq++, inputKeys, local.yaw, local.pitch);
+      }
     }
 
     const shouldFire = activeSlot !== 4 && ((WEAPONS[weapons.weaponId]?.automatic ?? false) ? fireHeld : firePressed);
@@ -1183,6 +1199,17 @@ function frame(t: number) {
       camera.fov = nextFov;
       camera.updateProjectionMatrix();
       crosshairScale = window.innerHeight * 0.5 / Math.tan(camera.fov * Math.PI / 360);
+    }
+
+    if (reloadPendingSlot === activeSlot && !weapons.isReloading(t)) {
+      const loaded = Math.min(WEAPONS[weapons.weaponId].mag - reloadPendingMag, reloadPendingReserve);
+      mag = reloadPendingMag + loaded;
+      reserve = reloadPendingReserve - loaded;
+      slotMags[activeSlot] = mag;
+      slotReserves[activeSlot] = reserve;
+      weapons.ammoLocal = mag;
+      reloadPendingSlot = 0;
+      refreshWeaponHud();
     }
 
     weapons.animate(t, dt, moving && local.onGround, aiming, mouseX, mouseY, activeSlot !== 4, hud.bobScale);
@@ -1246,7 +1273,7 @@ function fire(mode: number, t: number) {
       const pelletDir = i === 0 && !isShotgun(weapons.weaponId)
         ? dir
         : shotDirection(localPelletDir, local.yaw, local.pitch, spread, isShotgun(weapons.weaponId) ? shotSample : shotSample * 17 + i, weapons.weaponId, net.yourId, isShotgun(weapons.weaponId) ? i : undefined);
-      let dist = world?.raycastDistance(origin, pelletDir, 180) ?? 180;
+      let dist = world?.raycastDistance(origin, pelletDir, 180, impactNormal) ?? 180;
       const dummy = raycastDummies(origin, pelletDir, dist);
       let impactColor = 0xd6b36e;
       let impactCount = pellets > 1 ? 3 : 5;
@@ -1262,6 +1289,7 @@ function fire(mode: number, t: number) {
       weapons.spawnTracer(origin, pelletDir, dist, true);
       if (dist < 180) {
         particles.spawnImpact(impactPoint.copy(origin).addScaledVector(pelletDir, dist), impactNormal, impactColor, impactCount);
+        if (!dummy) particles.spawnBulletHole(impactPoint, impactNormal);
       }
     }
     applyRecoil(weapons.weaponId, patternShots, aiming);

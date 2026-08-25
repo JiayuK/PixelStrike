@@ -158,7 +158,7 @@ export class Hud {
     };
     this.refreshWeaponProgress = loadWeaponProgress;
     loadWeaponProgress();
-    // Restore loadout only; every deployment requires an explicit name.
+    // Restore the last deployment choices.
     const savedPrimary = localStorage.getItem('pixel_strike_primary');
     if (savedPrimary && primary) {
       primary.value = savedPrimary;
@@ -171,6 +171,8 @@ export class Hud {
     } else if (secondary) {
       secondary.value = '-1';
     }
+    primaryWeaponSkin.value = localStorage.getItem('pixel_strike_primary_skin') ?? '3';
+    secondaryWeaponSkin.value = localStorage.getItem('pixel_strike_secondary_skin') ?? '3';
 
     const updateWeaponSpecs = (id: number) => {
       const tag = el('weapon-spec-tag');
@@ -220,6 +222,8 @@ export class Hud {
         this.characterPreview?.setWeapon(+secondary.value);
       }
     });
+    primaryWeaponSkin.addEventListener('change', () => localStorage.setItem('pixel_strike_primary_skin', primaryWeaponSkin.value));
+    secondaryWeaponSkin.addEventListener('change', () => localStorage.setItem('pixel_strike_secondary_skin', secondaryWeaponSkin.value));
 
     const previewCanvas = el('character-preview-canvas') as HTMLCanvasElement;
     if (previewCanvas) {
@@ -243,13 +247,14 @@ export class Hud {
     let deploying = false;
     const startDeploy = () => {
       if (deploying) return;
-      const enteredName = window.prompt('请输入玩家名字（最多 16 个字符）');
+      const enteredName = window.prompt('请输入玩家名字（最多 16 个字符）', localStorage.getItem('pixel_strike_name') ?? '');
       if (enteredName === null) return;
       const n = [...enteredName.trim()].slice(0, 16).join('');
       if (!n) {
         window.alert('玩家名字不能为空');
         return;
       }
+      localStorage.setItem('pixel_strike_name', n);
       this.loadoutPrimary = +primary.value;
       this.loadoutSecondary = +secondary.value;
 
