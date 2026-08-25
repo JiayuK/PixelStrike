@@ -42,9 +42,9 @@ type BotAI struct {
 	// Target caches the last LOS-verified enemy between (staggered) scans.
 	Target *PlayerState
 	// TargetDist is the horizontal distance to Target at scan time.
-	TargetDist float64
-	NextNadeAt time.Time
-	ShotSeq    uint16
+	TargetDist   float64
+	NextNadeAt   time.Time
+	ShotSeq      uint16
 	RevengeID    uint16
 	RevengeUntil time.Time
 	HearPos      Vec3
@@ -199,7 +199,7 @@ func (r *Room) StepBots(now time.Time) {
 		if ai.Target == nil || (r.tick+uint32(p.Id))%12 == 0 {
 			previousTarget := ai.Target
 			ai.Target = nil
-			bestDistSq := 36.0 * 36.0
+			bestDistSq := 24.0 * 24.0
 			eyePos := Vec3{p.Pos.X, p.Pos.Y + EyeHeight, p.Pos.Z}
 			huntingRevenge := ai.RevengeID != 0 && now.Before(ai.RevengeUntil)
 			for i := range r.Players {
@@ -220,7 +220,13 @@ func (r *Room) StepBots(now time.Time) {
 				if distSq > maxSq {
 					continue
 				}
-				targetEye := Vec3{other.Pos.X, other.Pos.Y + EyeHeight*0.8, other.Pos.Z}
+				targetEye := Vec3{other.Pos.X, other.Pos.Y + EyeHeight*0.82, other.Pos.Z}
+				if dx*dx+dz*dz > 0.0001 {
+					forward := (-math.Sin(p.Yaw)*dx - math.Cos(p.Yaw)*dz) / math.Sqrt(dx*dx+dz*dz)
+					if forward < math.Cos(100.0*math.Pi/360.0) {
+						continue
+					}
+				}
 				dir := Vec3{targetEye.X - eyePos.X, targetEye.Y - eyePos.Y, targetEye.Z - eyePos.Z}
 				dLen := math.Sqrt(dir.X*dir.X + dir.Y*dir.Y + dir.Z*dir.Z)
 				if dLen <= 0.001 {
@@ -289,7 +295,7 @@ func (r *Room) StepBots(now time.Time) {
 			// Face enemy with smooth human-like aiming
 			dx := targetEnemy.Pos.X - p.Pos.X
 			dz := targetEnemy.Pos.Z - p.Pos.Z
-			dy := (targetEnemy.Pos.Y + 0.9) - (p.Pos.Y + EyeHeight)
+			dy := (targetEnemy.Pos.Y + 1.0) - (p.Pos.Y + EyeHeight)
 			targetYaw := math.Atan2(-dx, -dz)
 			targetPitch := math.Atan2(dy, math.Hypot(dx, dz))
 
@@ -348,15 +354,16 @@ func (r *Room) StepBots(now time.Time) {
 			if p.Grenades > 0 && now.After(ai.NextNadeAt) && bestDist > 5 && bestDist < 20 {
 				gdx := targetEnemy.Pos.X - p.Pos.X
 				gdz := targetEnemy.Pos.Z - p.Pos.Z
-				gdy := (targetEnemy.Pos.Y + 0.9) - (p.Pos.Y + EyeHeight)
+				gdy := (targetEnemy.Pos.Y + 1.0) - (p.Pos.Y + EyeHeight)
 				gYaw := math.Atan2(-gdx, -gdz)
 				gPitch := math.Atan2(gdy, math.Hypot(gdx, gdz)) + 0.24 // arc compensation
 				r.ThrowGrenade(p, gYaw, gPitch, now)
 				ai.NextNadeAt = now.Add(time.Duration(9+rand.IntN(8)) * time.Second)
 			}
 
+			// Fire weapon
 			if !p.Reloading && mag > 0 && now.After(ai.FireCooldown) && math.Abs(yawDiff) < 0.20-0.03*float64(skill) {
-				jitter := 0.09 - 0.025*float64(skill)
+				jitter := 0.14 - 0.025*float64(skill)
 				aimYaw := p.Yaw + (rand.Float64()-0.5)*jitter
 				aimPitch := p.Pitch + (rand.Float64()-0.5)*jitter*0.7
 				mode := uint8(0)
@@ -366,8 +373,7 @@ func (r *Room) StepBots(now time.Time) {
 				ai.ShotSeq++
 				if r.TryFire(p, aimYaw, aimPitch, mode, r.tick, ai.ShotSeq, now) {
 					w := Weapons[p.Weapon]
-					pace := 1.38 - 0.10*float64(skill)
-					ai.FireCooldown = now.Add(time.Duration(60000.0/w.Rpm*pace+float64(30+rand.IntN(80))) * time.Millisecond)
+					ai.FireCooldown = now.Add(time.Duration(60000.0/w.Rpm*2.6+float64(120+rand.IntN(161))) * time.Millisecond)
 				}
 			}
 		} else {
