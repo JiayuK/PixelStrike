@@ -1,0 +1,26 @@
+server/sim.go
+  265435a81f68c792 80,375-391,445,448-452,463-464,467-521,524-525,528-530,533,561-567,624,630
+server/proto_test.go
+  265435a81f68c792 253-296
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.6-codex",
+  "base_commit_sha": "0e918f4b1a0461452cd9eb3f392f6a2b1bc932f1",
+  "prompts": {
+    "265435a81f68c792": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "5ad7c6ae-2456-4354-93bd-5170864c38c7",
+        "model": "auto-smart"
+      },
+      "human_author": "JiayuK",
+      "messages": [],
+      "total_additions": 149,
+      "total_deletions": 56,
+      "accepted_lines": 141,
+      "overriden_lines": 0,
+      "messages_url": "https://codeaiapi.xinfei-inc.cn/cas/b0321965fce08bfc2c1cd37335ed40b44216bbfa17e42fbf17ccbb5027cb9a4b"
+    }
+  }
+}
