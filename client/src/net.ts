@@ -124,6 +124,7 @@ export class Net {
           e.name = new TextDecoder().decode(new Uint8Array(v.buffer, v.byteOffset + o + 3, len));
           o += 3 + len; break;
         }
+      }
       rows.push(e);
     }
     this.onEvents?.(rows);
