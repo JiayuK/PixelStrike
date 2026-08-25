@@ -1,0 +1,24 @@
+client/src/net.ts
+  265435a81f68c792 127
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.6-codex",
+  "base_commit_sha": "a35d6ac873979e011226ddaaae32a25dfa33ce5d",
+  "prompts": {
+    "265435a81f68c792": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "5ad7c6ae-2456-4354-93bd-5170864c38c7",
+        "model": "auto-smart"
+      },
+      "human_author": "JiayuK",
+      "messages": [],
+      "total_additions": 1,
+      "total_deletions": 0,
+      "accepted_lines": 1,
+      "overriden_lines": 0,
+      "messages_url": "https://codeaiapi.xinfei-inc.cn/cas/352192dddd66ec2984df839718366ec2f5be13aef4bcb420f8fe9f6583bf429f"
+    }
+  }
+}
