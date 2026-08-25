@@ -1,0 +1,26 @@
+client/src/main.ts
+  265435a81f68c792 693
+client/src/constants.ts
+  265435a81f68c792 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.6-codex",
+  "base_commit_sha": "a724f13fc89ad67462f3f582ee5f6e9c48b624db",
+  "prompts": {
+    "265435a81f68c792": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "5ad7c6ae-2456-4354-93bd-5170864c38c7",
+        "model": "auto-smart"
+      },
+      "human_author": "JiayuK",
+      "messages": [],
+      "total_additions": 2,
+      "total_deletions": 2,
+      "accepted_lines": 2,
+      "overriden_lines": 0,
+      "messages_url": "https://codeaiapi.xinfei-inc.cn/cas/35475206c9b07322d983cccc22c6e28fbd4240e10b56dc76c6d7dcd2d9999af2"
+    }
+  }
+}
