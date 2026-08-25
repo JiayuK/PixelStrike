@@ -43,9 +43,9 @@ var Weapons = []WeaponDef{
 	{12, "XM1014", 17, 1.2, 200, 1.85, 2.4, .10, .96, .70, 7, 32, 2100, true, 8},
 }
 
-func isGun(id uint8) bool      { return int(id) < len(Weapons) && id != 6 }
-func isSniper(id uint8) bool   { return id == 5 || id == 11 }
-func isShotgun(id uint8) bool  { return id == 12 }
+func isGun(id uint8) bool     { return int(id) < len(Weapons) && id != 6 }
+func isSniper(id uint8) bool  { return id == 5 || id == 11 }
+func isShotgun(id uint8) bool { return id == 12 }
 func isPrimary(id uint8) bool {
 	switch id {
 	case 2, 3, 4, 5, 8, 9, 10, 11, 12:
@@ -58,26 +58,26 @@ func isSecondary(id uint8) bool { return id == 0 || id == 1 || id == 7 }
 const WeaponHE uint8 = 13
 
 const (
-	TickRate        = 60
-	TickDT          = 1.0 / TickRate
-	WalkSpeed       = 6.4
-	GroundAccel     = 44.0
-	StopAccel       = 60.0
-	AirAccel        = 9.5
-	CrouchSpeed     = .6
-	Gravity         = -22.0
-	JumpVel         = 8.4
-	MaxRewindTicks  = 8
-	MaxHP           = 100
-	SpawnProtectS   = 2 * time.Second
-	AWPScopeTime    = 320 * time.Millisecond
-	RespawnDelayS   = 3 * time.Second
-	EyeHeight       = 1.7
-	CrouchEyeH      = 1.12
-	StandingHeight  = 2.1
-	CrouchingHeight = 1.3
-	FlightSpeed     = WalkSpeed
-	MaxFlightHeight = StandingHeight * 25
+	TickRate                    = 60
+	TickDT                      = 1.0 / TickRate
+	WalkSpeed                   = 6.4
+	GroundAccel                 = 44.0
+	StopAccel                   = 60.0
+	AirAccel                    = 9.5
+	CrouchSpeed                 = .6
+	Gravity                     = -22.0
+	JumpVel                     = 8.4
+	MaxRewindTicks              = 8
+	MaxHP                       = 100
+	SpawnProtectS               = 2 * time.Second
+	AWPScopeTime                = 320 * time.Millisecond
+	RespawnDelayS               = 3 * time.Second
+	EyeHeight                   = 1.7
+	CrouchEyeH                  = 1.12
+	StandingHeight              = 2.1
+	CrouchingHeight             = 1.3
+	FlightSpeed                 = WalkSpeed
+	MaxFlightHeight             = StandingHeight * 25
 	RevengeDeathThreshold uint8 = 10
 )
 
@@ -886,14 +886,14 @@ const (
 )
 
 const (
-	speedBoostDuration     = 8 * time.Second
-	speedBoostMultiplier   = 1.35
-	streakDmgCap           = 1.35
-	streakSpeedCap         = 1.45
-	streakHealCap          = 55
-	streakDurationCap      = 10 * time.Second
-	streakScaleCap         = 8
-	streakPickCap          = 3
+	speedBoostDuration         = 8 * time.Second
+	speedBoostMultiplier       = 1.35
+	streakDmgCap               = 1.35
+	streakSpeedCap             = 1.45
+	streakHealCap              = 55
+	streakDurationCap          = 10 * time.Second
+	streakScaleCap             = 8
+	streakPickCap              = 3
 	StreakAmmo           uint8 = 1
 	StreakHeal           uint8 = 2
 	StreakSpeed          uint8 = 4
@@ -1133,27 +1133,9 @@ func AimDir(yaw, pitch float64) Vec3 {
 	return Vec3{-math.Sin(yaw) * cp, math.Sin(pitch), -math.Cos(yaw) * cp}
 }
 func weaponSpread(def WeaponDef, vx, vz float64, onGround, crouching, landing, aiming bool, burstShots int) float64 {
-	moveFactor := math.Min(1, math.Hypot(vx, vz)/3)
-	spread := def.SpreadDeg + (def.MoveSpreadDeg-def.SpreadDeg)*moveFactor
-	spread += math.Min(.28, float64(burstShots)*def.BloomDeg*.14)
-	if !onGround {
-		spread = math.Max(spread, def.MoveSpreadDeg*1.55+.45)
-	}
-	if crouching {
-		spread *= .72
-	}
-	if aiming && !isSniper(def.Id) {
-		if isShotgun(def.Id) {
-			spread *= .85
-		} else {
-			spread *= .62
-		}
-	}
-	if landing {
-		spread = math.Max(spread, def.MoveSpreadDeg*1.12)
-	}
+	floor := 0.0
 	if isGun(def.Id) {
-		floor := 0.28
+		floor = 0.28
 		switch {
 		case isShotgun(def.Id):
 			floor = 1.25
@@ -1166,9 +1148,26 @@ func weaponSpread(def WeaponDef, vx, vz float64, onGround, crouching, landing, a
 		case def.Id == 0 || def.Id == 1 || def.Id == 7:
 			floor = 0.22
 		}
-		if floor > 0 && spread < floor {
-			spread = floor
+	}
+	base := math.Max(def.SpreadDeg, floor)
+	moveFactor := math.Min(1, math.Hypot(vx, vz)/3)
+	spread := base + (def.MoveSpreadDeg-base)*moveFactor
+	spread += math.Min(.28, float64(burstShots)*def.BloomDeg*.14)
+	if crouching {
+		spread *= .68
+	}
+	if aiming && !isSniper(def.Id) {
+		if isShotgun(def.Id) {
+			spread *= .85
+		} else {
+			spread *= .62
 		}
+	}
+	if !onGround {
+		spread = math.Max(spread, def.MoveSpreadDeg*1.55+.45)
+	}
+	if landing {
+		spread = math.Max(spread, def.MoveSpreadDeg*1.12)
 	}
 	return spread
 }

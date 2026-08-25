@@ -524,6 +524,21 @@ func TestBestSpawnNeverReturnsUnscoredOrigin(t *testing.T) {
 	}
 }
 
+func TestEveryGunRewardsCrouchingAndPenalizesMovement(t *testing.T) {
+	for _, def := range Weapons {
+		if !isGun(def.Id) {
+			continue
+		}
+		aiming := isSniper(def.Id)
+		crouched := weaponSpread(def, 0, 0, true, true, false, aiming, 0)
+		standing := weaponSpread(def, 0, 0, true, false, false, aiming, 0)
+		moving := weaponSpread(def, 3, 0, true, false, false, aiming, 0)
+		if !(crouched < standing && standing < moving) {
+			t.Fatalf("%s spread crouched=%v standing=%v moving=%v", def.Name, crouched, standing, moving)
+		}
+	}
+}
+
 func TestStreakBuffsRespectCaps(t *testing.T) {
 	p := &PlayerState{Streak: 20}
 	if p.streakDamageMul() > streakDmgCap+1e-9 {

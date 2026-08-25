@@ -307,7 +307,7 @@ func (r *Room) StepBots(now time.Time) {
 				yawDiff += 2 * math.Pi
 			}
 			skill := botSkill(p.Id)
-			turn := 0.18 + 0.05*float64(skill)
+			turn := 0.22 + 0.055*float64(skill)
 			if now.Sub(ai.LastHurtAt) < 700*time.Millisecond {
 				fwdX, fwdZ := -math.Sin(p.Yaw), -math.Cos(p.Yaw)
 				if dx*fwdX+dz*fwdZ < 0 {
@@ -363,7 +363,7 @@ func (r *Room) StepBots(now time.Time) {
 
 			// Fire weapon
 			if !p.Reloading && mag > 0 && now.After(ai.FireCooldown) && math.Abs(yawDiff) < 0.20-0.03*float64(skill) {
-				jitter := 0.14 - 0.025*float64(skill)
+				jitter := 0.11 - 0.022*float64(skill)
 				aimYaw := p.Yaw + (rand.Float64()-0.5)*jitter
 				aimPitch := p.Pitch + (rand.Float64()-0.5)*jitter*0.7
 				mode := uint8(0)
@@ -373,7 +373,7 @@ func (r *Room) StepBots(now time.Time) {
 				ai.ShotSeq++
 				if r.TryFire(p, aimYaw, aimPitch, mode, r.tick, ai.ShotSeq, now) {
 					w := Weapons[p.Weapon]
-					ai.FireCooldown = now.Add(time.Duration(60000.0/w.Rpm*2.6+float64(120+rand.IntN(161))) * time.Millisecond)
+					ai.FireCooldown = now.Add(time.Duration(60000.0/w.Rpm*2.2+float64(100+rand.IntN(121))) * time.Millisecond)
 				}
 			}
 		} else {

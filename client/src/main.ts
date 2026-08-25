@@ -40,6 +40,8 @@ fillLight.position.set(-70, 50, 70);
 scene.add(fillLight);
 const hud = new Hud();
 const audio = new AudioEngine();
+window.addEventListener('pointerdown', () => audio.init(), { once: true, capture: true });
+window.addEventListener('touchstart', () => audio.init(), { once: true, capture: true, passive: true });
 const net = new Net();
 const local = new LocalPlayer();
 const remotes = new RemotePlayers(scene);
@@ -1424,7 +1426,7 @@ function frame(t: number) {
     }
 
     const shouldFire = activeSlot !== 4 && ((WEAPONS[weapons.weaponId]?.automatic ?? false) ? fireHeld : firePressed);
-    if (shouldFire && document.pointerLockElement === renderer.domElement) {
+    if (shouldFire && (document.pointerLockElement === renderer.domElement || document.body.classList.contains('touch-device'))) {
       if (reloadPendingSlot !== activeSlot && weapons.canFire(t)) {
         fire(0, t);
       } else if (firePressed && reloadPendingSlot !== activeSlot && weapons.ammoLocal === 0 && !weapons.isReloading(t) && t >= weapons.nextFireAt && weapons.weaponId !== 6) {
@@ -1593,20 +1595,21 @@ function deathCam() {
 }
 
 function weaponSpread(def: WeaponDef, vx: number, vz: number, onGround: boolean, crouching: boolean, landing: boolean, ads: boolean, burstShots: number): number {
-  const moveFactor = Math.min(1, Math.hypot(vx, vz) / 3);
-  let spread = def.spread + (def.moveSpread - def.spread) * moveFactor;
-  spread += Math.min(0.28, burstShots * def.bloom * 0.14);
-  if (!onGround) spread = Math.max(spread, def.moveSpread * 1.55 + 0.45);
-  if (crouching) spread *= 0.72;
-  if (ads && !isSniper(def.id)) spread *= isShotgun(def.id) ? 0.85 : 0.62;
-  if (landing) spread = Math.max(spread, def.moveSpread * 1.12);
+  let floor = 0;
   if (isGun(def.id)) {
-    let floor = 0.28;
+    floor = 0.28;
     if (isShotgun(def.id)) floor = 1.25;
     else if (isSniper(def.id)) floor = ads ? 0.07 : 0;
     else if (isPistol(def.id)) floor = 0.22;
-    if (floor > 0 && spread < floor) spread = floor;
   }
+  const base = Math.max(def.spread, floor);
+  const moveFactor = Math.min(1, Math.hypot(vx, vz) / 3);
+  let spread = base + (def.moveSpread - base) * moveFactor;
+  spread += Math.min(0.28, burstShots * def.bloom * 0.14);
+  if (crouching) spread *= 0.68;
+  if (ads && !isSniper(def.id)) spread *= isShotgun(def.id) ? 0.85 : 0.62;
+  if (!onGround) spread = Math.max(spread, def.moveSpread * 1.55 + 0.45);
+  if (landing) spread = Math.max(spread, def.moveSpread * 1.12);
   return spread;
 }
 
