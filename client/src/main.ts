@@ -690,6 +690,10 @@ net.onEvents = (events) => {
 };
 
 function handleEvent(e: GameEvent) {
+  if (e.type === 14) {
+    hud.showRevengeAnnouncement(e.name ?? nameOf(e.player));
+    return;
+  }
   if (e.type === 0) {
     // EvKill
     const killer = nameOf(e.killer);

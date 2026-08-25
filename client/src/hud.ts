@@ -117,6 +117,7 @@ export class Hud {
   private hurtTimer = 0;
   private toastTimer = 0;
   private flightTimer = 0;
+  private revengeTimer = 0;
   private reconnectTimer = 0;
   private refreshWeaponProgress: (() => void) | null = null;
 
@@ -682,11 +683,25 @@ export class Hud {
   showFlightAnnouncement(name: string) {
     const banner = el('flight-announcement');
     banner.textContent = `${name || '特战队员'} 能飞`;
+    banner.classList.remove('revenge');
     banner.classList.remove('show');
     void banner.offsetWidth;
     banner.classList.add('show');
     clearTimeout(this.flightTimer);
     this.flightTimer = window.setTimeout(() => banner.classList.remove('show'), 2600);
+  }
+
+  showRevengeAnnouncement(name: string) {
+    const banner = el('flight-announcement');
+    banner.textContent = `（${name || '玩家'}）来复仇了！`;
+    banner.classList.add('revenge');
+    banner.classList.remove('show');
+    void banner.offsetWidth;
+    banner.classList.add('show');
+    clearTimeout(this.revengeTimer);
+    this.revengeTimer = window.setTimeout(() => {
+      banner.classList.remove('show', 'revenge');
+    }, 4000);
   }
 
 

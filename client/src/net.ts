@@ -118,6 +118,12 @@ export class Net {
         case 13:
           e.player = v.getUint16(o, true); e.kind = v.getUint8(o + 2);
           e.streak = v.getUint8(o + 3); e.ms = v.getUint16(o + 4, true); o += 6; break;
+        case 14: {
+          e.player = v.getUint16(o, true);
+          const len = v.getUint8(o + 2);
+          e.name = new TextDecoder().decode(new Uint8Array(v.buffer, v.byteOffset + o + 3, len));
+          o += 3 + len; break;
+        }
       }
       rows.push(e);
     }

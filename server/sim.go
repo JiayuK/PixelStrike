@@ -78,6 +78,7 @@ const (
 	CrouchingHeight = 1.3
 	FlightSpeed     = WalkSpeed
 	MaxFlightHeight = StandingHeight * 25
+	RevengeDeathThreshold uint8 = 10
 )
 
 type PlayerState struct {
@@ -98,6 +99,9 @@ type PlayerState struct {
 	Streak                                                         uint8
 	Grenades                                                       int
 	Kills, Deaths                                                  uint16
+	NoKillDeaths                                                   uint8
+	RevengeReady, RevengeActive                                    bool
+	RevengeShots                                                   uint8
 	LastInputSeq, LastShotSeq                                      uint16
 	HasShot                                                        bool
 	LastShotAt                                                     time.Time
@@ -338,7 +342,9 @@ func (r *Room) TryFire(p *PlayerState, yaw, pitch float64, mode uint8, seenTick 
 	p.LastShotAt = now
 	p.ShotCounter++
 	if p.ProtectedAt(now) {
-		p.InvincibleUntil = time.Time{}
+		if !p.RevengeActive {
+			p.InvincibleUntil = time.Time{}
+		}
 	}
 
 	origin := Vec3{p.Pos.X, p.Pos.Y + EyeHeight, p.Pos.Z}
@@ -368,6 +374,23 @@ func (r *Room) TryFire(p *PlayerState, yaw, pitch float64, mode uint8, seenTick 
 	if r.tick-seenTick > MaxRewindTicks {
 		seenTick = r.tick - MaxRewindTicks
 	}
+	// Revenge is a fixed 10-bullet budget: every gunshot counts, with or without a
+	// lock. Invincibility can expire independently without ending the budget.
+	if p.RevengeActive && p.RevengeShots > 0 && isGun(uint8(weapon)) {
+		if target := r.revengeTarget(p, yaw, pitch, origin, seenTick, now); target != nil {
+			r.Damage(p, target, def.Dmg*def.HeadMult, true, uint8(weapon), now)
+			p.RevengeShots--
+			if p.RevengeShots == 0 {
+				p.RevengeActive = false
+			}
+			return true
+		}
+		p.RevengeShots--
+		if p.RevengeShots == 0 {
+			p.RevengeActive = false
+		}
+	}
+
 	pellets := 1
 	if isGun(uint8(weapon)) && def.Pellets > 1 {
 		pellets = def.Pellets
@@ -433,6 +456,97 @@ func (r *Room) TryFire(p *PlayerState, yaw, pitch float64, mode uint8, seenTick 
 	return true
 }
 
+func (r *Room) revengeTarget(attacker *PlayerState, yaw, pitch float64, origin Vec3, seenTick uint32, now time.Time) *PlayerState {
+	var best *PlayerState
+	bestScore := math.MaxFloat64
+	forward, right, up := viewAxes(yaw, pitch)
+	// Cover a full on-screen rectangle (75° vertical, 21:9 horizontal) so any
+	// enemy in view locks, not only someone near the crosshair.
+	tanV := math.Tan(37.5 * math.Pi / 180)
+	tanH := tanV * 21 / 9
+	for _, other := range r.Players {
+		target := &other.PlayerState
+		if target == attacker || !target.Alive || target.ProtectedAt(now) {
+			continue
+		}
+		pose := r.poseAt(target.Id, seenTick, target.Pos, target.Crouch)
+		height := StandingHeight
+		if pose.Crouch {
+			height = CrouchingHeight
+		}
+		visible, centerDot, dist := r.revengeVisible(origin, forward, right, up, pose.Pos, height, tanH, tanV)
+		if !visible {
+			continue
+		}
+		score := (1-centerDot)*100 + dist*.001
+		if score < bestScore {
+			best, bestScore = target, score
+		}
+	}
+	return best
+}
+
+func viewAxes(yaw, pitch float64) (forward, right, up Vec3) {
+	forward = AimDir(yaw, pitch)
+	right = norm(Vec3{-forward.Z, 0, forward.X})
+	if right.X == 0 && right.Z == 0 {
+		right = Vec3{1, 0, 0}
+	}
+	up = Vec3{
+		right.Y*forward.Z - right.Z*forward.Y,
+		right.Z*forward.X - right.X*forward.Z,
+		right.X*forward.Y - right.Y*forward.X,
+	}
+	return
+}
+
+func inViewFrustum(origin, forward, right, up, point Vec3, tanH, tanV float64) (dot, dist float64, ok bool) {
+	to := Vec3{point.X - origin.X, point.Y - origin.Y, point.Z - origin.Z}
+	dist = math.Sqrt(to.X*to.X + to.Y*to.Y + to.Z*to.Z)
+	if dist <= 0.05 {
+		return 0, dist, false
+	}
+	z := to.X*forward.X + to.Y*forward.Y + to.Z*forward.Z
+	if z <= 0.05 {
+		return 0, dist, false
+	}
+	x := to.X*right.X + to.Y*right.Y + to.Z*right.Z
+	y := to.X*up.X + to.Y*up.Y + to.Z*up.Z
+	if math.Abs(x) > z*tanH || math.Abs(y) > z*tanV {
+		return 0, dist, false
+	}
+	return z / dist, dist, true
+}
+
+func (r *Room) revengeVisible(origin, forward, right, up, pos Vec3, height, tanH, tanV float64) (bool, float64, float64) {
+	points := []Vec3{
+		{pos.X, pos.Y + height - .12, pos.Z},
+		{pos.X, pos.Y + height*.55, pos.Z},
+		{pos.X, pos.Y + .2, pos.Z},
+		{pos.X + PlayerHalf, pos.Y + height*.55, pos.Z},
+		{pos.X - PlayerHalf, pos.Y + height*.55, pos.Z},
+		{pos.X, pos.Y + height*.55, pos.Z + PlayerHalf},
+		{pos.X, pos.Y + height*.55, pos.Z - PlayerHalf},
+	}
+	bestDot, bestDist := -1.0, math.MaxFloat64
+	any := false
+	for _, point := range points {
+		dot, dist, ok := inViewFrustum(origin, forward, right, up, point, tanH, tanV)
+		if !ok {
+			continue
+		}
+		line := norm(Vec3{point.X - origin.X, point.Y - origin.Y, point.Z - origin.Z})
+		if hit, distance := r.World.Raycast(origin, line, dist); hit && distance < dist-.05 {
+			continue
+		}
+		any = true
+		if dot > bestDot {
+			bestDot, bestDist = dot, dist
+		}
+	}
+	return any, bestDot, bestDist
+}
+
 func (r *Room) Damage(attacker, victim *PlayerState, dmg float64, headshot bool, weapon uint8, now time.Time) {
 	if !victim.Alive || victim.ProtectedAt(now) {
 		return
@@ -461,6 +575,16 @@ func (r *Room) Damage(attacker, victim *PlayerState, dmg float64, headshot bool,
 	r.Emit(Event{Type: EvKill, Killer: attacker.Id, Victim: victim.Id, Weapon: weapon, Headshot: hs})
 	attacker.Kills++
 	victim.Deaths++
+	// A kill breaks the attacker's consecutive zero-kill/death streak.
+	attacker.NoKillDeaths = 0
+	if !victim.IsBot {
+		victim.NoKillDeaths++
+		if victim.NoKillDeaths >= RevengeDeathThreshold {
+			// Consume the accumulated consecutive deaths when arming revenge.
+			victim.RevengeReady = true
+			victim.NoKillDeaths = 0
+		}
+	}
 	if attacker.Id != victim.Id {
 		if attacker.Streak < 255 {
 			attacker.Streak++
@@ -479,6 +603,8 @@ func (r *Room) Damage(attacker, victim *PlayerState, dmg float64, headshot bool,
 		r.Store.Accumulate(victim.Account, 0, 1)
 	}
 	victim.Alive, victim.Reloading = false, false
+	victim.RevengeActive, victim.RevengeShots = false, 0
+	victim.InvincibleUntil = time.Time{}
 	victim.RespawnAt = now.Add(RespawnDelayS)
 }
 
@@ -694,6 +820,13 @@ func (r *Room) Respawn(p *PlayerState, now time.Time) {
 	p.CmdKeys = 0
 	p.ApplyLoadout(p.Primary, p.Secondary)
 	p.InvincibleUntil = now.Add(SpawnProtectS)
+	if p.RevengeReady && !p.IsBot {
+		p.RevengeActive = true
+		p.RevengeShots = 10
+		p.InvincibleUntil = now.Add(10 * time.Second)
+		r.Emit(Event{Type: EvRevenge, Player: p.Id, Name: p.Name})
+	}
+	p.RevengeReady = false
 	p.LandingUntil, p.AimStarted = time.Time{}, time.Time{}
 	p.SpeedUntil, p.DmgUntil, p.RecoilUntil = time.Time{}, time.Time{}, time.Time{}
 	p.Streak = 0

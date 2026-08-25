@@ -250,6 +250,50 @@ func TestGrenadeThrowConsumesOnceAndEmitsTrajectory(t *testing.T) {
 	}
 }
 
+func TestRevengeShotHeadshotsAnyoneOnScreen(t *testing.T) {
+	now := time.Unix(1, 0)
+	attacker := &Player{PlayerState: PlayerState{
+		Id: 1, Alive: true, IsBot: true, HP: MaxHP, RevengeActive: true, RevengeShots: 10,
+		InvincibleUntil: now.Add(10 * time.Second),
+	}}
+	victim := &Player{PlayerState: PlayerState{
+		Id: 2, Alive: true, IsBot: true, HP: MaxHP, Armor: 100, Pos: Vec3{X: 8, Z: -6},
+	}}
+	attacker.ApplyLoadout(3, 0)
+	r := &Room{World: &World{}, Players: []*Player{attacker, victim}, history: make(map[uint16]*poseHistory)}
+	if !r.TryFire(&attacker.PlayerState, 0, 0, 0, 0, 1, now) {
+		t.Fatal("revenge shot rejected")
+	}
+	if victim.Alive || victim.HP != 0 {
+		t.Fatalf("on-screen target should be headshot without aiming: alive=%v hp=%d", victim.Alive, victim.HP)
+	}
+	if attacker.RevengeShots != 9 {
+		t.Fatalf("revenge ammo not consumed: %d", attacker.RevengeShots)
+	}
+	behind := &Player{PlayerState: PlayerState{Id: 3, Alive: true, IsBot: true, HP: MaxHP, Armor: 100, Pos: Vec3{Z: 8}}}
+	r.Players = []*Player{attacker, behind}
+	attacker.NextFire = time.Time{}
+	if !r.TryFire(&attacker.PlayerState, 0, 0, 0, 0, 2, now.Add(time.Second)) {
+		t.Fatal("second revenge shot rejected")
+	}
+	if !behind.Alive || behind.HP != MaxHP {
+		t.Fatal("player outside the view should not be auto-headshot")
+	}
+	if attacker.RevengeShots != 8 {
+		t.Fatalf("every gunshot should burn revenge ammo: %d", attacker.RevengeShots)
+	}
+	attacker.InvincibleUntil = now
+	attacker.NextFire = time.Time{}
+	next := &Player{PlayerState: PlayerState{Id: 4, Alive: true, IsBot: true, HP: MaxHP, Armor: 100, Pos: Vec3{X: -4, Z: -5}}}
+	r.Players = []*Player{attacker, next}
+	if !r.TryFire(&attacker.PlayerState, 0, 0, 0, 0, 3, now.Add(11*time.Second)) {
+		t.Fatal("revenge shot after invuln expired rejected")
+	}
+	if next.Alive || attacker.RevengeShots != 7 || !attacker.RevengeActive {
+		t.Fatalf("invuln expiry must not end the 10-shot budget: alive=%v shots=%d active=%v", next.Alive, attacker.RevengeShots, attacker.RevengeActive)
+	}
+}
+
 func TestKnifeAttackDoesNotRequireAmmo(t *testing.T) {
 	r := &Room{World: &World{}, history: make(map[uint16]*poseHistory)}
 	attacker := &Player{PlayerState: PlayerState{Id: 1, Alive: true, IsBot: true, HP: MaxHP, Pos: Vec3{}}}

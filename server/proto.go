@@ -6,7 +6,7 @@ import (
 	"unicode/utf8"
 )
 
-const ProtocolVersion = 6
+const ProtocolVersion = 8
 const SkinCount uint8 = 8
 
 const (
@@ -46,6 +46,7 @@ const (
 	EvPickupTaken
 	EvFlightToggle
 	EvStreakBuff
+	EvRevenge
 )
 
 type Event struct {
@@ -192,6 +193,11 @@ func Events(evts []Event) []byte {
 			w.U8(e.Kind)
 			w.U8(e.Dmg)
 			w.U16(e.Ms)
+		case EvRevenge:
+			w.U16(e.Player)
+			nb := safeNameBytes(e.Name)
+			w.U8(uint8(len(nb)))
+			w.b = append(w.b, nb...)
 		}
 	}
 	return w.Bytes()
