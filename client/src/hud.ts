@@ -64,6 +64,7 @@ export class Hud {
   root = el('hud');
   sensitivity = 0.00216;
   adsSensitivity = 0.85;
+  touchSensitivity = 0.0035;
   volume = 0.8;
   hipFov = 62;
   bobScale = 0.55;
@@ -304,7 +305,7 @@ export class Hud {
     el('join-btn').addEventListener('click', startDeploy);
 
     el('lb-refresh-btn')?.addEventListener('click', () => this.loadLeaderboard());
-
+    el('sb-close-btn')?.addEventListener('click', () => this.toggleScoreboard(false));
 
     this.setupSettings();
     this.loadLeaderboard();
@@ -317,6 +318,7 @@ export class Hud {
     const quality = el('quality-select') as HTMLSelectElement;
     const fov = el('fov-slider') as HTMLInputElement;
     const bob = el('bob-slider') as HTMLInputElement;
+    const touchSens = el('touch-sens-slider') as HTMLInputElement;
 
     const savedSens = localStorage.getItem('ps_sens');
     const savedAdsSens = localStorage.getItem('ps_ads_sens');
@@ -325,6 +327,7 @@ export class Hud {
     // v2 gives existing players the tighter default FOV once.
     const savedFov = localStorage.getItem('ps_hip_fov_v2');
     const savedBob = localStorage.getItem('ps_gun_bob');
+    const savedTouchSens = localStorage.getItem('ps_touch_sens');
 
     if (savedSens && sens) sens.value = savedSens;
     if (savedAdsSens && adsSens) adsSens.value = savedAdsSens;
@@ -332,9 +335,11 @@ export class Hud {
     if (savedQ && quality) quality.value = savedQ;
     if (savedFov && fov) fov.value = savedFov;
     if (savedBob && bob) bob.value = savedBob;
+    if (savedTouchSens && touchSens) touchSens.value = savedTouchSens;
 
     this.sensitivity = sens ? (+sens.value / 50) * 0.0024 : 0.00216;
     this.adsSensitivity = adsSens ? +adsSens.value / 100 : 0.85;
+    this.touchSensitivity = touchSens ? (+touchSens.value / 50) * 0.0035 : 0.0035;
     this.volume = vol ? +vol.value / 100 : 0.8;
     this.quality = quality ? (quality.value as typeof this.quality) : 'medium';
     this.hipFov = fov ? +fov.value : 62;
@@ -349,6 +354,11 @@ export class Hud {
       this.adsSensitivity = +adsSens.value / 100;
       localStorage.setItem('ps_ads_sens', adsSens.value);
     });
+    touchSens?.addEventListener('input', () => {
+      this.touchSensitivity = (+touchSens.value / 50) * 0.0035;
+      localStorage.setItem('ps_touch_sens', touchSens.value);
+    });
+
 
     vol?.addEventListener('input', () => {
       this.volume = +vol.value / 100;
@@ -950,6 +960,10 @@ export class Hud {
 
   isSettingsOpen(): boolean {
     return this.settings?.style.display === 'flex';
+  }
+
+  isPaused(): boolean {
+    return this.pause?.style.display === 'flex';
   }
 
   showPause(v: boolean) {

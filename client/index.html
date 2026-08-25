@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
   <meta name="theme-color" content="#111411">
   <meta name="description" content="Pixel Strike 百人同房体素战术射击游戏">
   <title>PIXEL STRIKE | 体素战术死斗</title>
@@ -1259,35 +1259,269 @@
       :root { --line: #747a6a; --muted: #c8c6bc; --dim: #a4a69c; }
     }
 
+    /* 触控按键与移动端虚拟控件样式 / Mobile Touch Controls */
+    #touch-controls {
+      position: fixed;
+      inset: 0;
+      z-index: 38;
+      pointer-events: none;
+      display: none;
+    }
+    body.touch-device #touch-controls {
+      display: block;
+    }
+    #touch-top-bar {
+      position: absolute;
+      top: max(12px, env(safe-area-inset-top, 12px));
+      right: max(12px, env(safe-area-inset-right, 12px));
+      display: flex;
+      gap: 10px;
+      pointer-events: auto;
+      z-index: 45;
+    }
+    .touch-icon-btn {
+      width: 44px;
+      height: 44px;
+      border-radius: 6px;
+      background: rgba(18, 22, 19, 0.88);
+      border: 1.5px solid rgba(240, 234, 220, 0.38);
+      color: var(--paper);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      touch-action: manipulation;
+    }
+    .touch-icon-btn:active {
+      background: var(--accent);
+      color: #0b0d0b;
+      border-color: var(--accent-hi);
+      transform: scale(0.94);
+    }
+    #touch-joystick-zone {
+      position: absolute;
+      left: max(16px, env(safe-area-inset-left, 16px));
+      bottom: max(16px, env(safe-area-inset-bottom, 16px));
+      width: 136px;
+      height: 136px;
+      pointer-events: auto;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    #touch-joystick-base {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(30, 36, 32, 0.65) 0%, rgba(10, 14, 12, 0.88) 100%);
+      border: 2px solid rgba(240, 234, 220, 0.35);
+      box-shadow: 0 4px 18px rgba(0, 0, 0, 0.65), inset 0 0 16px rgba(201, 130, 43, 0.15);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+    #touch-joystick-knob {
+      width: 54px;
+      height: 54px;
+      border-radius: 50%;
+      background: radial-gradient(circle, #f59e0b 0%, #c9822b 75%, #8a4e10 100%);
+      border: 2px solid #ffffff;
+      box-shadow: 0 0 14px rgba(201, 130, 43, 0.85);
+      position: absolute;
+      pointer-events: none;
+      will-change: transform;
+      transition: transform 0.03s linear;
+    }
+    #touch-action-cluster {
+      position: absolute;
+      right: max(12px, env(safe-area-inset-right, 12px));
+      bottom: max(12px, env(safe-area-inset-bottom, 12px));
+      width: 220px;
+      height: 220px;
+      pointer-events: none;
+    }
+    .touch-action-btn {
+      position: absolute;
+      pointer-events: auto;
+      touch-action: manipulation;
+      user-select: none;
+      -webkit-user-select: none;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1px;
+      border-radius: 50%;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      color: #ffffff;
+      background: rgba(22, 27, 24, 0.88);
+      border: 2px solid rgba(240, 234, 220, 0.45);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.65), inset 0 0 10px rgba(0, 0, 0, 0.4);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      transition: transform 0.08s ease, background-color 0.08s ease, border-color 0.08s ease, box-shadow 0.08s ease;
+    }
+    .touch-action-btn:active, .touch-action-btn.active {
+      transform: scale(0.92);
+      background: rgba(201, 130, 43, 0.55);
+      border-color: #ffd166;
+      box-shadow: 0 0 16px rgba(255, 209, 102, 0.8);
+    }
+    #btn-touch-fire {
+      right: 6px;
+      bottom: 6px;
+      width: 74px;
+      height: 74px;
+      border-color: var(--accent);
+      background: radial-gradient(circle, rgba(201, 130, 43, 0.45) 0%, rgba(35, 24, 15, 0.92) 100%);
+      box-shadow: 0 0 18px rgba(201, 130, 43, 0.5);
+    }
+    #btn-touch-fire .fire-inner {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    #btn-touch-fire:active, #btn-touch-fire.active {
+      background: radial-gradient(circle, #f59e0b 0%, #b45309 100%) !important;
+      border-color: #ffffff !important;
+      box-shadow: 0 0 24px rgba(255, 209, 102, 0.9) !important;
+    }
+    #btn-touch-jump {
+      right: 92px;
+      bottom: 12px;
+      width: 52px;
+      height: 52px;
+    }
+    #btn-touch-crouch {
+      right: 154px;
+      bottom: 20px;
+      width: 48px;
+      height: 48px;
+    }
+    #btn-touch-aim {
+      right: 92px;
+      bottom: 74px;
+      width: 52px;
+      height: 52px;
+    }
+    #btn-touch-reload {
+      right: 12px;
+      bottom: 92px;
+      width: 50px;
+      height: 50px;
+    }
+    #btn-touch-nade {
+      right: 72px;
+      bottom: 136px;
+      width: 48px;
+      height: 48px;
+    }
+    .score-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
     @media (max-width: 1160px) {
       .menu-frame { height: auto; min-height: calc(100dvh - 24px); }
       .menu-grid { grid-template-columns: 1fr 1.2fr; overflow: visible; }
-      .preview-panel { min-height: 480px; }
-      .intel-panel { grid-column: 1 / -1; min-height: 420px; }
+      .preview-panel { min-height: 420px; }
+      .intel-panel { grid-column: 1 / -1; min-height: 400px; }
       .loadout-grid { grid-template-columns: 1fr 1fr; }
       .field.full { grid-column: 1 / -1; }
       .key-grid { grid-template-columns: repeat(3, 1fr); }
     }
     @media (max-width: 800px) {
-      #menu { padding: 10px; }
+      #menu { padding: max(10px, env(safe-area-inset-top, 10px)) max(10px, env(safe-area-inset-right, 10px)) max(10px, env(safe-area-inset-bottom, 10px)) max(10px, env(safe-area-inset-left, 10px)); }
       .menu-frame { height: auto; min-height: calc(100dvh - 20px); }
-      .command-bar { grid-template-columns: 1fr auto; }
+      .command-bar { grid-template-columns: 1fr auto; padding: 10px 14px; }
       .sync-readout { display: none; }
-      .menu-grid { grid-template-columns: 1fr; overflow: visible; }
+      .menu-grid { grid-template-columns: 1fr; overflow: visible; gap: 12px; }
+      .preview-panel { min-height: 280px; }
+      .preview-canvas-wrap { min-height: 180px; }
       .deploy-panel, .intel-panel { overflow: visible; }
-      .intel-panel { min-height: 520px; }
+      .intel-panel { min-height: auto; }
       .zone-list { grid-template-columns: repeat(3, 1fr); }
-      #radar-wrap { transform: scale(.78); transform-origin: top left; }
-      #match-strip { top: 10px; }
-      #net-stats { right: 10px; top: 10px; }
-      #killfeed { right: 10px; top: 50px; }
-      #vitals { left: 10px; bottom: 10px; }
-      #ammo-wrap { left: 10px; bottom: 70px; right: auto; text-align: left; }
+      .loadout-grid select { font-size: 16px; min-height: 44px; }
+      #join-btn, #practice-join-btn { min-height: 48px; font-size: 16px; }
+      #radar-wrap {
+        top: max(8px, env(safe-area-inset-top, 8px));
+        left: max(8px, env(safe-area-inset-left, 8px));
+        transform: scale(0.68);
+        transform-origin: top left;
+      }
+      #match-strip {
+        top: max(8px, env(safe-area-inset-top, 8px));
+        padding: 5px 8px;
+        font-size: 9px;
+      }
+      #net-stats {
+        top: max(8px, env(safe-area-inset-top, 8px));
+        right: max(60px, calc(env(safe-area-inset-right, 0px) + 60px));
+        transform: scale(0.85);
+        transform-origin: top right;
+      }
+      #killfeed {
+        top: max(46px, calc(env(safe-area-inset-top, 0px) + 46px));
+        right: max(10px, env(safe-area-inset-right, 10px));
+        transform: scale(0.85);
+        transform-origin: top right;
+        max-width: 240px;
+      }
+      #vitals {
+        left: max(10px, env(safe-area-inset-left, 10px));
+        bottom: max(160px, calc(env(safe-area-inset-bottom, 0px) + 160px));
+        width: 148px;
+        padding: 6px 9px;
+      }
+      .vital-meta { font-size: 10px; }
+      .vital-bar-track { height: 5px; }
+      #ammo-wrap {
+        left: auto;
+        right: max(10px, env(safe-area-inset-right, 10px));
+        bottom: max(160px, calc(env(safe-area-inset-bottom, 0px) + 160px));
+        text-align: right;
+        min-width: auto;
+      }
+      #ammo { font-size: 42px; }
+      #ammo-reserve { font-size: 18px; }
+      #ammo-weapon { font-size: 10px; }
+      #hotbar {
+        bottom: max(10px, env(safe-area-inset-bottom, 10px));
+        left: 50%;
+        transform: translateX(-50%) scale(0.88);
+        transform-origin: bottom center;
+        pointer-events: auto;
+      }
+      .mc-slot { width: 50px; height: 50px; pointer-events: auto; }
+      .slot-icon { width: 36px; height: 36px; }
+      .slot-icon svg { width: 32px; height: 32px; }
+      #settings-modal .dialog {
+        width: min(500px, 94vw);
+        max-height: calc(100dvh - 30px);
+        padding: 16px;
+      }
+      #pause-overlay .dialog {
+        width: min(440px, 94vw);
+        padding: 18px;
+      }
+      #scoreboard {
+        width: min(840px, 96vw);
+        max-height: 86dvh;
+        padding: 12px;
+      }
     }
     @media (max-width: 560px) {
       .wordmark small { display: none; }
-      .wordmark strong { font-size: 22px; }
-      .deploy-title { font-size: 44px; }
+      .wordmark strong { font-size: 20px; }
+      .deploy-title { font-size: 36px; }
       .deploy-title span:last-child { font-size: .7em; }
       .loadout-grid, .dialog-actions { grid-template-columns: 1fr; }
       #settings-modal .dialog-actions { grid-template-columns: 1fr; }
@@ -1297,17 +1531,86 @@
       .metric { padding-inline: 7px; }
       .metric b { font-size: 14px; }
       .zone-list { grid-template-columns: 1fr 1fr; }
-      .table-shell { min-height: 260px; }
+      .table-shell { min-height: 200px; }
       #match-strip { display: none; }
-      #radar-wrap { transform: scale(.64); }
+      #radar-wrap { transform: scale(0.58); }
       #net-stats { font-size: 8px; }
-      #vitals { grid-template-columns: repeat(3, 62px); }
-      .vital-box { padding-inline: 7px; }
-      .vital-val { font-size: 20px; }
-      #ammo-wrap { min-width: 170px; max-width: calc(100vw - 20px); }
-      #inventory { grid-template-columns: repeat(2, minmax(74px, 1fr)); }
-      #scoreboard { padding: 10px; }
-      #scoreboard table { min-width: 680px; }
+      #vitals {
+        left: max(8px, env(safe-area-inset-left, 8px));
+        bottom: max(152px, calc(env(safe-area-inset-bottom, 0px) + 152px));
+        width: 132px;
+        padding: 5px 8px;
+      }
+      #ammo-wrap {
+        right: max(8px, env(safe-area-inset-right, 8px));
+        bottom: max(152px, calc(env(safe-area-inset-bottom, 0px) + 152px));
+      }
+      #ammo { font-size: 36px; }
+      #ammo-reserve { font-size: 16px; }
+      #hotbar {
+        transform: translateX(-50%) scale(0.78);
+      }
+      #scoreboard { padding: 8px; }
+      #scoreboard table { min-width: 560px; }
+    }
+    @media (max-height: 520px) {
+      #radar-wrap {
+        top: max(6px, env(safe-area-inset-top, 6px));
+        left: max(6px, env(safe-area-inset-left, 6px));
+        transform: scale(0.5);
+        transform-origin: top left;
+      }
+      #vitals {
+        left: max(8px, env(safe-area-inset-left, 8px));
+        bottom: max(10px, env(safe-area-inset-bottom, 10px));
+        width: 120px;
+        padding: 4px 6px;
+        font-size: 8px;
+      }
+      .vital-meta { font-size: 8px; }
+      .vital-bar-track { height: 4px; }
+      #ammo-wrap {
+        right: max(8px, env(safe-area-inset-right, 8px));
+        bottom: max(148px, calc(env(safe-area-inset-bottom, 0px) + 148px));
+        text-align: right;
+        min-width: auto;
+      }
+      #ammo { font-size: 32px; }
+      #ammo-reserve { font-size: 14px; }
+      #ammo-weapon { font-size: 9px; }
+      #hotbar {
+        bottom: max(4px, env(safe-area-inset-bottom, 4px));
+        transform: translateX(-50%) scale(0.72);
+        transform-origin: bottom center;
+      }
+      #touch-joystick-zone {
+        bottom: max(10px, env(safe-area-inset-bottom, 10px));
+        left: max(130px, calc(env(safe-area-inset-left, 0px) + 130px));
+        width: 110px;
+        height: 110px;
+      }
+      #touch-joystick-knob {
+        width: 44px;
+        height: 44px;
+      }
+      #touch-action-cluster {
+        right: max(6px, env(safe-area-inset-right, 6px));
+        bottom: max(6px, env(safe-area-inset-bottom, 6px));
+        transform: scale(0.8);
+        transform-origin: bottom right;
+      }
+      #menu {
+        padding: 6px;
+      }
+      .preview-panel {
+        min-height: 200px;
+      }
+      .preview-canvas-wrap {
+        min-height: 140px;
+      }
+    }
+    @media (pointer: coarse) {
+      #touch-controls { display: block; }
     }
   </style>
 </head>
@@ -1579,12 +1882,65 @@
       <div class="reload-label"><span>RELOADING 换弹中</span><span id="reload-pct">0%</span></div>
       <div class="reload-track"><div id="reload-fill" class="reload-fill"></div></div>
     </div>
+
+    <!-- 移动端虚拟触控操作层 / Mobile Touch Controls Layer -->
+    <div id="touch-controls" aria-label="移动端虚拟按键">
+      <!-- 移动端顶部快捷按钮 -->
+      <div id="touch-top-bar">
+        <button id="btn-touch-pause" class="touch-icon-btn" type="button" aria-label="暂停菜单">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
+        </button>
+        <button id="btn-touch-score" class="touch-icon-btn" type="button" aria-label="实时战绩">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+        </button>
+      </div>
+
+      <!-- 左侧移动摇杆 -->
+      <div id="touch-joystick-zone">
+        <div id="touch-joystick-base">
+          <div id="touch-joystick-knob"></div>
+        </div>
+      </div>
+
+      <!-- 右侧战斗按键集群 -->
+      <div id="touch-action-cluster">
+        <button id="btn-touch-reload" class="touch-action-btn" type="button" aria-label="换弹">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l6.73-6.73"/></svg>
+          <span>换弹</span>
+        </button>
+        <button id="btn-touch-nade" class="touch-action-btn" type="button" aria-label="手雷">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><ellipse cx="12" cy="14" rx="6" ry="7"/><rect x="9" y="5" width="6" height="3" rx="1"/><line x1="12" y1="2" x2="12" y2="5" stroke="currentColor" stroke-width="2"/></svg>
+          <span>手雷</span>
+        </button>
+        <button id="btn-touch-aim" class="touch-action-btn" type="button" aria-label="开镜">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><line x1="12" y1="3" x2="12" y2="7"/><line x1="12" y1="17" x2="12" y2="21"/><line x1="3" y1="12" x2="7" y2="12"/><line x1="17" y1="12" x2="21" y2="12"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/></svg>
+          <span>开镜</span>
+        </button>
+        <button id="btn-touch-crouch" class="touch-action-btn" type="button" aria-label="下蹲">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm-1 6v5l-3 3 1.5 1.5L12 15l2.5 2.5 1.5-1.5-3-3V8h-2z"/></svg>
+          <span>蹲</span>
+        </button>
+        <button id="btn-touch-jump" class="touch-action-btn" type="button" aria-label="跳跃">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+          <span>跳</span>
+        </button>
+        <button id="btn-touch-fire" class="touch-action-btn fire" type="button" aria-label="开火射击">
+          <div class="fire-inner">
+            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>
+            <span>开火</span>
+          </div>
+        </button>
+      </div>
+    </div>
   </div>
 
   <section id="scoreboard" aria-label="实时战绩">
     <div class="score-head">
       <div><h2>实时战绩</h2><div id="sb-room-info"></div></div>
-      <div class="mode-label">按住 TAB 查看</div>
+      <div class="score-actions">
+        <div class="mode-label">按住 TAB 查看</div>
+        <button id="sb-close-btn" class="ghost-button" type="button" style="min-height:32px;padding:4px 10px;font-size:11px;">关闭战绩</button>
+      </div>
     </div>
     <div class="table-shell">
       <table>
@@ -1635,6 +1991,10 @@
           <div class="field">
             <label for="ads-sens-slider">开镜灵敏度</label>
             <input id="ads-sens-slider" type="range" min="25" max="125" value="85">
+          </div>
+          <div class="field" id="touch-sens-field">
+            <label for="touch-sens-slider">触屏滑动灵敏度</label>
+            <input id="touch-sens-slider" type="range" min="10" max="100" value="50">
           </div>
         </section>
 
